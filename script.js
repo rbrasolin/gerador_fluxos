@@ -2,8 +2,8 @@ mermaid.initialize({
   startOnLoad: false,
   flowchart: {
     curve: 'linear',
-    nodeSpacing: 250,
-    rankSpacing: 40
+    nodeSpacing: 220,
+    rankSpacing: 50
   }
 });
 
@@ -27,16 +27,15 @@ function gerarFluxo() {
   let links = [];
   let allIds = [];
   
-  // Coleta todos IDs únicos para cadeia L→R
+  // 1. Coleta IDs únicos da coluna B (ID)
   linhas.forEach(function(linha) {
     if (!linha.trim()) return;
-    let col = linha.trim().split(/\s{2,}|\t/);
+    let col = linha.trim().split(/\s{2,}|\t/);  // Split por tabs/espaços múltiplos
     if (col.length < 6) return;
-    allIds.push("A" + Number(col[1]));
+    let id = limparTexto(col[1]);  // Coluna B = ID (A, B, C...)
+    if (id) allIds.push(id);
   });
-  allIds = [...new Set(allIds)].sort(function(a,b) {
-    return Number(a.slice(1)) - Number(b.slice(1));
-  });
+  allIds = [...new Set(allIds)].sort();  // A,B,C,D...
   
   let tempoTotal = 0;
   let loops = 0;
@@ -44,68 +43,64 @@ function gerarFluxo() {
   let sistemaAuto = 0;
   let atividadesTempo = [];
   
+  // 2. Processa cada linha
   linhas.forEach(function(linha) {
     if (!linha.trim()) return;
     let col = linha.trim().split(/\s{2,}|\t/);
     if (col.length < 6) return;
     
-    let idNumero = Number(col[1]);
-    let id = "A" + idNumero;
-    let atividade = limparTexto(col[2]);
-    let tipo = (col[3] || "").toLowerCase();
-    let sistema = limparTexto(col[4] || "");
-    let tempo = Number(col[5]) || 0;
-    let proxSim = col[6] ? "A" + col[6] : null;
-    let proxNao = col[7] ? "A" + col[7] : null;
-    let cor = (col[8] || "").toLowerCase().trim();
+    let ordem = Number(col[0]);  // Coluna A (ignorada)
+    let id = limparTexto(col[1]);  // Coluna B = ID
+    let atividade = limparTexto(col[2]);  // Coluna C
+    let tipo = (col[3] || "").toLowerCase();  // Coluna D
+    let sistema = limparTexto(col[4] || "");  // Coluna E
+    let tempo = Number(col[5]) || 0;  // Coluna F
+    let proxSim = col[6] ? limparTexto(col[6]) : null;  // Coluna G
+    let proxNao = col[7] ? limparTexto(col[7]) : null;  // Coluna H
+    let cor = (col[8] || "").toLowerCase().trim();  // Coluna I
     
     tempoTotal += tempo;
-    atividadesTempo.push({atividade: atividade, tempo: tempo});
+    atividadesTempo.push({atividade, tempo});
     
-    if (tipo === "manual") {
-      manual++;
-    } else {
-      sistemaAuto++;
-    }
-    if (proxNao && Number(col[7]) < idNumero) {
-      loops++;
-    }
+    if (tipo === "manual") manual++;
+    else sistemaAuto++;
+    if (proxNao && allIds.indexOf(proxNao) < allIds.indexOf(id)) loops++;
     
-    let label = atividade + "\\n" + sistema + "\\n" + tempo + " min";
+    let label = atividade + "\\n" + sistema + "\\n" + tempo + "min";
     
     if (atividade.includes("?")) {
+      // Losango para decisões
       nodes[id] = id + "{" + label + "}";
       if (proxSim) links.push(id + " -->|Sim| " + proxSim);
       if (proxNao) links.push(id + " -->|Não| " + proxNao);
     } else {
+      // Retangular para atividades
       nodes[id] = id + '["' + label + '"]';
       if (proxSim) links.push(id + " --> " + proxSim);
       if (proxNao) links.push(id + " --> " + proxNao);
     }
     
-    // COR APENAS se coluna Cor existir
+    // COR só se coluna I existir
     if (cor && cor !== "") {
       nodes[id] += "::: " + cor;
     }
   });
   
-  // **CADEIA PRINCIPAL HORIZONTAL L→R** (resolve vertical!)
+  // 3. **CADEIA PRINCIPAL HORIZONTAL** (resolve vertical!)
   for (let i = 0; i < allIds.length - 1; i++) {
-    links.unshift(allIds[i] + " -.-> " + allIds[i+1]);
+    links.unshift(allIds[i] + " -.-> " + allIds[i+1]);  // Linha tracejada sutil
   }
   
-  // Nós ordenados
+  // 4. Monta código Mermaid
   allIds.forEach(function(id) {
     mermaidCode += nodes[id] + "\n";
   });
-  
   links.forEach(function(l) {
     mermaidCode += l + "\n";
   });
   
   mermaidCode += "\n";
-  
-  // Classes com BORDA E TEXTO PRETOS sempre
+  // Estilos: borda/texto PRETOS sempre
   mermaidCode += "classDef default fill:#f0f9ff,stroke:#000,stroke-width:4px,color:#000\n";
   mermaidCode += "classDef blue fill:#8ecae6,stroke:#000,stroke-width:4px,color:#000\n";
   mermaidCode += "classDef yellow fill:#ffd166,stroke:#000,stroke-width:4px,color:#000\n";
@@ -117,29 +112,27 @@ function gerarFluxo() {
     document.getElementById("diagram").innerHTML = mermaidCode;
     mermaid.init();
     
-    // Atualiza métricas (IDs do seu HTML original)
+    // Atualiza métricas HTML
     if (document.getElementById("tempoTotal")) document.getElementById("tempoTotal").textContent = tempoTotal;
     if (document.getElementById("loops")) document.getElementById("loops").textContent = loops;
     if (document.getElementById("manual")) document.getElementById("manual").textContent = manual;
     if (document.getElementById("sistemaAuto")) document.getElementById("sistemaAuto").textContent = sistemaAuto;
     
   } catch (error) {
-    document.getElementById("diagram").innerHTML = "<p>Erro: " + error + "</p>";
+    document.getElementById("diagram").innerHTML = "<p>Erro: " + error.message + "</p>";
   }
 }
 
 function exportarPNG() {
   html2canvas(document.querySelector("#diagram"), {
     scale: 2,
-    useCORS: true,
-    width: document.querySelector("#diagram").scrollWidth,
-    height: document.querySelector("#diagram").scrollHeight
-  }).then(function(canvas) {
+    useCORS: true
+  }).then(canvas => {
     let link = document.createElement('a');
-    link.download = 'fluxo_bpmn.png';
+    link.download = 'fluxo.png';
     link.href = canvas.toDataURL();
     link.click();
-  });
+  }).catch(e => alert("Erro export: " + e));
 }
 
 function limparTudo() {
@@ -147,9 +140,4 @@ function limparTudo() {
   document.getElementById("processo").value = "";
   document.getElementById("analista").value = "";
   document.getElementById("diagram").innerHTML = "";
-  // Limpa métricas se existirem
-  ["tempoTotal", "loops", "manual", "sistemaAuto"].forEach(id => {
-    let el = document.getElementById(id);
-    if (el) el.textContent = "0";
-  });
 }
