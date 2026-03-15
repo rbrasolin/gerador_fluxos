@@ -3,10 +3,12 @@ mermaid.initialize({ startOnLoad:false });
 function gerarFluxo(){
 
 let texto = document.getElementById("entrada").value;
+let processo = document.getElementById("processo").value;
+let analista = document.getElementById("analista").value;
 
 let linhas = texto.trim().split("\n");
 
-// fluxo da esquerda para direita
+// fluxo esquerda → direita
 let mermaidCode = "flowchart LR\n";
 
 let nodes = {};
@@ -24,7 +26,6 @@ linhas.forEach(linha=>{
 
 if(!linha.trim()) return;
 
-// separa colunas (excel colado)
 let col = linha.trim().split(/\s{2,}|\t/);
 
 if(col.length < 6) return;
@@ -38,7 +39,8 @@ let proxSim = col[6];
 let proxNao = col[7];
 let cor = col[8] || "white";
 
-// métricas tempo
+// métricas
+
 tempoTotal += tempo;
 
 if(tempo > maiorTempo){
@@ -46,7 +48,6 @@ maiorTempo = tempo;
 gargalo = atividade;
 }
 
-// manual vs sistema
 if(tipo.toLowerCase() === "manual"){
 manual++;
 }else{
@@ -54,35 +55,63 @@ sistemaAuto++;
 }
 
 // detectar loops simples
+
 if(proxNao && proxNao < id){
 loops++;
 }
 
-// criar node
-nodes[id] = `${id}["${atividade}<br>${sistema}<br>${tempo} min"]:::${cor}`;
+// ===== NÓ DECISÃO OU ATIVIDADE =====
 
-// links
+let label = `${atividade}<br>${sistema}<br>${tempo} min`;
+
+if(atividade.includes("?")){
+
+// losango (decisão)
+
+nodes[id] = `${id}{${label}}:::${cor}`;
+
+// seta SIM
+if(proxSim){
+links.push(`${id} -->|Sim| ${proxSim}`);
+}
+
+// seta NÃO
+if(proxNao){
+links.push(`${id} -->|Não| ${proxNao}`);
+}
+
+}else{
+
+// caixa normal
+
+nodes[id] = `${id}["${label}"]:::${cor}`;
+
 if(proxSim){
 links.push(`${id} --> ${proxSim}`);
 }
 
 if(proxNao){
-links.push(`${id} -->|Não| ${proxNao}`);
+links.push(`${id} --> ${proxNao}`);
+}
+
 }
 
 });
 
 // montar nodes
+
 Object.values(nodes).forEach(n=>{
 mermaidCode += n + "\n";
 });
 
 // montar links
+
 links.forEach(l=>{
 mermaidCode += l + "\n";
 });
 
-// cores padrão
+// cores
+
 mermaidCode += `
 classDef blue fill:#8ecae6
 classDef yellow fill:#ffd166
@@ -90,11 +119,20 @@ classDef green fill:#95d5b2
 classDef white fill:#ffffff
 `;
 
-// renderizar diagrama
+// renderizar
+
 document.getElementById("diagram").innerHTML =
 `<div class="mermaid">${mermaidCode}</div>`;
 
 mermaid.init(undefined, document.querySelectorAll(".mermaid"));
+
+
+// ===== INFORMAÇÕES PROCESSO =====
+
+document.getElementById("infoProcesso").innerHTML = `
+<b>Processo:</b> ${processo}<br>
+<b>Analista:</b> ${analista}
+`;
 
 
 // ===== MÉTRICAS =====
@@ -116,5 +154,33 @@ document.getElementById("metricas").innerHTML = `
 <b>Sistema:</b> ${pctSistema}%
 
 `;
+
+}
+
+
+// ===== DOWNLOAD SVG =====
+
+function baixarSVG(){
+
+let svg = document.querySelector("#diagram svg");
+
+if(!svg){
+alert("Gere o fluxo primeiro");
+return;
+}
+
+let serializer = new XMLSerializer();
+let source = serializer.serializeToString(svg);
+
+let blob = new Blob([source], {type:"image/svg+xml;charset=utf-8"});
+
+let url = URL.createObjectURL(blob);
+
+let a = document.createElement("a");
+a.href = url;
+a.download = "fluxograma.svg";
+a.click();
+
+URL.revokeObjectURL(url);
 
 }
