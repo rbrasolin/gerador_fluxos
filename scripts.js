@@ -6,14 +6,18 @@ let texto = document.getElementById("entrada").value;
 
 let linhas = texto.trim().split("\n");
 
-let mermaid = "flowchart TD\n";
+let mermaidCode = "flowchart TD\n";
 
 let nodes = {};
 let links = [];
 
 linhas.forEach(linha=>{
 
+if(!linha.trim()) return;
+
 let col = linha.trim().split(/\s{2,}|\t/);
+
+if(col.length < 6) return;
 
 let id = col[1];
 let atividade = col[2];
@@ -36,22 +40,22 @@ links.push(`${id} -->|Não| ${proxNao}`);
 });
 
 Object.values(nodes).forEach(n=>{
-mermaid += n + "\n";
+mermaidCode += n + "\n";
 });
 
 links.forEach(l=>{
-mermaid += l + "\n";
+mermaidCode += l + "\n";
 });
 
-mermaid += `
+mermaidCode += `
 classDef blue fill:#8ecae6
 classDef yellow fill:#ffd166
 classDef green fill:#95d5b2
 `;
 
 document.getElementById("diagram").innerHTML =
-`<div class="mermaid">${mermaid}</div>`;
+`<div class="mermaid">${mermaidCode}</div>`;
 
-mermaid.init();
+mermaid.init(undefined, document.querySelectorAll(".mermaid"));
 
 }
