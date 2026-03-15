@@ -7,6 +7,15 @@ rankSpacing:80
 }
 });
 
+function limparTexto(txt){
+return txt
+.replace(/"/g,'')
+.replace(/\(/g,'')
+.replace(/\)/g,'')
+.replace(/:/g,'')
+.trim();
+}
+
 function gerarFluxo(){
 
 let texto = document.getElementById("entrada").value;
@@ -15,22 +24,18 @@ let analista = document.getElementById("analista").value;
 
 let linhas = texto.trim().split("\n");
 
-// fluxo esquerda → direita
 let mermaidCode = "flowchart LR\n";
 
 let nodes = {};
 let links = [];
-let rankFix = [];
-
-let atividadesTempo = [];
 
 // métricas
 let tempoTotal = 0;
-let maiorTempo = 0;
-let gargalo = "";
 let loops = 0;
 let manual = 0;
 let sistemaAuto = 0;
+
+let atividadesTempo = [];
 
 linhas.forEach(linha=>{
 
@@ -40,56 +45,45 @@ let col = linha.trim().split(/\s{2,}|\t/);
 
 if(col.length < 6) return;
 
-let id = col[1];
-let atividade = col[2];
-let tipo = col[3] || "";
-let sistema = col[4] || "";
+let id = "A"+col[1]; // evitar erro mermaid com números
+let idNumero = Number(col[1]);
+
+let atividade = limparTexto(col[2]);
+let tipo = (col[3] || "").toLowerCase();
+let sistema = limparTexto(col[4] || "");
 let tempo = Number(col[5]) || 0;
 
-let proxSim = col[6] || "";
-let proxNao = col[7] || "";
-let cor = col[8] ? col[8].toLowerCase() : "white";
+let proxSim = col[6] ? "A"+col[6] : null;
+let proxNao = col[7] ? "A"+col[7] : null;
 
-// impedir erro da coluna cor virar próximo passo
-if(isNaN(proxSim)) proxSim="";
-if(isNaN(proxNao)) proxNao="";
-
-// métricas
+let cor = (col[8] || "white").toLowerCase();
 
 tempoTotal += tempo;
 
 atividadesTempo.push({
-id:id,
 atividade:atividade,
 tempo:tempo
 });
 
-if(tempo > maiorTempo){
-maiorTempo = tempo;
-gargalo = atividade;
-}
+// manual vs sistema
 
-if(tipo.toLowerCase() === "manual"){
+if(tipo === "manual"){
 manual++;
 }else{
 sistemaAuto++;
 }
 
-// detectar loops
+// detectar loop simples
 
-if(proxNao && Number(proxNao) < Number(id)){
+if(proxNao && Number(col[7]) < idNumero){
 loops++;
 }
-
-// label da caixa
 
 let label = `${atividade}<br>${sistema}<br>${tempo} min`;
 
 if(atividade.includes("?")){
 
-nodes[id] = `${id}{${label}}:::${cor}`;
-
-rankFix.push(id);
+nodes[id] = `${id}{${label}}`;
 
 if(proxSim){
 links.push(`${id} -->|Sim| ${proxSim}`);
@@ -101,7 +95,7 @@ links.push(`${id} -->|Não| ${proxNao}`);
 
 }else{
 
-nodes[id] = `${id}["${label}"]:::${cor}`;
+nodes[id] = `${id}["${label}"]`;
 
 if(proxSim){
 links.push(`${id} --> ${proxSim}`);
@@ -113,55 +107,27 @@ links.push(`${id} --> ${proxNao}`);
 
 }
 
-});
+// aplicar cor
 
-
-// ===== ANALISE PARETO =====
-
-atividadesTempo.sort((a,b)=>b.tempo-a.tempo);
-
-let top3 = atividadesTempo.slice(0,3).map(a=>a.atividade);
-
-let paretoHTML = "<b>Pareto de tempo das atividades</b><br><br>";
-
-atividadesTempo.forEach((a,i)=>{
-paretoHTML += `${i+1}. ${a.atividade} - ${a.tempo} min<br>`;
-});
-
-
-// ===== DESTACAR TOP 3 GARGALOS =====
-
-Object.keys(nodes).forEach(id=>{
-
-let atividadeNode = atividadesTempo.find(a=>a.id==id)?.atividade;
-
-if(top3.includes(atividadeNode)){
-nodes[id] = nodes[id].replace(":::", ":::gargalo ");
+if(cor !== "white"){
+nodes[id] += `:::${cor}`;
 }
 
 });
 
-
 // montar nodes ordenados
 
 Object.keys(nodes)
-.sort((a,b)=>Number(a)-Number(b))
+.sort()
 .forEach(id=>{
 mermaidCode += nodes[id] + "\n";
 });
 
-// montar links
+// links
 
 links.forEach(l=>{
 mermaidCode += l + "\n";
 });
-
-// corrigir layout decisões
-
-rankFix.forEach(id=>{
-mermaidCode += `{rank=same; ${id}}\n`;
-});
-
 
 // cores
 
@@ -169,20 +135,26 @@ mermaidCode += `
 classDef blue fill:#8ecae6
 classDef yellow fill:#ffd166
 classDef green fill:#95d5b2
+classDef red fill:#ef476f
 classDef white fill:#ffffff
-classDef gargalo fill:#ff6b6b,color:#ffffff
 `;
 
-
-// renderizar
+try{
 
 document.getElementById("diagram").innerHTML =
 `<div class="mermaid">${mermaidCode}</div>`;
 
 mermaid.init(undefined, document.querySelectorAll(".mermaid"));
 
+}catch(e){
 
-// ===== INFORMAÇÕES PROCESSO =====
+console.error("Erro Mermaid:", mermaidCode);
+
+alert("Erro ao gerar fluxo. Verifique caracteres especiais.");
+
+}
+
+// ===== INFO PROCESSO =====
 
 document.getElementById("infoProcesso").innerHTML = `
 <b>Processo:</b> ${processo}<br>
@@ -197,16 +169,35 @@ let totalAtividades = manual + sistemaAuto;
 let pctManual = totalAtividades ? ((manual/totalAtividades)*100).toFixed(1) : 0;
 let pctSistema = totalAtividades ? ((sistemaAuto/totalAtividades)*100).toFixed(1) : 0;
 
-let indiceRetrabalho = totalAtividades ? ((loops/totalAtividades)*100).toFixed(1) : 0;
+
+// TOP 3 gargalos
+
+atividadesTempo.sort((a,b)=>b.tempo-a.tempo);
+
+let top3 = atividadesTempo.slice(0,3)
+.map(a=>`${a.atividade} (${a.tempo} min)`)
+.join("<br>");
+
+let indiceRetrabalho = ((loops/totalAtividades)*100).toFixed(1);
+
+
+// ===== PARETO =====
+
+let paretoHTML = "<b>Pareto de tempo</b><br><br>";
+
+atividadesTempo.forEach(a=>{
+let pct = ((a.tempo/tempoTotal)*100).toFixed(1);
+paretoHTML += `${a.atividade} — ${pct}%<br>`;
+});
 
 document.getElementById("metricas").innerHTML = `
 
 <b>Tempo total do processo:</b> ${tempoTotal} min<br><br>
 
-<b>Gargalo principal:</b> ${gargalo} (${maiorTempo} min)<br><br>
+<b>Top 3 gargalos:</b><br>
+${top3}<br><br>
 
-<b>Loops de retrabalho detectados:</b> ${loops}<br>
-
+<b>Loops de retrabalho:</b> ${loops}<br>
 <b>Índice de retrabalho:</b> ${indiceRetrabalho}%<br><br>
 
 <b>Manual:</b> ${pctManual}%<br>
@@ -217,7 +208,6 @@ ${paretoHTML}
 `;
 
 }
-
 
 
 // ===== DOWNLOAD PNG =====
