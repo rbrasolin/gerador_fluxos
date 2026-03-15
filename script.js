@@ -22,6 +22,8 @@ let nodes = {};
 let links = [];
 let rankFix = [];
 
+let atividadesTempo = [];
+
 // métricas
 let tempoTotal = 0;
 let maiorTempo = 0;
@@ -43,13 +45,24 @@ let atividade = col[2];
 let tipo = col[3] || "";
 let sistema = col[4] || "";
 let tempo = Number(col[5]) || 0;
-let proxSim = col[6];
-let proxNao = col[7];
-let cor = col[8] || "white";
+
+let proxSim = col[6] || "";
+let proxNao = col[7] || "";
+let cor = col[8] ? col[8].toLowerCase() : "white";
+
+// impedir erro da coluna cor virar próximo passo
+if(isNaN(proxSim)) proxSim="";
+if(isNaN(proxNao)) proxNao="";
 
 // métricas
 
 tempoTotal += tempo;
+
+atividadesTempo.push({
+id:id,
+atividade:atividade,
+tempo:tempo
+});
 
 if(tempo > maiorTempo){
 maiorTempo = tempo;
@@ -62,13 +75,13 @@ manual++;
 sistemaAuto++;
 }
 
-// detectar loops simples
+// detectar loops
 
 if(proxNao && Number(proxNao) < Number(id)){
 loops++;
 }
 
-// ===== NÓ DECISÃO OU ATIVIDADE =====
+// label da caixa
 
 let label = `${atividade}<br>${sistema}<br>${tempo} min`;
 
@@ -78,12 +91,10 @@ nodes[id] = `${id}{${label}}:::${cor}`;
 
 rankFix.push(id);
 
-// seta SIM
 if(proxSim){
 links.push(`${id} -->|Sim| ${proxSim}`);
 }
 
-// seta NÃO
 if(proxNao){
 links.push(`${id} -->|Não| ${proxNao}`);
 }
@@ -104,7 +115,34 @@ links.push(`${id} --> ${proxNao}`);
 
 });
 
-// montar nodes ORDENADOS pelo ID
+
+// ===== ANALISE PARETO =====
+
+atividadesTempo.sort((a,b)=>b.tempo-a.tempo);
+
+let top3 = atividadesTempo.slice(0,3).map(a=>a.atividade);
+
+let paretoHTML = "<b>Pareto de tempo das atividades</b><br><br>";
+
+atividadesTempo.forEach((a,i)=>{
+paretoHTML += `${i+1}. ${a.atividade} - ${a.tempo} min<br>`;
+});
+
+
+// ===== DESTACAR TOP 3 GARGALOS =====
+
+Object.keys(nodes).forEach(id=>{
+
+let atividadeNode = atividadesTempo.find(a=>a.id==id)?.atividade;
+
+if(top3.includes(atividadeNode)){
+nodes[id] = nodes[id].replace(":::", ":::gargalo ");
+}
+
+});
+
+
+// montar nodes ordenados
 
 Object.keys(nodes)
 .sort((a,b)=>Number(a)-Number(b))
@@ -118,11 +156,12 @@ links.forEach(l=>{
 mermaidCode += l + "\n";
 });
 
-// corrigir layout de decisões
+// corrigir layout decisões
 
 rankFix.forEach(id=>{
 mermaidCode += `{rank=same; ${id}}\n`;
 });
+
 
 // cores
 
@@ -131,7 +170,9 @@ classDef blue fill:#8ecae6
 classDef yellow fill:#ffd166
 classDef green fill:#95d5b2
 classDef white fill:#ffffff
+classDef gargalo fill:#ff6b6b,color:#ffffff
 `;
+
 
 // renderizar
 
@@ -156,20 +197,27 @@ let totalAtividades = manual + sistemaAuto;
 let pctManual = totalAtividades ? ((manual/totalAtividades)*100).toFixed(1) : 0;
 let pctSistema = totalAtividades ? ((sistemaAuto/totalAtividades)*100).toFixed(1) : 0;
 
+let indiceRetrabalho = totalAtividades ? ((loops/totalAtividades)*100).toFixed(1) : 0;
+
 document.getElementById("metricas").innerHTML = `
 
 <b>Tempo total do processo:</b> ${tempoTotal} min<br><br>
 
-<b>Gargalo do processo:</b> ${gargalo} (${maiorTempo} min)<br><br>
+<b>Gargalo principal:</b> ${gargalo} (${maiorTempo} min)<br><br>
 
-<b>Loops de retrabalho detectados:</b> ${loops}<br><br>
+<b>Loops de retrabalho detectados:</b> ${loops}<br>
+
+<b>Índice de retrabalho:</b> ${indiceRetrabalho}%<br><br>
 
 <b>Manual:</b> ${pctManual}%<br>
-<b>Sistema:</b> ${pctSistema}%
+<b>Sistema:</b> ${pctSistema}%<br><br>
+
+${paretoHTML}
 
 `;
 
 }
+
 
 
 // ===== DOWNLOAD PNG =====
@@ -194,7 +242,6 @@ img.onload = function(){
 
 let canvas = document.createElement("canvas");
 
-// resolução maior
 canvas.width = img.width * 3;
 canvas.height = img.height * 3;
 
