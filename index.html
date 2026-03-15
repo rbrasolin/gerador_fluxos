@@ -1,58 +1,132 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="pt-BR">
 <head>
-
-<meta charset="UTF-8">
-
-<title>Gerador de Fluxograma</title>
-
-<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-
-<link rel="stylesheet" href="style.css">
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ComponenteFerramenta - Fluxo BPMN</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
+<body class="bg-gray-100 p-8">
+  <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-lg p-8">
+    
+    <!-- Header -->
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">
+      🛠️ ComponenteFerramenta - Gerador de Fluxo BPMN
+    </h1>
+    
+    <!-- Inputs -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <input type="text" id="processo" placeholder="Nome do Processo" 
+             class="p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+      <input type="text" id="analista" placeholder="Analista Responsável" 
+             class="p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+      <label class="p-3 bg-blue-100 rounded-lg">
+        Cole dados Excel:
+        <textarea id="entrada" rows="6" 
+                  class="w-full mt-2 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-vertical"
+                  placeholder="1   A   Receber?   Manual   Email   5   2   3   blue
+2   B   Processar   Robô   SAP   10              green"></textarea>
+      </label>
+    </div>
+    
+    <!-- Botão Gerar -->
+    <div class="text-center mb-8">
+      <button onclick="gerarFluxo()" 
+              class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-12 rounded-lg text-xl shadow-lg transition-all">
+        🎨 Gerar Fluxo BPMN
+      </button>
+    </div>
+    
+    <!-- Diagrama Mermaid (CORRIGIDO!) -->
+    <div id="diagram" class="mermaid max-h-96 overflow-auto border-2 border-gray-200 rounded-lg p-4 bg-white">
+      <!-- Diagrama renderiza aqui automaticamente -->
+    </div>
+    
+    <!-- Métricas (opcional) -->
+    <div class="mt-6 p-4 bg-gray-50 rounded-lg text-sm">
+      <strong>Estatísticas:</strong> Aguarde geração...
+    </div>
+  </div>
 
-<body>
+  <!-- SCRIPT COMPLETO CORRIGIDO -->
+  <script>
+    // Espera DOM carregar
+    document.addEventListener('DOMContentLoaded', function() {
+      mermaid.initialize({
+        startOnLoad: false,
+        flowchart: {
+          curve: 'basis',
+          nodeSpacing: 120,
+          rankSpacing: 100
+        }
+      });
+    });
 
-<h1>Gerador de Fluxograma de Processos</h1>
+    function limparTexto(txt) {
+      return txt.replace(/"/g, '').replace(/\(/g, '').replace(/\)/g, '').replace(/:/g, '').trim();
+    }
 
-<label>Nome do Processo</label>
-<input id="processo">
+    function gerarFluxo() {
+      const entrada = document.getElementById("entrada").value;
+      const linhas = entrada.trim().split("\n");
+      let mermaidCode = "flowchart LR\n";
+      let nodes = {};
+      let links = [];
+      let tempoTotal = 0, manual = 0, sistemaAuto = 0, loops = 0;
 
-<label>Analista</label>
-<input id="analista">
+      linhas.forEach(linha => {
+        if (!linha.trim()) return;
+        const col = linha.trim().split(/\s{2,}|\t/);
+        if (col.length < 6) return;
+        
+        const idNumero = Number(col[1]);
+        const id = "A" + idNumero;
+        const atividade = limparTexto(col[2]);
+        const tipo = (col[3] || "").toLowerCase();
+        const sistema = limparTexto(col[4] || "");
+        const tempo = Number(col[5]) || 0;
+        const proxSim = col[6] ? "A" + col[6] : null;
+        const proxNao = col[7] ? "A" + col[7] : null;
+        const cor = (col[8] || "").toLowerCase().trim();
+        
+        tempoTotal += tempo;
+        if (tipo === "manual") manual++;
+        else sistemaAuto++;
+        if (proxNao && Number(col[7]) < idNumero) loops++;
+        
+        const label = atividade + "\\n" + sistema + "\\n" + tempo + "min";
+        
+        if (atividade.includes("?")) {
+          nodes[id] = id + "{" + label + "}";
+          if (proxSim) links.push(id + " -->|Sim| " + proxSim);
+          if (proxNao) links.push(id + " -->|Não| " + proxNao);
+        } else {
+          nodes[id] = id + "[" + label + "]";
+          if (proxSim) links.push(id + " --> " + proxSim);
+          if (proxNao) links.push(id + " --> " + proxNao);
+        }
+        
+        if (cor && cor !== "") {
+          nodes[id] += ":::cor" + cor.charAt(0).toUpperCase() + cor.slice(1);
+        }
+      });
 
-<h3>Cole a tabela do Excel</h3>
+      Object.keys(nodes).sort((a,b) => Number(a.slice(1)) - Number(b.slice(1)))
+        .forEach(id => mermaidCode += nodes[id] + "\n");
+      links.forEach(l => mermaidCode += l + "\n");
 
-<textarea id="entrada" placeholder="Cole aqui a tabela copiada do Excel"></textarea>
+      mermaidCode += "\nclassDef corBlue fill:#8ecae6,stroke:#000,stroke-width:2px,color:#000\n";
+      mermaidCode += "classDef corYellow fill:#ffd166,stroke:#000,stroke-width:2px,color:#000\n";
+      mermaidCode += "classDef corGreen fill:#95d5b2,stroke:#000,stroke-width:2px,color:#000\n";
+      mermaidCode += "classDef corRed fill:#ef476f,stroke:#000,stroke-width:2px,color:#000\n";
+      mermaidCode += "classDef corWhite fill:#ffffff,stroke:#000,stroke-width:2px,color:#000\n";
 
-<br><br>
-
-<button onclick="gerarFluxo()">GERAR FLUXO</button>
-
-<hr>
-
-<h3>Fluxo</h3>
-
-<div id="diagram"></div>
-
-<br>
-
-<button onclick="baixarPNG()">Baixar PNG</button>
-
-<hr>
-
-<h3>Informações do Processo</h3>
-
-<div id="infoProcesso"></div>
-
-<h3>Análise do Processo</h3>
-
-<div id="metricas"></div>
-
-<script src="script.js"></script>
-
+      // AUTO-RENDER PERFEITO
+      document.getElementById("diagram").innerHTML = mermaidCode;
+      mermaid.init();
+    }
+  </script>
 </body>
-
 </html>
