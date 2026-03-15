@@ -13,7 +13,7 @@ let links = [];
 
 linhas.forEach(linha=>{
 
-let col = linha.split("\t");
+let col = linha.trim().split(/\s{2,}|\t/);
 
 let id = col[1];
 let atividade = col[2];
