@@ -8,7 +8,7 @@ rankSpacing:80
 });
 
 function limparTexto(txt){
-return txt
+return (txt || "")
 .replace(/"/g,'')
 .replace(/\(/g,'')
 .replace(/\)/g,'')
@@ -53,10 +53,11 @@ let tipo = (col[3] || "").toLowerCase();
 let sistema = limparTexto(col[4] || "");
 let tempo = Number(col[5]) || 0;
 
-let proxSim = col[6] ? "A"+col[6] : null;
-let proxNao = col[7] ? "A"+col[7] : null;
+// 🔧 CORREÇÃO DO BUG DAS CORES
+let proxSim = (col[6] && !isNaN(col[6])) ? "A"+col[6] : null;
+let proxNao = (col[7] && !isNaN(col[7])) ? "A"+col[7] : null;
 
-let cor = (col[8] || "white").toLowerCase();
+let cor = limparTexto(col[8] || "white").toLowerCase();
 
 tempoTotal += tempo;
 
@@ -79,7 +80,7 @@ if(proxNao && Number(col[7]) < idNumero){
 loops++;
 }
 
-// 🔧 CORREÇÃO 1 (removido <br>)
+// label sem <br>
 
 let label = `${atividade}\\n${sistema}\\n${tempo} min`;
 
@@ -118,7 +119,7 @@ nodes[id] += `:::${cor}`;
 });
 
 
-// 🔧 CORREÇÃO 2 (sort correto)
+// sort correto
 
 Object.keys(nodes)
 .sort((a,b)=>Number(a.slice(1))-Number(b.slice(1)))
@@ -227,9 +228,10 @@ return;
 let serializer = new XMLSerializer();
 let source = serializer.serializeToString(svg);
 
+let svg64 = btoa(unescape(encodeURIComponent(source)));
+let image64 = 'data:image/svg+xml;base64,' + svg64;
+
 let img = new Image();
-let svgBlob = new Blob([source], {type:"image/svg+xml;charset=utf-8"});
-let url = URL.createObjectURL(svgBlob);
 
 img.onload = function(){
 
@@ -245,8 +247,6 @@ ctx.fillRect(0,0,canvas.width,canvas.height);
 
 ctx.drawImage(img,0,0,canvas.width,canvas.height);
 
-URL.revokeObjectURL(url);
-
 let link = document.createElement("a");
 link.download = "fluxograma.png";
 link.href = canvas.toDataURL("image/png");
@@ -254,6 +254,6 @@ link.click();
 
 };
 
-img.src = url;
+img.src = image64;
 
 }
