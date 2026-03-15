@@ -2,7 +2,7 @@ mermaid.initialize({
   startOnLoad: false,
   flowchart: {
     curve: 'basis',
-    nodeSpacing: 180,
+    nodeSpacing: 150,
     rankSpacing: 80
   }
 });
@@ -27,60 +27,78 @@ function gerarFluxo() {
   let loops = 0;
   let manual = 0;
   let sistemaAuto = 0;
-  let atividadesTempo = [];
   
-  linhas.forEach(function(linha) {
+  console.log("Linhas processadas:", linhas.length);  // DEBUG
+  
+  linhas.forEach(function(linha, linhaIndex) {
     if (!linha.trim()) return;
     
-    // **PARSE EXATO**: tab OU 2+ espaços (formato Excel copiado)
-    let col = linha.split(/\t| {2,}/);
-    if (col.length < 6) return;
+    // **PARSE ROBUSTO**: tenta tab, depois múltiplos espaços
+    let col = linha.split(/\t/);
+    if (col.length < 2) col = linha.trim().split(/ {2,}/);
     
-    let ordem = col[0].trim();      // A: 1
-    let id = col[1].trim();         // B: A, B, C...
-    let atividade = limparTexto(col[2]);  // C: "Receber?"
-    let tipo = col[3].trim().toLowerCase(); // D: Manual
-    let sistema = limparTexto(col[4]);  // E: Email
-    let tempo = parseFloat(col[5]) || 0; // F: 5.0
-    let proxSim = col[6] ? col[6].trim() : null; // G: B
-    let proxNao = col[7] ? col[7].trim() : null; // H: 
-    let cor = col[8] ? col[8].trim().toLowerCase() : ""; // I: blue
+    console.log(`Linha ${linhaIndex}:`, col);  // DEBUG cada linha
+    
+    if (col.length < 6) {
+      console.warn("Ignorando linha curta:", linha);
+      return;
+    }
+    
+    let idNumero = parseInt(col[1]);
+    if (isNaN(idNumero)) {
+      console.warn("ID inválido:", col[1]);
+      return;
+    }
+    
+    let id = "A" + idNumero;
+    let atividade = limparTexto(col[2]);
+    let tipo = (col[3] || "").toLowerCase();
+    let sistema = limparTexto(col[4] || "");
+    let tempo = parseFloat(col[5]) || 0;
+    let proxSim = col[6] ? "A" + parseInt(col[6]) : null;
+    let proxNao = col[7] ? "A" + parseInt(col[7]) : null;
+    let cor = (col[8] || "").toLowerCase().trim();
+    
+    console.log(`Processado: ${id} "${atividade}" ${tempo}min cor:${cor}`);  // DEBUG
     
     tempoTotal += tempo;
-    atividadesTempo.push({atividade, tempo});
     
     if (tipo === "manual") manual++;
     else sistemaAuto++;
-    if (proxNao && proxNao !== "") loops++;
+    if (proxNao && parseInt(col[7]) < idNumero) loops++;
     
-    let label = atividade + "\\n" + sistema + "\\n" + tempo + "min";
+    let label = atividade + "\\n" + sistema + "\\n" + tempo + " min";
     
     if (atividade.includes("?")) {
       nodes[id] = id + "{" + label + "}";
-      if (proxSim && proxSim !== "") links.push(id + " -->|Sim| " + proxSim);
-      if (proxNao && proxNao !== "") links.push(id + " -->|Não| " + proxNao);
+      if (proxSim) links.push(id + " -->|Sim| " + proxSim);
+      if (proxNao) links.push(id + " -->|Não| " + proxNao);
     } else {
       nodes[id] = id + '["' + label + '"]';
-      if (proxSim && proxSim !== "") links.push(id + " --> " + proxSim);
-      if (proxNao && proxNao !== "") links.push(id + " --> " + proxNao);
+      if (proxSim) links.push(id + " --> " + proxSim);
+      if (proxNao) links.push(id + " --> " + proxNao);
     }
     
-    // Cor SÓ se coluna I tem valor
-    if (cor !== "") {
+    if (cor) {
       nodes[id] += "::: " + cor;
     }
   });
   
-  // **LINKS NORMAIS PRIMEIRO** (Prox_Sim/Prox_Nao)
-  links.forEach(l => mermaidCode += l + "\n");
+  console.log("Nodes criados:", Object.keys(nodes));  // DEBUG
   
-  // Nós ordenados por ID
-  Object.keys(nodes).sort().forEach(id => {
+  // Ordena por número ID
+  Object.keys(nodes).sort(function(a,b) {
+    return Number(a.slice(1)) - Number(b.slice(1));
+  }).forEach(function(id) {
     mermaidCode += nodes[id] + "\n";
   });
   
-  // Estilos - BORDA PRETA SEMPRE
-  mermaidCode += "\nclassDef default fill:#e3f2fd,stroke:#000,stroke-width:3px,color:#000\n";
+  links.forEach(function(l) {
+    mermaidCode += l + "\n";
+  });
+  
+  mermaidCode += "\n";
+  mermaidCode += "classDef default fill:#f0f9ff,stroke:#000,stroke-width:3px,color:#000\n";
   mermaidCode += "classDef blue fill:#8ecae6,stroke:#000,stroke-width:3px,color:#000\n";
   mermaidCode += "classDef yellow fill:#ffd166,stroke:#000,stroke-width:3px,color:#000\n";
   mermaidCode += "classDef green fill:#95d5b2,stroke:#000,stroke-width:3px,color:#000\n";
@@ -89,44 +107,30 @@ function gerarFluxo() {
   
   try {
     document.getElementById("diagram").innerHTML = mermaidCode;
-    
-    // **RENDER DUAS VEZES** (corrige layout Mermaid)
     mermaid.init();
-    setTimeout(() => mermaid.init(), 100);
     
     // Métricas
-    if (document.getElementById("tempoTotal")) document.getElementById("tempoTotal").innerHTML = tempoTotal + " min";
-    if (document.getElementById("loops")) document.getElementById("loops").innerHTML = loops;
-    if (document.getElementById("manual")) document.getElementById("manual").innerHTML = manual;
-    if (document.getElementById("sistemaAuto")) document.getElementById("sistemaAuto").innerHTML = sistemaAuto;
+    document.getElementById("tempoTotal") && (document.getElementById("tempoTotal").textContent = tempoTotal);
+    document.getElementById("loops") && (document.getElementById("loops").textContent = loops);
+    document.getElementById("manual") && (document.getElementById("manual").textContent = manual);
+    document.getElementById("sistemaAuto") && (document.getElementById("sistemaAuto").textContent = sistemaAuto);
+    
+    console.log("Mermaid code gerado:", mermaidCode);  // DEBUG final
     
   } catch (error) {
-    console.error(error);
-    document.getElementById("diagram").innerHTML = "Erro parsing: verifique formato Excel";
+    console.error("Erro Mermaid:", error);
+    document.getElementById("diagram").innerHTML = "<pre>Erro:\n" + error + "\n\nVerifique console (F12)</pre>";
   }
 }
 
 function exportarPNG() {
-  // Fallback simples se html2canvas não carregar
-  const svg = document.querySelector("#diagram svg");
+  const svg = document.querySelector('#diagram svg');
   if (svg) {
-    const serializer = new XMLSerializer();
-    let svgStr = serializer.serializeToString(svg);
-    svgStr = '<?xml version="1.0" standalone="no"?>\r\n' + svgStr;
-    const svgBlob = new Blob([svgStr], {type:"image/svg+xml;charset=utf-8"});
-    const svgUrl = URL.createObjectURL(svgBlob);
-    const link = document.createElement("a");
-    link.href = svgUrl;
-    link.download = "fluxo_bpmn.svg";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-}
-
-function limparTudo() {
-  document.getElementById("entrada").value = "";
-  document.getElementById("processo").value = "";
-  document.getElementById("analista").value = "";
-  document.getElementById("diagram").innerHTML = "";
-}
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img
