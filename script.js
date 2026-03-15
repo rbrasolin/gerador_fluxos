@@ -45,7 +45,7 @@ let col = linha.trim().split(/\s{2,}|\t/);
 
 if(col.length < 6) return;
 
-let id = "A"+col[1]; // evitar erro mermaid com números
+let id = "A"+col[1];
 let idNumero = Number(col[1]);
 
 let atividade = limparTexto(col[2]);
@@ -79,7 +79,9 @@ if(proxNao && Number(col[7]) < idNumero){
 loops++;
 }
 
-let label = `${atividade}<br>${sistema}<br>${tempo} min`;
+// 🔧 CORREÇÃO 1 (removido <br>)
+
+let label = `${atividade}\\n${sistema}\\n${tempo} min`;
 
 if(atividade.includes("?")){
 
@@ -115,10 +117,11 @@ nodes[id] += `:::${cor}`;
 
 });
 
-// montar nodes ordenados
+
+// 🔧 CORREÇÃO 2 (sort correto)
 
 Object.keys(nodes)
-.sort()
+.sort((a,b)=>Number(a.slice(1))-Number(b.slice(1)))
 .forEach(id=>{
 mermaidCode += nodes[id] + "\n";
 });
