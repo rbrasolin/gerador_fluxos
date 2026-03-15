@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<meta charset="UTF-8">
+<title>Gerador de Fluxograma</title>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+
+<link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+
+<h1>Gerador de Fluxograma de Processos</h1>
+
+<label>Nome do Processo</label>
+<input id="processo">
+
+<label>Analista</label>
+<input id="analista">
+
+<h3>Cole a tabela do Excel</h3>
+
+<textarea id="entrada"></textarea>
+
+<button onclick="gerarFluxo()">GERAR FLUXO</button>
+
+<h3>Fluxo</h3>
+
+<div id="diagram"></div>
+
+<button onclick="baixarSVG()">Baixar SVG</button>
+
+<script src="script.js"></script>
+
+</body>
+</html>
