@@ -3,7 +3,8 @@ startOnLoad:false,
 flowchart:{
 curve:'basis',
 nodeSpacing:50,
-rankSpacing:80
+rankSpacing:80,
+useMaxWidth:false
 }
 });
 
@@ -28,6 +29,7 @@ let mermaidCode = "flowchart LR\n";
 
 let nodes = {};
 let links = [];
+let classes = [];
 
 // métricas
 let tempoTotal = 0;
@@ -53,11 +55,11 @@ let tipo = (col[3] || "").toLowerCase();
 let sistema = limparTexto(col[4] || "");
 let tempo = Number(col[5]) || 0;
 
-// 🔧 CORREÇÃO DO BUG DAS CORES
+// validação numérica das ligações
 let proxSim = (col[6] && !isNaN(col[6])) ? "A"+col[6] : null;
 let proxNao = (col[7] && !isNaN(col[7])) ? "A"+col[7] : null;
 
-let cor = limparTexto(col[8] || "white").toLowerCase();
+let cor = limparTexto(col[8] || "").toLowerCase();
 
 tempoTotal += tempo;
 
@@ -67,7 +69,6 @@ tempo:tempo
 });
 
 // manual vs sistema
-
 if(tipo === "manual"){
 manual++;
 }else{
@@ -75,74 +76,73 @@ sistemaAuto++;
 }
 
 // detectar loop simples
-
 if(proxNao && Number(col[7]) < idNumero){
 loops++;
 }
 
-// label sem <br>
-
+// label
 let label = `${atividade}\\n${sistema}\\n${tempo} min`;
 
+// decisão ou atividade
 if(atividade.includes("?")){
 
 nodes[id] = `${id}{${label}}`;
 
+}else{
+
+nodes[id] = `${id}["${label}"]`;
+
+}
+
+// registrar classe de cor
+if(cor){
+classes.push(`class ${id} ${cor}`);
+}
+
+// ligações
 if(proxSim){
+if(atividade.includes("?")){
 links.push(`${id} -->|Sim| ${proxSim}`);
+}else{
+links.push(`${id} --> ${proxSim}`);
+}
 }
 
 if(proxNao){
 links.push(`${id} -->|Não| ${proxNao}`);
 }
 
-}else{
-
-nodes[id] = `${id}["${label}"]`;
-
-if(proxSim){
-links.push(`${id} --> ${proxSim}`);
-}
-
-if(proxNao){
-links.push(`${id} --> ${proxNao}`);
-}
-
-}
-
-// aplicar cor
-
-if(cor !== "white"){
-nodes[id] += `:::${cor}`;
-}
-
 });
 
-
-// sort correto
-
+// ordenar nodes
 Object.keys(nodes)
 .sort((a,b)=>Number(a.slice(1))-Number(b.slice(1)))
 .forEach(id=>{
 mermaidCode += nodes[id] + "\n";
 });
 
-// links
-
+// adicionar links
 links.forEach(l=>{
 mermaidCode += l + "\n";
 });
 
-// cores
+// aplicar classes
+classes.forEach(c=>{
+mermaidCode += c + "\n";
+});
 
+// estilos
 mermaidCode += `
-classDef blue fill:#8ecae6
-classDef yellow fill:#ffd166
-classDef green fill:#95d5b2
-classDef red fill:#ef476f
-classDef white fill:#ffffff
+
+classDef blue fill:#8ecae6,stroke:#000,stroke-width:2px,color:#000;
+classDef yellow fill:#ffd166,stroke:#000,stroke-width:2px,color:#000;
+classDef green fill:#95d5b2,stroke:#000,stroke-width:2px,color:#000;
+classDef red fill:#ef476f,stroke:#000,stroke-width:2px,color:#000;
+classDef white fill:#ffffff,stroke:#000,stroke-width:2px,color:#000;
+
 `;
 
+// renderizar
 try{
 
 document.getElementById("diagram").innerHTML =
@@ -162,7 +162,7 @@ alert("Erro ao gerar fluxo. Verifique caracteres especiais.");
 
 document.getElementById("infoProcesso").innerHTML = `
 <b>Processo:</b> ${processo}<br>
-<b>Analista:</b> ${analista}
+<b>Analista:</b> ${analista>
 `;
 
 
@@ -173,9 +173,7 @@ let totalAtividades = manual + sistemaAuto;
 let pctManual = totalAtividades ? ((manual/totalAtividades)*100).toFixed(1) : 0;
 let pctSistema = totalAtividades ? ((sistemaAuto/totalAtividades)*100).toFixed(1) : 0;
 
-
 // TOP 3 gargalos
-
 atividadesTempo.sort((a,b)=>b.tempo-a.tempo);
 
 let top3 = atividadesTempo.slice(0,3)
@@ -184,9 +182,7 @@ let top3 = atividadesTempo.slice(0,3)
 
 let indiceRetrabalho = ((loops/totalAtividades)*100).toFixed(1);
 
-
-// ===== PARETO =====
-
+// PARETO
 let paretoHTML = "<b>Pareto de tempo</b><br><br>";
 
 atividadesTempo.forEach(a=>{
@@ -214,7 +210,7 @@ ${paretoHTML}
 }
 
 
-// ===== DOWNLOAD PNG =====
+// ===== EXPORTAR PNG =====
 
 function baixarPNG(){
 
