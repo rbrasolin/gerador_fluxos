@@ -158,9 +158,9 @@ document.getElementById("metricas").innerHTML = `
 }
 
 
-// ===== DOWNLOAD SVG =====
+// ===== DOWNLOAD PNG =====
 
-function baixarSVG(){
+function baixarPNG(){
 
 let svg = document.querySelector("#diagram svg");
 
@@ -169,18 +169,39 @@ alert("Gere o fluxo primeiro");
 return;
 }
 
+// converter SVG para string
 let serializer = new XMLSerializer();
 let source = serializer.serializeToString(svg);
 
-let blob = new Blob([source], {type:"image/svg+xml;charset=utf-8"});
+// criar imagem
+let img = new Image();
+let svgBlob = new Blob([source], {type:"image/svg+xml;charset=utf-8"});
+let url = URL.createObjectURL(svgBlob);
 
-let url = URL.createObjectURL(blob);
+img.onload = function(){
 
-let a = document.createElement("a");
-a.href = url;
-a.download = "fluxograma.svg";
-a.click();
+let canvas = document.createElement("canvas");
+canvas.width = img.width * 2;
+canvas.height = img.height * 2;
+
+let ctx = canvas.getContext("2d");
+
+// fundo branco
+ctx.fillStyle = "white";
+ctx.fillRect(0,0,canvas.width,canvas.height);
+
+ctx.drawImage(img,0,0,canvas.width,canvas.height);
 
 URL.revokeObjectURL(url);
+
+// exportar PNG
+let link = document.createElement("a");
+link.download = "fluxograma.png";
+link.href = canvas.toDataURL("image/png");
+link.click();
+
+};
+
+img.src = url;
 
 }
