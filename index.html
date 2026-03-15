@@ -1,65 +1,55 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ComponenteFerramenta - Fluxo BPMN</title>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2/dist/tailwind.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.0/dist/tailwind.min.css" rel="stylesheet">
+  <link href="style.css" rel="stylesheet">
 </head>
-<body class="bg-gray-100 p-8">
-  <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-lg p-8">
+<body>
+  <div class="container mx-auto p-8 max-w-6xl">
     
     <!-- Header -->
-    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">
-      🛠️ ComponenteFerramenta - Gerador de Fluxo BPMN
-    </h1>
+    <h1 class="text-4xl font-bold text-center mb-8 text-blue-800">🛠️ ComponenteFerramenta</h1>
     
     <!-- Inputs -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      <input type="text" id="processo" placeholder="Nome do Processo" 
-             class="p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-      <input type="text" id="analista" placeholder="Analista Responsável" 
-             class="p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-      <label class="p-3 bg-blue-100 rounded-lg">
-        Cole dados Excel:
-        <textarea id="entrada" rows="6" 
-                  class="w-full mt-2 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-vertical"
-                  placeholder="1   A   Receber?   Manual   Email   5   2   3   blue
-2   B   Processar   Robô   SAP   10              green"></textarea>
-      </label>
+    <div class="grid md:grid-cols-3 gap-4 mb-6">
+      <input type="text" id="processo" placeholder="Processo" class="p-4 border rounded-lg">
+      <input type="text" id="analista" placeholder="Analista" class="p-4 border rounded-lg">
+      <textarea id="entrada" rows="10" class="md:col-span-3 p-4 border rounded-lg resize-vertical font-mono text-sm" 
+                placeholder="Cole aqui os dados do Excel..."></textarea>
     </div>
     
-    <!-- Botão Gerar -->
-    <div class="text-center mb-8">
-      <button onclick="gerarFluxo()" 
-              class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-12 rounded-lg text-xl shadow-lg transition-all">
-        🎨 Gerar Fluxo BPMN
+    <!-- Botões -->
+    <div class="flex flex-wrap gap-4 mb-8 justify-center">
+      <button onclick="gerarFluxo()" class="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700">
+        🎨 Gerar Fluxo
+      </button>
+      <button onclick="exportarPNG()" class="bg-green-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-green-700">
+        💾 Exportar PNG
+      </button>
+      <button onclick="limparTudo()" class="bg-gray-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-gray-700">
+        🗑️ Limpar
       </button>
     </div>
     
-    <!-- Diagrama Mermaid (CORRIGIDO!) -->
-    <div id="diagram" class="mermaid max-h-96 overflow-auto border-2 border-gray-200 rounded-lg p-4 bg-white">
-      <!-- Diagrama renderiza aqui automaticamente -->
+    <!-- Diagrama GRANDE -->
+    <div id="diagram" class="mermaid border-2 border-gray-300 rounded-xl p-8 bg-white shadow-2xl mb-8 h-[600px] overflow-auto"></div>
+    
+    <!-- Análises e Pareto -->
+    <div id="analises" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl">
+      <!-- Preenche via JS -->
     </div>
     
-    <!-- Métricas (opcional) -->
-    <div class="mt-6 p-4 bg-gray-50 rounded-lg text-sm">
-      <strong>Estatísticas:</strong> Aguarde geração...
-    </div>
   </div>
 
-  <!-- SCRIPT COMPLETO CORRIGIDO -->
   <script>
-    // Espera DOM carregar
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', () => {
       mermaid.initialize({
         startOnLoad: false,
         flowchart: {
-          curve: 'basis',
-          nodeSpacing: 120,
-          rankSpacing: 100
+          curve: 'linear',  // Linhas retas para BPMN
+          nodeSpacing: 150, // Mais horizontal
+          rankSpacing: 80
         }
       });
     });
@@ -69,63 +59,116 @@
     }
 
     function gerarFluxo() {
-      const entrada = document.getElementById("entrada").value;
-      const linhas = entrada.trim().split("\n");
+      let texto = document.getElementById("entrada").value;
+      let processo = document.getElementById("processo").value;
+      let analista = document.getElementById("analista").value;
+      
+      let linhas = texto.trim().split("\n");
       let mermaidCode = "flowchart LR\n";
-      let nodes = {};
-      let links = [];
-      let tempoTotal = 0, manual = 0, sistemaAuto = 0, loops = 0;
+      let nodes = {}, links = [];
+      let tempoTotal = 0, loops = 0, manual = 0, sistemaAuto = 0, atividadesTempo = [];
 
       linhas.forEach(linha => {
         if (!linha.trim()) return;
-        const col = linha.trim().split(/\s{2,}|\t/);
+        let col = linha.trim().split(/\s{2,}|\t/);
         if (col.length < 6) return;
         
-        const idNumero = Number(col[1]);
-        const id = "A" + idNumero;
-        const atividade = limparTexto(col[2]);
-        const tipo = (col[3] || "").toLowerCase();
-        const sistema = limparTexto(col[4] || "");
-        const tempo = Number(col[5]) || 0;
-        const proxSim = col[6] ? "A" + col[6] : null;
-        const proxNao = col[7] ? "A" + col[7] : null;
-        const cor = (col[8] || "").toLowerCase().trim();
+        let idNumero = Number(col[1]);
+        let id = "A" + idNumero;
+        let atividade = limparTexto(col[2]);
+        let tipo = (col[3] || "").toLowerCase();
+        let sistema = limparTexto(col[4] || "");
+        let tempo = Number(col[5]) || 0;
+        let proxSim = col[6] ? "A" + col[6] : null;
+        let proxNao = col[7] ? "A" + col[7] : null;
+        let cor = (col[8] || "").toLowerCase().trim();
         
         tempoTotal += tempo;
+        atividadesTempo.push({atividade, tempo});
         if (tipo === "manual") manual++;
         else sistemaAuto++;
         if (proxNao && Number(col[7]) < idNumero) loops++;
         
-        const label = atividade + "\\n" + sistema + "\\n" + tempo + "min";
+        let label = atividade + "\\n" + sistema + "\\n" + tempo + "min";
         
         if (atividade.includes("?")) {
-          nodes[id] = id + "{" + label + "}";
+          nodes[id] = id + "{" + label + "}"; // Losango
           if (proxSim) links.push(id + " -->|Sim| " + proxSim);
           if (proxNao) links.push(id + " -->|Não| " + proxNao);
         } else {
-          nodes[id] = id + "[" + label + "]";
+          nodes[id] = id + "[" + label + "]"; // Retangular
           if (proxSim) links.push(id + " --> " + proxSim);
           if (proxNao) links.push(id + " --> " + proxNao);
         }
         
-        if (cor && cor !== "") {
-          nodes[id] += ":::cor" + cor.charAt(0).toUpperCase() + cor.slice(1);
-        }
+        if (cor && cor !== "") nodes[id] += ":::cor" + cor.charAt(0).toUpperCase() + cor.slice(1);
       });
 
-      Object.keys(nodes).sort((a,b) => Number(a.slice(1)) - Number(b.slice(1)))
+      // Ordem L→R
+      Object.keys(nodes).sort((a,b)=>Number(a.slice(1))-Number(b.slice(1)))
         .forEach(id => mermaidCode += nodes[id] + "\n");
       links.forEach(l => mermaidCode += l + "\n");
 
-      mermaidCode += "\nclassDef corBlue fill:#8ecae6,stroke:#000,stroke-width:2px,color:#000\n";
-      mermaidCode += "classDef corYellow fill:#ffd166,stroke:#000,stroke-width:2px,color:#000\n";
-      mermaidCode += "classDef corGreen fill:#95d5b2,stroke:#000,stroke-width:2px,color:#000\n";
-      mermaidCode += "classDef corRed fill:#ef476f,stroke:#000,stroke-width:2px,color:#000\n";
-      mermaidCode += "classDef corWhite fill:#ffffff,stroke:#000,stroke-width:2px,color:#000\n";
+      // Cores com borda preta
+      mermaidCode += "\nclassDef corBlue fill:#8ecae6,stroke:#000,stroke-width:3px,color:#000\n";
+      mermaidCode += "classDef corYellow fill:#ffd166,stroke:#000,stroke-width:3px,color:#000\n";
+      mermaidCode += "classDef corGreen fill:#95d5b2,stroke:#000,stroke-width:3px,color:#000\n";
+      mermaidCode += "classDef corRed fill:#ef476f,stroke:#000,stroke-width:3px,color:#000\n";
+      mermaidCode += "classDef corWhite fill:#ffffff,stroke:#000,stroke-width:3px,color:#000\n";
 
-      // AUTO-RENDER PERFEITO
       document.getElementById("diagram").innerHTML = mermaidCode;
       mermaid.init();
+      
+      // Análises + Pareto
+      mostrarAnalises(tempoTotal, loops, manual, sistemaAuto, atividadesTempo);
+    }
+
+    function mostrarAnalises(tempoTotal, loops, manual, sistemaAuto, atividades) {
+      // Ordena Pareto (80/20)
+      atividades.sort((a,b)=>b.tempo-a.tempo);
+      let pareto80 = atividades.slice(0, Math.ceil(atividades.length * 0.2)).reduce((sum,at)=>sum+at.tempo,0);
+      
+      document.getElementById("analises").innerHTML = `
+        <div class="bg-white p-6 rounded-xl shadow-lg">
+          <h3 class="text-xl font-bold text-gray-800 mb-4">📊 Análises</h3>
+          <p><strong>Tempo Total:</strong> ${tempoTotal}min</p>
+          <p><strong>Gargalos (Loops):</strong> ${loops}</p>
+          <p><strong>Manual:</strong> ${manual} | <strong>Autom.</strong> ${sistemaAuto}</p>
+        </div>
+        <div class="bg-white p-6 rounded-xl shadow-lg">
+          <h3 class="text-xl font-bold text-gray-800 mb-4">📈 Pareto 80/20</h3>
+          <p><strong>Top 20%:</strong> ${pareto80}min (${((pareto80/tempoTotal)*100).toFixed(0)}%)</p>
+          <p><strong>Principais:</strong> ${atividades.slice(0,3).map(a=>a.atividade).join(', ')}</p>
+        </div>
+      `;
+    }
+
+    function exportarPNG() {
+      const svg = document.querySelector('#diagram svg');
+      if (svg) {
+        const svgData = new XMLSerializer().serializeToString(svg);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        img.onload = () => {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          const link = document.createElement('a');
+          link.download = 'fluxo.png';
+          link.href = canvas.toDataURL();
+          link.click();
+        };
+        img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+      }
+    }
+
+    function limparTudo() {
+      document.getElementById("entrada").value = "";
+      document.getElementById("processo").value = "";
+      document.getElementById("analista").value = "";
+      document.getElementById("diagram").innerHTML = "";
+      document.getElementById("analises").innerHTML = '<div class="col-span-full text-center p-8">Aguardando dados...</div>';
     }
   </script>
 </body>
