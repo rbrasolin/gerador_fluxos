@@ -1,4 +1,11 @@
-mermaid.initialize({ startOnLoad:false });
+mermaid.initialize({
+startOnLoad:false,
+flowchart:{
+curve:'basis',
+nodeSpacing:50,
+rankSpacing:80
+}
+});
 
 function gerarFluxo(){
 
@@ -13,6 +20,7 @@ let mermaidCode = "flowchart LR\n";
 
 let nodes = {};
 let links = [];
+let rankFix = [];
 
 // métricas
 let tempoTotal = 0;
@@ -56,7 +64,7 @@ sistemaAuto++;
 
 // detectar loops simples
 
-if(proxNao && proxNao < id){
+if(proxNao && Number(proxNao) < Number(id)){
 loops++;
 }
 
@@ -66,9 +74,9 @@ let label = `${atividade}<br>${sistema}<br>${tempo} min`;
 
 if(atividade.includes("?")){
 
-// losango (decisão)
-
 nodes[id] = `${id}{${label}}:::${cor}`;
+
+rankFix.push(id);
 
 // seta SIM
 if(proxSim){
@@ -81,8 +89,6 @@ links.push(`${id} -->|Não| ${proxNao}`);
 }
 
 }else{
-
-// caixa normal
 
 nodes[id] = `${id}["${label}"]:::${cor}`;
 
@@ -98,16 +104,24 @@ links.push(`${id} --> ${proxNao}`);
 
 });
 
-// montar nodes
+// montar nodes ORDENADOS pelo ID
 
-Object.values(nodes).forEach(n=>{
-mermaidCode += n + "\n";
+Object.keys(nodes)
+.sort((a,b)=>Number(a)-Number(b))
+.forEach(id=>{
+mermaidCode += nodes[id] + "\n";
 });
 
 // montar links
 
 links.forEach(l=>{
 mermaidCode += l + "\n";
+});
+
+// corrigir layout de decisões
+
+rankFix.forEach(id=>{
+mermaidCode += `{rank=same; ${id}}\n`;
 });
 
 // cores
@@ -169,11 +183,9 @@ alert("Gere o fluxo primeiro");
 return;
 }
 
-// converter SVG para string
 let serializer = new XMLSerializer();
 let source = serializer.serializeToString(svg);
 
-// criar imagem
 let img = new Image();
 let svgBlob = new Blob([source], {type:"image/svg+xml;charset=utf-8"});
 let url = URL.createObjectURL(svgBlob);
@@ -181,12 +193,13 @@ let url = URL.createObjectURL(svgBlob);
 img.onload = function(){
 
 let canvas = document.createElement("canvas");
-canvas.width = img.width * 2;
-canvas.height = img.height * 2;
+
+// resolução maior
+canvas.width = img.width * 3;
+canvas.height = img.height * 3;
 
 let ctx = canvas.getContext("2d");
 
-// fundo branco
 ctx.fillStyle = "white";
 ctx.fillRect(0,0,canvas.width,canvas.height);
 
@@ -194,7 +207,6 @@ ctx.drawImage(img,0,0,canvas.width,canvas.height);
 
 URL.revokeObjectURL(url);
 
-// exportar PNG
 let link = document.createElement("a");
 link.download = "fluxograma.png";
 link.href = canvas.toDataURL("image/png");
