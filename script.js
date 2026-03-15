@@ -3,13 +3,12 @@ startOnLoad:false,
 flowchart:{
 curve:'basis',
 nodeSpacing:50,
-rankSpacing:80,
-useMaxWidth:false
+rankSpacing:80
 }
 });
 
 function limparTexto(txt){
-return (txt || "")
+return txt
 .replace(/"/g,'')
 .replace(/\(/g,'')
 .replace(/\)/g,'')
@@ -17,7 +16,7 @@ return (txt || "")
 .trim();
 }
 
-function gerarFluxo(){
+window.gerarFluxo = function(){
 
 let texto = document.getElementById("entrada").value;
 let processo = document.getElementById("processo").value;
@@ -29,9 +28,7 @@ let mermaidCode = "flowchart LR\n";
 
 let nodes = {};
 let links = [];
-let classes = [];
 
-// métricas
 let tempoTotal = 0;
 let loops = 0;
 let manual = 0;
@@ -47,19 +44,18 @@ let col = linha.trim().split(/\s{2,}|\t/);
 
 if(col.length < 6) return;
 
-let id = "A"+col[1];
 let idNumero = Number(col[1]);
+let id = "A"+idNumero;
 
 let atividade = limparTexto(col[2]);
 let tipo = (col[3] || "").toLowerCase();
 let sistema = limparTexto(col[4] || "");
 let tempo = Number(col[5]) || 0;
 
-// validação numérica das ligações
-let proxSim = (col[6] && !isNaN(col[6])) ? "A"+col[6] : null;
-let proxNao = (col[7] && !isNaN(col[7])) ? "A"+col[7] : null;
+let proxSim = col[6] ? "A"+col[6] : null;
+let proxNao = col[7] ? "A"+col[7] : null;
 
-let cor = limparTexto(col[8] || "").toLowerCase();
+let cor = (col[8] || "").toLowerCase();
 
 tempoTotal += tempo;
 
@@ -68,81 +64,70 @@ atividade:atividade,
 tempo:tempo
 });
 
-// manual vs sistema
 if(tipo === "manual"){
 manual++;
 }else{
 sistemaAuto++;
 }
 
-// detectar loop simples
 if(proxNao && Number(col[7]) < idNumero){
 loops++;
 }
 
-// label
 let label = `${atividade}\\n${sistema}\\n${tempo} min`;
 
-// decisão ou atividade
 if(atividade.includes("?")){
 
 nodes[id] = `${id}{${label}}`;
 
-}else{
-
-nodes[id] = `${id}["${label}"]`;
-
-}
-
-// registrar classe de cor
-if(cor){
-classes.push(`class ${id} ${cor}`);
-}
-
-// ligações
 if(proxSim){
-if(atividade.includes("?")){
 links.push(`${id} -->|Sim| ${proxSim}`);
-}else{
-links.push(`${id} --> ${proxSim}`);
-}
 }
 
 if(proxNao){
 links.push(`${id} -->|Não| ${proxNao}`);
 }
 
+}else{
+
+nodes[id] = `${id}["${label}"]`;
+
+if(proxSim){
+links.push(`${id} --> ${proxSim}`);
+}
+
+if(proxNao){
+links.push(`${id} --> ${proxNao}`);
+}
+
+}
+
+if(cor){
+nodes[id] += `:::${cor}`;
+}
+
 });
 
-// ordenar nodes
 Object.keys(nodes)
 .sort((a,b)=>Number(a.slice(1))-Number(b.slice(1)))
 .forEach(id=>{
 mermaidCode += nodes[id] + "\n";
 });
 
-// adicionar links
 links.forEach(l=>{
 mermaidCode += l + "\n";
 });
 
-// aplicar classes
-classes.forEach(c=>{
-mermaidCode += c + "\n";
-});
-
-// estilos
 mermaidCode += `
 
-classDef blue fill:#8ecae6,stroke:#000,stroke-width:2px,color:#000;
-classDef yellow fill:#ffd166,stroke:#000,stroke-width:2px,color:#000;
-classDef green fill:#95d5b2,stroke:#000,stroke-width:2px,color:#000;
-classDef red fill:#ef476f,stroke:#000,stroke-width:2px,color:#000;
-classDef white fill:#ffffff,stroke:#000,stroke-width:2px,color:#000;
+classDef blue fill:#8ecae6,stroke:#000,color:#000
+classDef yellow fill:#ffd166,stroke:#000,color:#000
+classDef green fill:#95d5b2,stroke:#000,color:#000
+classDef red fill:#ef476f,stroke:#000,color:#000
+classDef white fill:#ffffff,stroke:#000,color:#000
 
 `;
 
-// renderizar
 try{
 
 document.getElementById("diagram").innerHTML =
@@ -158,22 +143,16 @@ alert("Erro ao gerar fluxo. Verifique caracteres especiais.");
 
 }
 
-// ===== INFO PROCESSO =====
-
 document.getElementById("infoProcesso").innerHTML = `
 <b>Processo:</b> ${processo}<br>
-<b>Analista:</b> ${analista>
+<b>Analista:</b> ${analista}
 `;
-
-
-// ===== MÉTRICAS =====
 
 let totalAtividades = manual + sistemaAuto;
 
 let pctManual = totalAtividades ? ((manual/totalAtividades)*100).toFixed(1) : 0;
 let pctSistema = totalAtividades ? ((sistemaAuto/totalAtividades)*100).toFixed(1) : 0;
 
-// TOP 3 gargalos
 atividadesTempo.sort((a,b)=>b.tempo-a.tempo);
 
 let top3 = atividadesTempo.slice(0,3)
@@ -182,7 +161,6 @@ let top3 = atividadesTempo.slice(0,3)
 
 let indiceRetrabalho = ((loops/totalAtividades)*100).toFixed(1);
 
-// PARETO
 let paretoHTML = "<b>Pareto de tempo</b><br><br>";
 
 atividadesTempo.forEach(a=>{
@@ -210,9 +188,9 @@ ${paretoHTML}
 }
 
 
-// ===== EXPORTAR PNG =====
+// EXPORTAÇÃO PNG
 
-function baixarPNG(){
+window.baixarPNG = function(){
 
 let svg = document.querySelector("#diagram svg");
 
