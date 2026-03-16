@@ -275,31 +275,47 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
 
   atividadesTempo.sort((a, b) => b.tempo - a.tempo);
 
-  const top3 = atividadesTempo
+    const top3HTML = atividadesTempo
     .slice(0, 3)
     .map(a => {
       const pct = tempoTotal
         ? ((a.tempo / tempoTotal) * 100).toFixed(1).replace(".", ",")
         : "0,0";
-      return a.atividade + " (" + formatarTempo(a.tempo) + " | " + pct + "%)";
-    })
-    .join("<br>");
 
-  let paretoHTML = "<b>Pareto de tempo</b><br><br>";
+      return '<div class="analytics-item">' +
+        a.atividade +
+        ' — <span class="icon-time">⏱</span>' + formatarTempo(a.tempo) +
+        ' <span class="icon-pct">٪</span>' + pct + '%' +
+        '</div>';
+    })
+    .join("");
+
+  let paretoHTML = "";
   atividadesTempo.forEach(a => {
     const pct = tempoTotal
       ? ((a.tempo / tempoTotal) * 100).toFixed(1).replace(".", ",")
       : "0,0";
-    paretoHTML += a.atividade + " — " + formatarTempo(a.tempo) + " | " + pct + "%<br>";
+
+    paretoHTML += '<div class="analytics-item">' +
+      a.atividade +
+      ' — <span class="icon-time">⏱</span>' + formatarTempo(a.tempo) +
+      ' <span class="icon-pct">٪</span>' + pct + '%' +
+      '</div>';
   });
 
   const tiposOrdenados = Object.entries(tiposTempo).sort((a, b) => b[1] - a[1]);
-  let tiposHTML = "<b>Tempo por tipo</b><br><br>";
+
+  let tiposHTML = "";
   tiposOrdenados.forEach(([tipo, tempo]) => {
     const pct = tempoTotal
       ? ((tempo / tempoTotal) * 100).toFixed(1).replace(".", ",")
       : "0,0";
-    tiposHTML += tipo + " — " + formatarTempo(tempo) + " | " + pct + "%<br>";
+
+    tiposHTML += '<div class="analytics-item">' +
+      tipo +
+      ' — <span class="icon-time">⏱</span>' + formatarTempo(tempo) +
+      ' <span class="icon-pct">٪</span>' + pct + '%' +
+      '</div>';
   });
 
   // Impacto potencial de retrabalho
@@ -319,16 +335,36 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
     : "0,0";
 
   document.getElementById("metricas").innerHTML =
-    "<b>Tempo total do processo:</b> " + formatarTempo(tempoTotal) + "<br><br>" +
+    '<div class="analytics-grid">' +
 
-    "<b>Top 3 gargalos:</b><br>" + top3 + "<br><br>" +
+      '<div class="analytics-col">' +
+        '<div class="analytics-section">' +
+          '<div class="metric-highlight"><b>Tempo total do processo:</b> <span class="icon-time">⏱</span>' + formatarTempo(tempoTotal) + '</div>' +
 
-    "<b>Loops detectados:</b> " + loops + "<br>" +
-    "<b>Impacto potencial de retrabalho:</b> " + formatarTempo(tempoPotencialRetrabalho) + " | " + impactoPotencialRetrabalho + "%<br>" +
-    "<b>Taxa de decisão:</b> " + decisoes + " etapa(s) | " + taxaDecisao + "%<br><br>" +
+          '<div class="analytics-title">Top 3 gargalos</div>' +
+          top3HTML +
 
-    tiposHTML + "<br>" +
-    paretoHTML;
+          '<br>' +
+
+          '<div class="analytics-item"><b>Loops detectados:</b> ' + loops + '</div>' +
+          '<div class="analytics-item"><b>Impacto potencial de retrabalho:</b> <span class="icon-time">⏱</span>' + formatarTempo(tempoPotencialRetrabalho) + ' <span class="icon-pct">٪</span>' + impactoPotencialRetrabalho + '%</div>' +
+          '<div class="analytics-item"><b>Taxa de decisão:</b> ' + decisoes + ' etapa(s) <span class="icon-pct">٪</span>' + taxaDecisao + '%</div>' +
+        '</div>' +
+
+        '<div class="analytics-section">' +
+          '<div class="analytics-title">Tempo por tipo</div>' +
+          tiposHTML +
+        '</div>' +
+      '</div>' +
+
+      '<div class="analytics-col">' +
+        '<div class="analytics-section">' +
+          '<div class="analytics-title">Pareto de tempo</div>' +
+          paretoHTML +
+        '</div>' +
+      '</div>' +
+
+    '</div>';
 }
 
 function baixarPNG() {
@@ -351,7 +387,7 @@ function baixarPNG() {
   const alturaReal = Math.ceil(bbox.height + padding * 2);
 
   // Define um tamanho alto de exportação
-  const larguraExportacao = 9000; // pode reduzir para 5000 ou 7000 se quiser arquivo menor
+  const larguraExportacao = 9000; // pode reduzir para 5000 - 7000 ou 9000 se quiser arquivo menor
   const escala = larguraExportacao / larguraReal;
   const alturaExportacao = Math.ceil(alturaReal * escala);
 
