@@ -1,207 +1,259 @@
 mermaid.initialize({
-startOnLoad:false,
-flowchart:{
-curve:'basis',
-nodeSpacing:60,
-rankSpacing:100
-}
+  startOnLoad: false,
+  flowchart: {
+    curve: "basis",
+    nodeSpacing: 60,
+    rankSpacing: 100
+  }
 });
 
-function limpar(txt){
-if(!txt) return "";
-return txt.toString().replace(/"/g,"").trim();
+function limpar(txt) {
+  if (txt === null || txt === undefined) return "";
+  return String(txt)
+    .replace(/"/g, "")
+    .replace(/\(/g, "")
+    .replace(/\)/g, "")
+    .replace(/:/g, "")
+    .trim();
 }
 
-function gerarFluxo(){
-
-let texto = document.getElementById("entrada").value.trim();
-let processo = document.getElementById("processo").value;
-let analista = document.getElementById("analista").value;
-
-let linhas = texto.split("\n");
-
-let mermaidCode = "flowchart LR\n";
-
-let nodes = {};
-let links = [];
-
-let tempoTotal = 0;
-let loops = 0;
-let manual = 0;
-let sistemaAuto = 0;
-
-let atividadesTempo = [];
-
-linhas.shift(); // remove cabeçalho
-
-linhas.forEach(linha=>{
-
-if(!linha.trim()) return;
-
-let col = linha.split("\t");
-
-if(col.length < 8) return;
-
-let ordem = Number(col[0]);
-let id = limpar(col[1]);
-let atividade = limpar(col[2]);
-let tipo = limpar(col[3]).toLowerCase();
-let sistema = limpar(col[4]);
-let tempo = Number(col[5]) || 0;
-
-let proxSim = limpar(col[6]);
-let proxNao = limpar(col[7]);
-let cor = limpar(col[8]).toLowerCase();
-
-tempoTotal += tempo;
-
-atividadesTempo.push({
-atividade:atividade,
-tempo:tempo
-});
-
-if(tipo==="manual"){
-manual++;
-}else{
-sistemaAuto++;
+function normalizarCor(cor) {
+  const c = limpar(cor).toLowerCase();
+  const permitidas = ["blue", "yellow", "green", "red", "white"];
+  return permitidas.includes(c) ? c : "white";
 }
 
-if(proxNao && proxNao < id){
-loops++;
+function ehCabecalho(colunas) {
+  if (!colunas || colunas.length === 0) return false;
+  return limpar(colunas[0]).toLowerCase() === "ordem";
 }
 
-let label = `${atividade}\\n${sistema}\\n${tempo} min`;
+function gerarFluxo() {
+  const texto = document.getElementById("entrada").value;
+  const processo = document.getElementById("processo").value;
+  const analista = document.getElementById("analista").value;
 
-if(atividade.includes("?")){
+  if (!texto.trim()) {
+    alert("Cole a tabela do Excel primeiro.");
+    return;
+  }
 
-nodes[id] = `${id}{${label}}`;
+  const linhasBrutas = texto
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .filter(l => l.trim() !== "");
 
-if(proxSim){
-links.push(`${id} -->|Sim| ${proxSim}`);
-}
+  let linhas = linhasBrutas.map(l => l.split("\t"));
 
-if(proxNao){
-links.push(`${id} -->|Não| ${proxNao}`);
-}
+  if (linhas.length && ehCabecalho(linhas[0])) {
+    linhas.shift();
+  }
 
-}else{
+  const etapas = [];
+  const idsValidos = new Set();
 
-nodes[id] = `${id}["${label}"]`;
+  // 1ª passagem: montar estrutura correta das etapas
+  linhas.forEach((col) => {
+    // Precisamos de pelo menos 8 colunas do template
+    // Ordem | ID | Atividade | Tipo | Sistema | Tempo | Prox_Sim | Prox_Nao | Cor
+    while (col.length < 9) col.push("");
 
-if(proxSim){
-links.push(`${id} --> ${proxSim}`);
-}
+    const ordem = Number(limpar(col[0])) || 0;
+    const id = limpar(col[1]);
+    const atividade = limpar(col[2]);
+    const tipo = limpar(col[3]).toLowerCase();
+    const sistema = limpar(col[4]);
+    const tempo = Number(limpar(col[5])) || 0;
+    const proxSim = limpar(col[6]);
+    const proxNao = limpar(col[7]);
+    const cor = normalizarCor(col[8]);
 
-}
+    if (!id || !atividade) return;
 
-if(cor){
-nodes[id] += `:::${cor}`;
-}else{
-nodes[id] += `:::white`;
-}
+    etapas.push({
+      ordem,
+      id,
+      atividade,
+      tipo,
+      sistema,
+      tempo,
+      proxSim,
+      proxNao,
+      cor
+    });
 
-});
+    idsValidos.add(id);
+  });
 
-Object.keys(nodes).forEach(id=>{
-mermaidCode += nodes[id] + "\n";
-});
+  if (!etapas.length) {
+    alert("Nenhuma etapa válida foi encontrada na tabela.");
+    return;
+  }
 
-links.forEach(l=>{
-mermaidCode += l + "\n";
-});
+  etapas.sort((a, b) => a.ordem - b.ordem);
 
-mermaidCode += `
-classDef white fill:#ffffff,stroke:#000,color:#000
-classDef blue fill:#8ecae6,stroke:#000,color:#000
-classDef yellow fill:#ffd166,stroke:#000,color:#000
-classDef green fill:#95d5b2,stroke:#000,color:#000
-classDef red fill:#ef476f,stroke:#000,color:#000
+  let mermaidCode = "flowchart LR\n";
+
+  const nodes = [];
+  const links = [];
+  const classLines = [];
+
+  let tempoTotal = 0;
+  let loops = 0;
+  let manual = 0;
+  let sistemaAuto = 0;
+  const atividadesTempo = [];
+
+  // 2ª passagem: criar nós e métricas
+  etapas.forEach((etapa) => {
+    const id = etapa.id;
+    const atividade = etapa.atividade;
+    const tipo = etapa.tipo;
+    const sistema = etapa.sistema;
+    const tempo = etapa.tempo;
+    const cor = etapa.cor;
+
+    tempoTotal += tempo;
+    atividadesTempo.push({ atividade, tempo });
+
+    if (tipo === "manual") {
+      manual++;
+    } else {
+      sistemaAuto++;
+    }
+
+    if (etapa.proxNao && idsValidos.has(etapa.proxNao)) {
+      // loop simples: volta para uma ordem anterior
+      const destino = etapas.find(e => e.id === etapa.proxNao);
+      if (destino && destino.ordem < etapa.ordem) {
+        loops++;
+      }
+    }
+
+    const label = atividade + "\\n" + sistema + "\\n" + tempo + " min";
+
+    if (atividade.includes("?")) {
+      nodes.push(id + "{" + label + "}");
+    } else {
+      nodes.push(id + '["' + label + '"]');
+    }
+
+    classLines.push("class " + id + " " + cor);
+  });
+
+  // 3ª passagem: criar links apenas para IDs que existem
+  etapas.forEach((etapa) => {
+    const id = etapa.id;
+    const decisao = etapa.atividade.includes("?");
+
+    if (etapa.proxSim && idsValidos.has(etapa.proxSim)) {
+      if (decisao) {
+        links.push(id + " -->|Sim| " + etapa.proxSim);
+      } else {
+        links.push(id + " --> " + etapa.proxSim);
+      }
+    }
+
+    if (etapa.proxNao && idsValidos.has(etapa.proxNao)) {
+      links.push(id + " -->|Não| " + etapa.proxNao);
+    }
+  });
+
+  nodes.forEach(n => {
+    mermaidCode += n + "\n";
+  });
+
+  links.forEach(l => {
+    mermaidCode += l + "\n";
+  });
+
+  classLines.forEach(c => {
+    mermaidCode += c + "\n";
+  });
+
+  mermaidCode += `
+classDef white fill:#ffffff,stroke:#000,stroke-width:1.5px,color:#000;
+classDef blue fill:#8ecae6,stroke:#000,stroke-width:1.5px,color:#000;
+classDef yellow fill:#ffd166,stroke:#000,stroke-width:1.5px,color:#000;
+classDef green fill:#95d5b2,stroke:#000,stroke-width:1.5px,color:#000;
+classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
 `;
 
-document.getElementById("diagram").innerHTML =
-`<div class="mermaid">${mermaidCode}</div>`;
+  try {
+    document.getElementById("diagram").innerHTML =
+      '<div class="mermaid">' + mermaidCode + "</div>";
 
-mermaid.init(undefined, document.querySelectorAll(".mermaid"));
+    mermaid.init(undefined, document.querySelectorAll(".mermaid"));
+  } catch (e) {
+    console.error("Erro Mermaid:", e);
+    console.error("Código Mermaid gerado:\n", mermaidCode);
+    alert("Erro ao gerar fluxo. Veja o console (F12).");
+    return;
+  }
 
-document.getElementById("infoProcesso").innerHTML =
-`<b>Processo:</b> ${processo}<br>
-<b>Analista:</b> ${analista}`;
+  document.getElementById("infoProcesso").innerHTML =
+    "<b>Processo:</b> " + processo + "<br>" +
+    "<b>Analista:</b> " + analista;
 
-let totalAtividades = manual + sistemaAuto;
+  const totalAtividades = manual + sistemaAuto;
+  const pctManual = totalAtividades ? ((manual / totalAtividades) * 100).toFixed(1) : "0.0";
+  const pctSistema = totalAtividades ? ((sistemaAuto / totalAtividades) * 100).toFixed(1) : "0.0";
+  const indiceRetrabalho = totalAtividades ? ((loops / totalAtividades) * 100).toFixed(1) : "0.0";
 
-let pctManual = totalAtividades ? ((manual/totalAtividades)*100).toFixed(1) : 0;
-let pctSistema = totalAtividades ? ((sistemaAuto/totalAtividades)*100).toFixed(1) : 0;
+  atividadesTempo.sort((a, b) => b.tempo - a.tempo);
 
-atividadesTempo.sort((a,b)=>b.tempo-a.tempo);
+  const top3 = atividadesTempo
+    .slice(0, 3)
+    .map(a => a.atividade + " (" + a.tempo + " min)")
+    .join("<br>");
 
-let top3 = atividadesTempo.slice(0,3)
-.map(a=>`${a.atividade} (${a.tempo} min)`)
-.join("<br>");
+  let paretoHTML = "<b>Pareto de tempo</b><br><br>";
+  atividadesTempo.forEach(a => {
+    const pct = tempoTotal ? ((a.tempo / tempoTotal) * 100).toFixed(1) : "0.0";
+    paretoHTML += a.atividade + " — " + pct + "%<br>";
+  });
 
-let indiceRetrabalho = ((loops/totalAtividades)*100).toFixed(1);
-
-let paretoHTML = "<b>Pareto de tempo</b><br><br>";
-
-atividadesTempo.forEach(a=>{
-let pct = ((a.tempo/tempoTotal)*100).toFixed(1);
-paretoHTML += `${a.atividade} — ${pct}%<br>`;
-});
-
-document.getElementById("metricas").innerHTML =
-
-`<b>Tempo total do processo:</b> ${tempoTotal} min<br><br>
-
-<b>Top 3 gargalos:</b><br>
-${top3}<br><br>
-
-<b>Loops de retrabalho:</b> ${loops}<br>
-<b>Índice de retrabalho:</b> ${indiceRetrabalho}%<br><br>
-
-<b>Manual:</b> ${pctManual}%<br>
-<b>Sistema:</b> ${pctSistema}%<br><br>
-
-${paretoHTML}`;
-
+  document.getElementById("metricas").innerHTML =
+    "<b>Tempo total do processo:</b> " + tempoTotal + " min<br><br>" +
+    "<b>Top 3 gargalos:</b><br>" + top3 + "<br><br>" +
+    "<b>Loops de retrabalho:</b> " + loops + "<br>" +
+    "<b>Índice de retrabalho:</b> " + indiceRetrabalho + "%<br><br>" +
+    "<b>Manual:</b> " + pctManual + "%<br>" +
+    "<b>Sistema:</b> " + pctSistema + "%<br><br>" +
+    paretoHTML;
 }
 
-function baixarPNG(){
+function baixarPNG() {
+  const svg = document.querySelector("#diagram svg");
 
-let svg = document.querySelector("#diagram svg");
+  if (!svg) {
+    alert("Gere o fluxo primeiro.");
+    return;
+  }
 
-if(!svg){
-alert("Gere o fluxo primeiro");
-return;
-}
+  const serializer = new XMLSerializer();
+  const source = serializer.serializeToString(svg);
+  const svg64 = btoa(unescape(encodeURIComponent(source)));
+  const image64 = "data:image/svg+xml;base64," + svg64;
 
-let serializer = new XMLSerializer();
-let source = serializer.serializeToString(svg);
+  const img = new Image();
 
-let svg64 = btoa(unescape(encodeURIComponent(source)));
-let image64 = 'data:image/svg+xml;base64,' + svg64;
+  img.onload = function () {
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width * 3;
+    canvas.height = img.height * 3;
 
-let img = new Image();
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-img.onload = function(){
+    const link = document.createElement("a");
+    link.download = "fluxograma.png";
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  };
 
-let canvas = document.createElement("canvas");
-
-canvas.width = img.width * 3;
-canvas.height = img.height * 3;
-
-let ctx = canvas.getContext("2d");
-
-ctx.fillStyle="white";
-ctx.fillRect(0,0,canvas.width,canvas.height);
-
-ctx.drawImage(img,0,0,canvas.width,canvas.height);
-
-let link = document.createElement("a");
-link.download = "fluxograma.png";
-link.href = canvas.toDataURL("image/png");
-link.click();
-
-};
-
-img.src = image64;
-
+  img.src = image64;
 }
