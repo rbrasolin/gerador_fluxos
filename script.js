@@ -339,6 +339,11 @@ function baixarPNG() {
     return;
   }
 
+  const bbox = svg.getBBox();
+  svg.setAttribute("width", bbox.width);
+  svg.setAttribute("height", bbox.height);
+  svg.setAttribute("viewBox", `0 0 ${bbox.width} ${bbox.height}`);
+
   const serializer = new XMLSerializer();
   const source = serializer.serializeToString(svg);
   const svg64 = btoa(unescape(encodeURIComponent(source)));
@@ -347,13 +352,19 @@ function baixarPNG() {
   const img = new Image();
 
   img.onload = function () {
+    const escala = 6;
     const canvas = document.createElement("canvas");
-    canvas.width = img.width * 3;
-    canvas.height = img.height * 3;
+
+    canvas.width = Math.ceil(bbox.width * escala);
+    canvas.height = Math.ceil(bbox.height * escala);
 
     const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
     const link = document.createElement("a");
