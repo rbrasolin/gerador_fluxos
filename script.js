@@ -372,7 +372,7 @@ function baixarPNG() {
   const larguraReal = Math.ceil(bbox.width + padding * 2);
   const alturaReal = Math.ceil(bbox.height + padding * 2);
 
-  const larguraExportacao = 12000; // pode reduzir para 5000 - 7000 ou 9000 se quiser arquivo menor
+  const larguraExportacao = 9000; // pode reduzir para 5000 - 7000 ou 9000 se quiser arquivo menor
   const escala = larguraExportacao / larguraReal;
   const alturaExportacao = Math.ceil(alturaReal * escala);
 
