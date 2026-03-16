@@ -28,6 +28,10 @@ function ehCabecalho(colunas) {
   return limpar(colunas[0]).toLowerCase() === "ordem";
 }
 
+function formatarHoras(valor) {
+  return (Number(valor) || 0).toFixed(2).replace(".", ",") + " h";
+}
+
 function gerarFluxo() {
   const texto = document.getElementById("entrada").value;
   const processo = document.getElementById("processo").value;
@@ -53,18 +57,16 @@ function gerarFluxo() {
   const etapas = [];
   const idsValidos = new Set();
 
-  // 1ª passagem: montar estrutura correta das etapas
+  // 1ª passagem: montar etapas
   linhas.forEach((col) => {
-    // Precisamos de pelo menos 8 colunas do template
-    // Ordem | ID | Atividade | Tipo | Sistema | Tempo | Prox_Sim | Prox_Nao | Cor
     while (col.length < 9) col.push("");
 
     const ordem = Number(limpar(col[0])) || 0;
     const id = limpar(col[1]);
     const atividade = limpar(col[2]);
-    const tipo = limpar(col[3]).toLowerCase();
+    const tipo = limpar(col[3]);
     const sistema = limpar(col[4]);
-    const tempo = Number(limpar(col[5])) || 0;
+    const tempo = Number(String(limpar(col[5])).replace(",", ".")) || 0;
     const proxSim = limpar(col[6]);
     const proxNao = limpar(col[7]);
     const cor = normalizarCor(col[8]);
@@ -101,15 +103,21 @@ function gerarFluxo() {
 
   let tempoTotal = 0;
   let loops = 0;
-  let manual = 0;
-  let sistemaAuto = 0;
   const atividadesTempo = [];
+  const tiposTempo = {};
 
-  // 2ª passagem: criar nós e métricas
+  const primeiroId = etapas[0].id;
+  const ultimoIds = [];
+
+  // nó de início
+  nodes.push('INICIO(["Início"])');
+  classLines.push("class INICIO white");
+
+  // 2ª passagem: nós e métricas
   etapas.forEach((etapa) => {
     const id = etapa.id;
     const atividade = etapa.atividade;
-    const tipo = etapa.tipo;
+    const tipo = etapa.tipo || "Não informado";
     const sistema = etapa.sistema;
     const tempo = etapa.tempo;
     const cor = etapa.cor;
@@ -117,21 +125,19 @@ function gerarFluxo() {
     tempoTotal += tempo;
     atividadesTempo.push({ atividade, tempo });
 
-    if (tipo === "manual") {
-      manual++;
-    } else {
-      sistemaAuto++;
+    if (!tiposTempo[tipo]) {
+      tiposTempo[tipo] = 0;
     }
+    tiposTempo[tipo] += tempo;
 
     if (etapa.proxNao && idsValidos.has(etapa.proxNao)) {
-      // loop simples: volta para uma ordem anterior
       const destino = etapas.find(e => e.id === etapa.proxNao);
       if (destino && destino.ordem < etapa.ordem) {
         loops++;
       }
     }
 
-    const label = atividade + "\\n" + sistema + "\\n" + tempo + " min";
+    const label = atividade + "\\n" + sistema + "\\n" + formatarHoras(tempo);
 
     if (atividade.includes("?")) {
       nodes.push(id + "{" + label + "}");
@@ -140,9 +146,22 @@ function gerarFluxo() {
     }
 
     classLines.push("class " + id + " " + cor);
+
+    const semProxSim = !etapa.proxSim || !idsValidos.has(etapa.proxSim);
+    const semProxNao = !etapa.proxNao || !idsValidos.has(etapa.proxNao);
+
+    if (semProxSim && semProxNao) {
+      ultimoIds.push(id);
+    }
   });
 
-  // 3ª passagem: criar links apenas para IDs que existem
+  // nó de fim
+  nodes.push('FIM(["Fim"])');
+  classLines.push("class FIM white");
+
+  // 3ª passagem: links
+  links.push("INICIO --> " + primeiroId);
+
   etapas.forEach((etapa) => {
     const id = etapa.id;
     const decisao = etapa.atividade.includes("?");
@@ -158,6 +177,10 @@ function gerarFluxo() {
     if (etapa.proxNao && idsValidos.has(etapa.proxNao)) {
       links.push(id + " -->|Não| " + etapa.proxNao);
     }
+  });
+
+  ultimoIds.forEach(id => {
+    links.push(id + " --> FIM");
   });
 
   nodes.forEach(n => {
@@ -196,31 +219,37 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
     "<b>Processo:</b> " + processo + "<br>" +
     "<b>Analista:</b> " + analista;
 
-  const totalAtividades = manual + sistemaAuto;
-  const pctManual = totalAtividades ? ((manual / totalAtividades) * 100).toFixed(1) : "0.0";
-  const pctSistema = totalAtividades ? ((sistemaAuto / totalAtividades) * 100).toFixed(1) : "0.0";
-  const indiceRetrabalho = totalAtividades ? ((loops / totalAtividades) * 100).toFixed(1) : "0.0";
+  const indiceRetrabalho = etapas.length ? ((loops / etapas.length) * 100).toFixed(1) : "0,0";
 
   atividadesTempo.sort((a, b) => b.tempo - a.tempo);
 
   const top3 = atividadesTempo
     .slice(0, 3)
-    .map(a => a.atividade + " (" + a.tempo + " min)")
+    .map(a => {
+      const pct = tempoTotal ? ((a.tempo / tempoTotal) * 100).toFixed(1).replace(".", ",") : "0,0";
+      return a.atividade + " (" + formatarHoras(a.tempo) + " | " + pct + "%)";
+    })
     .join("<br>");
 
   let paretoHTML = "<b>Pareto de tempo</b><br><br>";
   atividadesTempo.forEach(a => {
-    const pct = tempoTotal ? ((a.tempo / tempoTotal) * 100).toFixed(1) : "0.0";
-    paretoHTML += a.atividade + " — " + pct + "%<br>";
+    const pct = tempoTotal ? ((a.tempo / tempoTotal) * 100).toFixed(1).replace(".", ",") : "0,0";
+    paretoHTML += a.atividade + " — " + formatarHoras(a.tempo) + " | " + pct + "%<br>";
+  });
+
+  const tiposOrdenados = Object.entries(tiposTempo).sort((a, b) => b[1] - a[1]);
+  let tiposHTML = "<b>Tempo por tipo</b><br><br>";
+  tiposOrdenados.forEach(([tipo, tempo]) => {
+    const pct = tempoTotal ? ((tempo / tempoTotal) * 100).toFixed(1).replace(".", ",") : "0,0";
+    tiposHTML += tipo + " — " + formatarHoras(tempo) + " | " + pct + "%<br>";
   });
 
   document.getElementById("metricas").innerHTML =
-    "<b>Tempo total do processo:</b> " + tempoTotal + " min<br><br>" +
+    "<b>Tempo total do processo:</b> " + formatarHoras(tempoTotal) + "<br><br>" +
     "<b>Top 3 gargalos:</b><br>" + top3 + "<br><br>" +
     "<b>Loops de retrabalho:</b> " + loops + "<br>" +
-    "<b>Índice de retrabalho:</b> " + indiceRetrabalho + "%<br><br>" +
-    "<b>Manual:</b> " + pctManual + "%<br>" +
-    "<b>Sistema:</b> " + pctSistema + "%<br><br>" +
+    "<b>Índice de retrabalho:</b> " + indiceRetrabalho.replace(".", ",") + "%<br><br>" +
+    tiposHTML + "<br>" +
     paretoHTML;
 }
 
