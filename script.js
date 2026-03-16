@@ -13,7 +13,6 @@ function limpar(txt) {
     .replace(/"/g, "")
     .replace(/\(/g, "")
     .replace(/\)/g, "")
-    .replace(/:/g, ":")
     .trim();
 }
 
@@ -38,7 +37,6 @@ function tempoParaSegundos(tempo) {
   }
 
   const partes = tempo.split(":");
-
   const h = Number(partes[0]) || 0;
   const m = Number(partes[1]) || 0;
   const s = Number(partes[2]) || 0;
@@ -90,7 +88,7 @@ function gerarFluxo() {
   const etapas = [];
   const idsValidos = new Set();
 
-  // 1ª passagem: montar estrutura das etapas
+  // 1ª passagem: estrutura das etapas
   linhas.forEach((col) => {
     while (col.length < 9) col.push("");
 
@@ -128,6 +126,11 @@ function gerarFluxo() {
 
   etapas.sort((a, b) => a.ordem - b.ordem);
 
+  const etapaPorId = {};
+  etapas.forEach(e => {
+    etapaPorId[e.id] = e;
+  });
+
   let mermaidCode = "flowchart LR\n";
 
   const nodes = [];
@@ -135,9 +138,14 @@ function gerarFluxo() {
   const classLines = [];
 
   let tempoTotal = 0;
-  let loops = 0;
   const atividadesTempo = [];
   const tiposTempo = {};
+
+  let loops = 0;
+  let decisoes = 0;
+
+  // Para o impacto potencial de retrabalho
+  const etapasOrigemComRetorno = new Set();
 
   const primeiroId = etapas[0].id;
   const ultimoIds = [];
@@ -163,11 +171,8 @@ function gerarFluxo() {
     }
     tiposTempo[tipo] += tempo;
 
-    if (etapa.proxNao && idsValidos.has(etapa.proxNao)) {
-      const destino = etapas.find(e => e.id === etapa.proxNao);
-      if (destino && destino.ordem < etapa.ordem) {
-        loops++;
-      }
+    if (atividade.includes("?")) {
+      decisoes++;
     }
 
     const label = atividade + "\\n" + sistema + "\\n" + formatarTempo(tempo);
@@ -192,7 +197,7 @@ function gerarFluxo() {
   nodes.push('FIM(["Fim"])');
   classLines.push("class FIM white");
 
-  // 3ª passagem: links
+  // 3ª passagem: links + loops
   links.push("INICIO --> " + primeiroId);
 
   etapas.forEach((etapa) => {
@@ -200,6 +205,13 @@ function gerarFluxo() {
     const decisao = etapa.atividade.includes("?");
 
     if (etapa.proxSim && idsValidos.has(etapa.proxSim)) {
+      const destinoSim = etapaPorId[etapa.proxSim];
+
+      if (destinoSim && destinoSim.ordem < etapa.ordem) {
+        loops++;
+        etapasOrigemComRetorno.add(id);
+      }
+
       if (decisao) {
         links.push(id + " -->|Sim| " + etapa.proxSim);
       } else {
@@ -208,6 +220,13 @@ function gerarFluxo() {
     }
 
     if (etapa.proxNao && idsValidos.has(etapa.proxNao)) {
+      const destinoNao = etapaPorId[etapa.proxNao];
+
+      if (destinoNao && destinoNao.ordem < etapa.ordem) {
+        loops++;
+        etapasOrigemComRetorno.add(id);
+      }
+
       links.push(id + " -->|Não| " + etapa.proxNao);
     }
   });
@@ -252,9 +271,7 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
     "<b>Processo:</b> " + processo + "<br>" +
     "<b>Analista:</b> " + analista;
 
-  const indiceRetrabalho = etapas.length
-    ? ((loops / etapas.length) * 100).toFixed(1)
-    : "0.0";
+  // ===== Análises =====
 
   atividadesTempo.sort((a, b) => b.tempo - a.tempo);
 
@@ -285,11 +302,31 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
     tiposHTML += tipo + " — " + formatarTempo(tempo) + " | " + pct + "%<br>";
   });
 
+  // Impacto potencial de retrabalho
+  let tempoPotencialRetrabalho = 0;
+  etapas.forEach((etapa) => {
+    if (etapasOrigemComRetorno.has(etapa.id)) {
+      tempoPotencialRetrabalho += etapa.tempo;
+    }
+  });
+
+  const impactoPotencialRetrabalho = tempoTotal
+    ? ((tempoPotencialRetrabalho / tempoTotal) * 100).toFixed(1).replace(".", ",")
+    : "0,0";
+
+  const taxaDecisao = etapas.length
+    ? ((decisoes / etapas.length) * 100).toFixed(1).replace(".", ",")
+    : "0,0";
+
   document.getElementById("metricas").innerHTML =
     "<b>Tempo total do processo:</b> " + formatarTempo(tempoTotal) + "<br><br>" +
+
     "<b>Top 3 gargalos:</b><br>" + top3 + "<br><br>" +
-    "<b>Loops de retrabalho:</b> " + loops + "<br>" +
-    "<b>Índice de retrabalho:</b> " + indiceRetrabalho.replace(".", ",") + "%<br><br>" +
+
+    "<b>Loops detectados:</b> " + loops + "<br>" +
+    "<b>Impacto potencial de retrabalho:</b> " + formatarTempo(tempoPotencialRetrabalho) + " | " + impactoPotencialRetrabalho + "%<br>" +
+    "<b>Taxa de decisão:</b> " + decisoes + " etapa(s) | " + taxaDecisao + "%<br><br>" +
+
     tiposHTML + "<br>" +
     paretoHTML;
 }
