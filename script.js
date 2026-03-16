@@ -34,13 +34,14 @@ function formatarHoras(valor) {
 
 function gerarFluxo() {
   const texto = document.getElementById("entrada").value;
-  const processo = document.getElementById("processo").value;
-  const analista = document.getElementById("analista").value;
 
   if (!texto.trim()) {
     alert("Cole a tabela do Excel primeiro.");
     return;
   }
+
+  const processo = document.getElementById("processo").value;
+  const analista = document.getElementById("analista").value;
 
   const linhasBrutas = texto
     .replace(/\r\n/g, "\n")
@@ -57,14 +58,14 @@ function gerarFluxo() {
   const etapas = [];
   const idsValidos = new Set();
 
-  // 1ª passagem: montar etapas
+  // 1ª passagem: montar estrutura das etapas
   linhas.forEach((col) => {
     while (col.length < 9) col.push("");
 
     const ordem = Number(limpar(col[0])) || 0;
     const id = limpar(col[1]);
     const atividade = limpar(col[2]);
-    const tipo = limpar(col[3]);
+    const tipo = limpar(col[3]) || "Não informado";
     const sistema = limpar(col[4]);
     const tempo = Number(String(limpar(col[5])).replace(",", ".")) || 0;
     const proxSim = limpar(col[6]);
@@ -109,7 +110,7 @@ function gerarFluxo() {
   const primeiroId = etapas[0].id;
   const ultimoIds = [];
 
-  // nó de início
+  // Início
   nodes.push('INICIO(["Início"])');
   classLines.push("class INICIO white");
 
@@ -117,7 +118,7 @@ function gerarFluxo() {
   etapas.forEach((etapa) => {
     const id = etapa.id;
     const atividade = etapa.atividade;
-    const tipo = etapa.tipo || "Não informado";
+    const tipo = etapa.tipo;
     const sistema = etapa.sistema;
     const tempo = etapa.tempo;
     const cor = etapa.cor;
@@ -155,7 +156,7 @@ function gerarFluxo() {
     }
   });
 
-  // nó de fim
+  // Fim
   nodes.push('FIM(["Fim"])');
   classLines.push("class FIM white");
 
@@ -219,28 +220,36 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
     "<b>Processo:</b> " + processo + "<br>" +
     "<b>Analista:</b> " + analista;
 
-  const indiceRetrabalho = etapas.length ? ((loops / etapas.length) * 100).toFixed(1) : "0,0";
+  const indiceRetrabalho = etapas.length
+    ? ((loops / etapas.length) * 100).toFixed(1)
+    : "0.0";
 
   atividadesTempo.sort((a, b) => b.tempo - a.tempo);
 
   const top3 = atividadesTempo
     .slice(0, 3)
     .map(a => {
-      const pct = tempoTotal ? ((a.tempo / tempoTotal) * 100).toFixed(1).replace(".", ",") : "0,0";
+      const pct = tempoTotal
+        ? ((a.tempo / tempoTotal) * 100).toFixed(1).replace(".", ",")
+        : "0,0";
       return a.atividade + " (" + formatarHoras(a.tempo) + " | " + pct + "%)";
     })
     .join("<br>");
 
   let paretoHTML = "<b>Pareto de tempo</b><br><br>";
   atividadesTempo.forEach(a => {
-    const pct = tempoTotal ? ((a.tempo / tempoTotal) * 100).toFixed(1).replace(".", ",") : "0,0";
+    const pct = tempoTotal
+      ? ((a.tempo / tempoTotal) * 100).toFixed(1).replace(".", ",")
+      : "0,0";
     paretoHTML += a.atividade + " — " + formatarHoras(a.tempo) + " | " + pct + "%<br>";
   });
 
   const tiposOrdenados = Object.entries(tiposTempo).sort((a, b) => b[1] - a[1]);
   let tiposHTML = "<b>Tempo por tipo</b><br><br>";
   tiposOrdenados.forEach(([tipo, tempo]) => {
-    const pct = tempoTotal ? ((tempo / tempoTotal) * 100).toFixed(1).replace(".", ",") : "0,0";
+    const pct = tempoTotal
+      ? ((tempo / tempoTotal) * 100).toFixed(1).replace(".", ",")
+      : "0,0";
     tiposHTML += tipo + " — " + formatarHoras(tempo) + " | " + pct + "%<br>";
   });
 
