@@ -13,7 +13,7 @@ function limpar(txt) {
     .replace(/"/g, "")
     .replace(/\(/g, "")
     .replace(/\)/g, "")
-    .replace(/:/g, "")
+    .replace(/:/g, ":")
     .trim();
 }
 
@@ -28,8 +28,40 @@ function ehCabecalho(colunas) {
   return limpar(colunas[0]).toLowerCase() === "ordem";
 }
 
-function formatarHoras(valor) {
-  return (Number(valor) || 0).toFixed(2).replace(".", ",") + " h";
+function tempoParaSegundos(tempo) {
+  if (!tempo) return 0;
+
+  tempo = String(tempo).trim();
+
+  if (!tempo.includes(":")) {
+    return (Number(tempo) || 0) * 3600;
+  }
+
+  const partes = tempo.split(":");
+
+  const h = Number(partes[0]) || 0;
+  const m = Number(partes[1]) || 0;
+  const s = Number(partes[2]) || 0;
+
+  return (h * 3600) + (m * 60) + s;
+}
+
+function segundosParaTempo(seg) {
+  seg = Math.round(Number(seg) || 0);
+
+  const h = Math.floor(seg / 3600);
+  const m = Math.floor((seg % 3600) / 60);
+  const s = seg % 60;
+
+  return (
+    String(h).padStart(2, "0") + ":" +
+    String(m).padStart(2, "0") + ":" +
+    String(s).padStart(2, "0")
+  );
+}
+
+function formatarTempo(seg) {
+  return segundosParaTempo(seg);
 }
 
 function gerarFluxo() {
@@ -67,7 +99,7 @@ function gerarFluxo() {
     const atividade = limpar(col[2]);
     const tipo = limpar(col[3]) || "Não informado";
     const sistema = limpar(col[4]);
-    const tempo = Number(String(limpar(col[5])).replace(",", ".")) || 0;
+    const tempo = tempoParaSegundos(limpar(col[5]));
     const proxSim = limpar(col[6]);
     const proxNao = limpar(col[7]);
     const cor = normalizarCor(col[8]);
@@ -138,7 +170,7 @@ function gerarFluxo() {
       }
     }
 
-    const label = atividade + "\\n" + sistema + "\\n" + formatarHoras(tempo);
+    const label = atividade + "\\n" + sistema + "\\n" + formatarTempo(tempo);
 
     if (atividade.includes("?")) {
       nodes.push(id + "{" + label + "}");
@@ -232,7 +264,7 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
       const pct = tempoTotal
         ? ((a.tempo / tempoTotal) * 100).toFixed(1).replace(".", ",")
         : "0,0";
-      return a.atividade + " (" + formatarHoras(a.tempo) + " | " + pct + "%)";
+      return a.atividade + " (" + formatarTempo(a.tempo) + " | " + pct + "%)";
     })
     .join("<br>");
 
@@ -241,7 +273,7 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
     const pct = tempoTotal
       ? ((a.tempo / tempoTotal) * 100).toFixed(1).replace(".", ",")
       : "0,0";
-    paretoHTML += a.atividade + " — " + formatarHoras(a.tempo) + " | " + pct + "%<br>";
+    paretoHTML += a.atividade + " — " + formatarTempo(a.tempo) + " | " + pct + "%<br>";
   });
 
   const tiposOrdenados = Object.entries(tiposTempo).sort((a, b) => b[1] - a[1]);
@@ -250,11 +282,11 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
     const pct = tempoTotal
       ? ((tempo / tempoTotal) * 100).toFixed(1).replace(".", ",")
       : "0,0";
-    tiposHTML += tipo + " — " + formatarHoras(tempo) + " | " + pct + "%<br>";
+    tiposHTML += tipo + " — " + formatarTempo(tempo) + " | " + pct + "%<br>";
   });
 
   document.getElementById("metricas").innerHTML =
-    "<b>Tempo total do processo:</b> " + formatarHoras(tempoTotal) + "<br><br>" +
+    "<b>Tempo total do processo:</b> " + formatarTempo(tempoTotal) + "<br><br>" +
     "<b>Top 3 gargalos:</b><br>" + top3 + "<br><br>" +
     "<b>Loops de retrabalho:</b> " + loops + "<br>" +
     "<b>Índice de retrabalho:</b> " + indiceRetrabalho.replace(".", ",") + "%<br><br>" +
