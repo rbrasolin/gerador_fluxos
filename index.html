@@ -1,56 +1,53 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="pt-BR">
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gerador de Fluxograma</title>
 
-<meta charset="UTF-8">
-
-<title>Gerador de Fluxograma</title>
-
-<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-
-<link rel="stylesheet" href="style.css">
-
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
 
-<h1>Gerador de Fluxograma de Processos</h1>
+  <h1>Gerador de Fluxograma de Processos</h1>
 
-<label>Nome do Processo</label>
-<input id="processo">
+  <div class="top-form">
+    <div class="field">
+      <label for="processo">Nome do Processo</label>
+      <input id="processo" type="text" />
+    </div>
 
-<label>Analista</label>
-<input id="analista">
+    <div class="field">
+      <label for="analista">Analista</label>
+      <input id="analista" type="text" />
+    </div>
+  </div>
 
-<h3>Cole a tabela do Excel</h3>
+  <h3>Cole a tabela do Excel</h3>
+  <textarea id="entrada" placeholder="Cole aqui a tabela copiada do Excel"></textarea>
 
-<textarea id="entrada" placeholder="Cole aqui a tabela copiada do Excel"></textarea>
+  <div class="actions">
+    <button onclick="gerarFluxo()">GERAR FLUXO</button>
+  </div>
 
-<br><br>
+  <hr>
 
-<button onclick="gerarFluxo()">GERAR FLUXO</button>
+  <h3>Fluxo</h3>
+  <div id="diagram"></div>
 
-<hr>
+  <div class="actions">
+    <button onclick="baixarPNG()">Baixar PNG</button>
+  </div>
 
-<h3>Fluxo</h3>
+  <hr>
 
-<div id="diagram"></div>
+  <h3>Informações do Processo</h3>
+  <div id="infoProcesso"></div>
 
-<br>
+  <h3>Análise do Processo</h3>
+  <div id="metricas"></div>
 
-<button onclick="baixarPNG()">Baixar PNG</button>
-
-<hr>
-
-<h3>Informações do Processo</h3>
-<div id="infoProcesso"></div>
-
-<h3>Análise do Processo</h3>
-<div id="metricas"></div>
-
-<script src="script.js"></script>
-
+  <script src="script.js"></script>
 </body>
-
 </html>

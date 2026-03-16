@@ -88,7 +88,6 @@ function gerarFluxo() {
   const etapas = [];
   const idsValidos = new Set();
 
-  // 1ª passagem: estrutura das etapas
   linhas.forEach((col) => {
     while (col.length < 9) col.push("");
 
@@ -143,18 +142,14 @@ function gerarFluxo() {
 
   let loops = 0;
   let decisoes = 0;
-
-  // Para o impacto potencial de retrabalho
   const etapasOrigemComRetorno = new Set();
 
   const primeiroId = etapas[0].id;
   const ultimoIds = [];
 
-  // Início
   nodes.push('INICIO(["Início"])');
   classLines.push("class INICIO white");
 
-  // 2ª passagem: nós e métricas
   etapas.forEach((etapa) => {
     const id = etapa.id;
     const atividade = etapa.atividade;
@@ -193,11 +188,9 @@ function gerarFluxo() {
     }
   });
 
-  // Fim
   nodes.push('FIM(["Fim"])');
   classLines.push("class FIM white");
 
-  // 3ª passagem: links + loops
   links.push("INICIO --> " + primeiroId);
 
   etapas.forEach((etapa) => {
@@ -271,11 +264,9 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
     "<b>Processo:</b> " + processo + "<br>" +
     "<b>Analista:</b> " + analista;
 
-  // ===== Análises =====
-
   atividadesTempo.sort((a, b) => b.tempo - a.tempo);
 
-    const top3HTML = atividadesTempo
+  const top3HTML = atividadesTempo
     .slice(0, 3)
     .map(a => {
       const pct = tempoTotal
@@ -318,7 +309,6 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
       '</div>';
   });
 
-  // Impacto potencial de retrabalho
   let tempoPotencialRetrabalho = 0;
   etapas.forEach((etapa) => {
     if (etapasOrigemComRetorno.has(etapa.id)) {
@@ -375,35 +365,31 @@ function baixarPNG() {
     return;
   }
 
-  // Clona o SVG para não mexer no desenho da tela
   const svg = svgOriginal.cloneNode(true);
-
   const bbox = svgOriginal.getBBox();
-
-  // Margem para não cortar setas e textos
   const padding = 40;
 
   const larguraReal = Math.ceil(bbox.width + padding * 2);
   const alturaReal = Math.ceil(bbox.height + padding * 2);
 
-  // Define um tamanho alto de exportação
-  const larguraExportacao = 9000; // pode reduzir para 5000 - 7000 ou 9000 se quiser arquivo menor
+  const larguraExportacao = 12000; // pode reduzir para 5000 - 7000 ou 9000 se quiser arquivo menor
   const escala = larguraExportacao / larguraReal;
   const alturaExportacao = Math.ceil(alturaReal * escala);
 
   svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   svg.setAttribute("width", larguraReal);
   svg.setAttribute("height", alturaReal);
-  svg.setAttribute("viewBox", (bbox.x - padding) + " " + (bbox.y - padding) + " " + larguraReal + " " + alturaReal);
+  svg.setAttribute(
+    "viewBox",
+    (bbox.x - padding) + " " + (bbox.y - padding) + " " + larguraReal + " " + alturaReal
+  );
 
-  // Fundo branco dentro do SVG
   const fundo = document.createElementNS("http://www.w3.org/2000/svg", "rect");
   fundo.setAttribute("x", bbox.x - padding);
   fundo.setAttribute("y", bbox.y - padding);
   fundo.setAttribute("width", larguraReal);
   fundo.setAttribute("height", alturaReal);
   fundo.setAttribute("fill", "white");
-
   svg.insertBefore(fundo, svg.firstChild);
 
   const serializer = new XMLSerializer();
@@ -421,10 +407,8 @@ function baixarPNG() {
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
     const link = document.createElement("a");
