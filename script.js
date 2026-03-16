@@ -332,17 +332,43 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
 }
 
 function baixarPNG() {
-  const svg = document.querySelector("#diagram svg");
+  const svgOriginal = document.querySelector("#diagram svg");
 
-  if (!svg) {
+  if (!svgOriginal) {
     alert("Gere o fluxo primeiro.");
     return;
   }
 
-  const bbox = svg.getBBox();
-  svg.setAttribute("width", bbox.width);
-  svg.setAttribute("height", bbox.height);
-  svg.setAttribute("viewBox", `0 0 ${bbox.width} ${bbox.height}`);
+  // Clona o SVG para não mexer no desenho da tela
+  const svg = svgOriginal.cloneNode(true);
+
+  const bbox = svgOriginal.getBBox();
+
+  // Margem para não cortar setas e textos
+  const padding = 40;
+
+  const larguraReal = Math.ceil(bbox.width + padding * 2);
+  const alturaReal = Math.ceil(bbox.height + padding * 2);
+
+  // Define um tamanho alto de exportação
+  const larguraExportacao = 9000; // pode reduzir para 5000 ou 7000 se quiser arquivo menor
+  const escala = larguraExportacao / larguraReal;
+  const alturaExportacao = Math.ceil(alturaReal * escala);
+
+  svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  svg.setAttribute("width", larguraReal);
+  svg.setAttribute("height", alturaReal);
+  svg.setAttribute("viewBox", (bbox.x - padding) + " " + (bbox.y - padding) + " " + larguraReal + " " + alturaReal);
+
+  // Fundo branco dentro do SVG
+  const fundo = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  fundo.setAttribute("x", bbox.x - padding);
+  fundo.setAttribute("y", bbox.y - padding);
+  fundo.setAttribute("width", larguraReal);
+  fundo.setAttribute("height", alturaReal);
+  fundo.setAttribute("fill", "white");
+
+  svg.insertBefore(fundo, svg.firstChild);
 
   const serializer = new XMLSerializer();
   const source = serializer.serializeToString(svg);
@@ -352,11 +378,9 @@ function baixarPNG() {
   const img = new Image();
 
   img.onload = function () {
-    const escala = 6;
     const canvas = document.createElement("canvas");
-
-    canvas.width = Math.ceil(bbox.width * escala);
-    canvas.height = Math.ceil(bbox.height * escala);
+    canvas.width = larguraExportacao;
+    canvas.height = alturaExportacao;
 
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = true;
