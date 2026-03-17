@@ -96,7 +96,7 @@ function escapeMermaidText(texto) {
     .trim();
 }
 
-function quebrarTextoPorPalavras(texto, palavrasPorLinha = 3) {
+function quebrarTextoAutomatico(texto, maxPalavrasPorLinha = 3, maxCaracteresPorLinha = 18) {
   const palavras = String(texto || "")
     .trim()
     .split(/\s+/)
@@ -105,8 +105,23 @@ function quebrarTextoPorPalavras(texto, palavrasPorLinha = 3) {
   if (!palavras.length) return "";
 
   const linhas = [];
-  for (let i = 0; i < palavras.length; i += palavrasPorLinha) {
-    linhas.push(palavras.slice(i, i + palavrasPorLinha).join(" "));
+  let linhaAtual = [];
+
+  for (const palavra of palavras) {
+    const testeLinha = [...linhaAtual, palavra].join(" ");
+    const excedeuPalavras = linhaAtual.length >= maxPalavrasPorLinha;
+    const excedeuCaracteres = testeLinha.length > maxCaracteresPorLinha;
+
+    if (linhaAtual.length > 0 && (excedeuPalavras || excedeuCaracteres)) {
+      linhas.push(linhaAtual.join(" "));
+      linhaAtual = [palavra];
+    } else {
+      linhaAtual.push(palavra);
+    }
+  }
+
+  if (linhaAtual.length) {
+    linhas.push(linhaAtual.join(" "));
   }
 
   return linhas.join("<br/>");
@@ -225,9 +240,14 @@ async function gerarFluxo() {
   etapas.forEach((etapa) => {
     const id = etapa.id;
     const atividadeOriginal = escapeMermaidText(etapa.atividade);
-    const atividade = quebrarTextoPorPalavras(atividadeOriginal, 3);
+    const atividade = quebrarTextoAutomatico(atividadeOriginal, 3, 18);
     const tipo = etapa.tipo;
-    const sistema = escapeMermaidText(etapa.sistema || "Sem sistema informado");
+
+    const sistemaOriginal = escapeMermaidText(etapa.sistema || "Sem sistema informado");
+    const sistema = sistemaOriginal.length > 22
+      ? quebrarTextoAutomatico(sistemaOriginal, 3, 20)
+      : sistemaOriginal;
+
     const tempo = etapa.tempo;
     const cor = etapa.cor;
 
