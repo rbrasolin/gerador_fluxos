@@ -5,48 +5,60 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Gerador de Fluxograma</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/svg2pdf.js@2.5.0/dist/svg2pdf.min.js"></script>
+
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-  <h1>Gerador de Fluxograma de Processos</h1>
+  <div class="page">
+    <h1>Gerador de Fluxograma de Processos</h1>
 
-  <div class="top-form">
-    <div class="field">
-      <label for="processo">Nome do Processo</label>
-      <input id="processo" type="text" />
+    <div class="top-form">
+      <div class="field">
+        <label for="processo">Nome do Processo</label>
+        <input id="processo" type="text" placeholder="Ex.: Fechamento OPEX" />
+      </div>
+
+      <div class="field">
+        <label for="analista">Analista</label>
+        <input id="analista" type="text" placeholder="Ex.: Ricardo" />
+      </div>
     </div>
 
-    <div class="field">
-      <label for="analista">Analista</label>
-      <input id="analista" type="text" />
+    <h3>Cole a tabela do Excel</h3>
+    <textarea id="entrada" placeholder="Cole aqui a tabela copiada do Excel"></textarea>
+
+    <div class="actions">
+      <button type="button" onclick="gerarFluxo()">GERAR FLUXO</button>
+      <button type="button" class="secondary" onclick="limparTudo()">LIMPAR</button>
     </div>
+
+    <hr>
+
+    <div class="section-header">
+      <h3>Fluxo</h3>
+      <div class="actions inline-actions">
+        <button type="button" onclick="baixarSVG()">Baixar SVG</button>
+        <button type="button" onclick="baixarPDF()">Baixar PDF Vetorial</button>
+        <button type="button" onclick="baixarPNG()">Baixar PNG</button>
+      </div>
+    </div>
+
+    <div id="diagramWrap">
+      <div id="diagram"></div>
+    </div>
+
+    <hr>
+
+    <h3>Informações do Processo</h3>
+    <div id="infoProcesso"></div>
+
+    <h3>Análise do Processo</h3>
+    <div id="metricas"></div>
   </div>
-
-  <h3>Cole a tabela do Excel</h3>
-  <textarea id="entrada" placeholder="Cole aqui a tabela copiada do Excel"></textarea>
-
-  <div class="actions">
-    <button onclick="gerarFluxo()">GERAR FLUXO</button>
-  </div>
-
-  <hr>
-
-  <h3>Fluxo</h3>
-  <div id="diagram"></div>
-
-  <div class="actions">
-    <button onclick="baixarPNG()">Baixar PNG</button>
-  </div>
-
-  <hr>
-
-  <h3>Informações do Processo</h3>
-  <div id="infoProcesso"></div>
-
-  <h3>Análise do Processo</h3>
-  <div id="metricas"></div>
 
   <script src="script.js"></script>
 </body>

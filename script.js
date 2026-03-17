@@ -1,9 +1,28 @@
+let ultimoMermaidCode = "";
+let ultimoNomeArquivo = "fluxograma_processo";
+
 mermaid.initialize({
   startOnLoad: false,
+  securityLevel: "loose",
+  theme: "base",
+  themeVariables: {
+    fontFamily: "Arial, sans-serif",
+    fontSize: "18px",
+    primaryTextColor: "#111111",
+    lineColor: "#222222",
+    textColor: "#111111",
+    nodeBorder: "#111111",
+    clusterBorder: "#111111",
+    edgeLabelBackground: "#ffffff",
+    mainBkg: "#ffffff"
+  },
   flowchart: {
+    useMaxWidth: false,
+    htmlLabels: true,
     curve: "basis",
-    nodeSpacing: 60,
-    rankSpacing: 100
+    nodeSpacing: 80,
+    rankSpacing: 130,
+    padding: 20
   }
 });
 
@@ -33,7 +52,7 @@ function tempoParaSegundos(tempo) {
   tempo = String(tempo).trim();
 
   if (!tempo.includes(":")) {
-    return (Number(tempo) || 0) * 3600;
+    return (Number(tempo.replace(",", ".")) || 0) * 3600;
   }
 
   const partes = tempo.split(":");
@@ -62,7 +81,43 @@ function formatarTempo(seg) {
   return segundosParaTempo(seg);
 }
 
-function gerarFluxo() {
+function formatarPercentual(valor) {
+  return (Number(valor) || 0).toFixed(1).replace(".", ",");
+}
+
+function escapeMermaidText(texto) {
+  return String(texto || "")
+    .replace(/&/g, "&amp;")
+    .replace(/#/g, " ")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\|/g, "/")
+    .replace(/"/g, "'")
+    .trim();
+}
+
+function gerarNomeArquivo() {
+  const processo = limpar(document.getElementById("processo").value) || "fluxograma";
+  return processo
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase() || "fluxograma_processo";
+}
+
+function limparTudo() {
+  document.getElementById("processo").value = "";
+  document.getElementById("analista").value = "";
+  document.getElementById("entrada").value = "";
+  document.getElementById("diagram").innerHTML = "";
+  document.getElementById("infoProcesso").innerHTML = "";
+  document.getElementById("metricas").innerHTML = "";
+  ultimoMermaidCode = "";
+  ultimoNomeArquivo = "fluxograma_processo";
+}
+
+async function gerarFluxo() {
   const texto = document.getElementById("entrada").value;
 
   if (!texto.trim()) {
@@ -70,8 +125,8 @@ function gerarFluxo() {
     return;
   }
 
-  const processo = document.getElementById("processo").value;
-  const analista = document.getElementById("analista").value;
+  const processo = limpar(document.getElementById("processo").value);
+  const analista = limpar(document.getElementById("analista").value);
 
   const linhasBrutas = texto
     .replace(/\r\n/g, "\n")
@@ -131,6 +186,7 @@ function gerarFluxo() {
   });
 
   let mermaidCode = "flowchart LR\n";
+  mermaidCode += "%%{init: {'flowchart': {'curve': 'basis'}}}%%\n";
 
   const nodes = [];
   const links = [];
@@ -152,33 +208,33 @@ function gerarFluxo() {
 
   etapas.forEach((etapa) => {
     const id = etapa.id;
-    const atividade = etapa.atividade;
+    const atividade = escapeMermaidText(etapa.atividade);
     const tipo = etapa.tipo;
-    const sistema = etapa.sistema;
+    const sistema = escapeMermaidText(etapa.sistema || "Sem sistema informado");
     const tempo = etapa.tempo;
     const cor = etapa.cor;
 
     tempoTotal += tempo;
-    atividadesTempo.push({ atividade, tempo });
+    atividadesTempo.push({ atividade: etapa.atividade, tempo });
 
     if (!tiposTempo[tipo]) {
       tiposTempo[tipo] = 0;
     }
     tiposTempo[tipo] += tempo;
 
-    if (atividade.includes("?")) {
+    if (etapa.atividade.includes("?")) {
       decisoes++;
     }
 
-    const label = atividade + "\\n" + sistema + "\\n" + formatarTempo(tempo);
+    const label = `${atividade}<br/>${sistema}<br/><b>${formatarTempo(tempo)}</b>`;
 
-    if (atividade.includes("?")) {
-      nodes.push(id + "{" + label + "}");
+    if (etapa.atividade.includes("?")) {
+      nodes.push(`${id}{"${label}"}`);
     } else {
-      nodes.push(id + '["' + label + '"]');
+      nodes.push(`${id}["${label}"]`);
     }
 
-    classLines.push("class " + id + " " + cor);
+    classLines.push(`class ${id} ${cor}`);
 
     const semProxSim = !etapa.proxSim || !idsValidos.has(etapa.proxSim);
     const semProxNao = !etapa.proxNao || !idsValidos.has(etapa.proxNao);
@@ -191,7 +247,7 @@ function gerarFluxo() {
   nodes.push('FIM(["Fim"])');
   classLines.push("class FIM white");
 
-  links.push("INICIO --> " + primeiroId);
+  links.push(`INICIO --> ${primeiroId}`);
 
   etapas.forEach((etapa) => {
     const id = etapa.id;
@@ -206,9 +262,9 @@ function gerarFluxo() {
       }
 
       if (decisao) {
-        links.push(id + " -->|Sim| " + etapa.proxSim);
+        links.push(`${id} -->|Sim| ${etapa.proxSim}`);
       } else {
-        links.push(id + " --> " + etapa.proxSim);
+        links.push(`${id} --> ${etapa.proxSim}`);
       }
     }
 
@@ -220,39 +276,51 @@ function gerarFluxo() {
         etapasOrigemComRetorno.add(id);
       }
 
-      links.push(id + " -->|Não| " + etapa.proxNao);
+      links.push(`${id} -->|Não| ${etapa.proxNao}`);
     }
   });
 
   ultimoIds.forEach(id => {
-    links.push(id + " --> FIM");
+    links.push(`${id} --> FIM`);
   });
 
   nodes.forEach(n => {
-    mermaidCode += n + "\n";
+    mermaidCode += `${n}\n`;
   });
 
   links.forEach(l => {
-    mermaidCode += l + "\n";
+    mermaidCode += `${l}\n`;
   });
 
   classLines.forEach(c => {
-    mermaidCode += c + "\n";
+    mermaidCode += `${c}\n`;
   });
 
   mermaidCode += `
-classDef white fill:#ffffff,stroke:#000,stroke-width:1.5px,color:#000;
-classDef blue fill:#8ecae6,stroke:#000,stroke-width:1.5px,color:#000;
-classDef yellow fill:#ffd166,stroke:#000,stroke-width:1.5px,color:#000;
-classDef green fill:#95d5b2,stroke:#000,stroke-width:1.5px,color:#000;
-classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
+classDef white fill:#ffffff,stroke:#111111,stroke-width:2px,color:#111111;
+classDef blue fill:#8ecae6,stroke:#111111,stroke-width:2px,color:#111111;
+classDef yellow fill:#ffd166,stroke:#111111,stroke-width:2px,color:#111111;
+classDef green fill:#95d5b2,stroke:#111111,stroke-width:2px,color:#111111;
+classDef red fill:#ef476f,stroke:#111111,stroke-width:2px,color:#111111;
+
+linkStyle default stroke:#222222,stroke-width:2.2px;
 `;
 
-  try {
-    document.getElementById("diagram").innerHTML =
-      '<div class="mermaid">' + mermaidCode + "</div>";
+  ultimoMermaidCode = mermaidCode;
+  ultimoNomeArquivo = gerarNomeArquivo();
 
-    mermaid.init(undefined, document.querySelectorAll(".mermaid"));
+  try {
+    const renderId = `mermaid_${Date.now()}`;
+    const { svg } = await mermaid.render(renderId, mermaidCode);
+
+    document.getElementById("diagram").innerHTML = svg;
+
+    const svgElement = document.querySelector("#diagram svg");
+    if (svgElement) {
+      svgElement.style.maxWidth = "none";
+      svgElement.style.height = "auto";
+      svgElement.setAttribute("preserveAspectRatio", "xMinYMin meet");
+    }
   } catch (e) {
     console.error("Erro Mermaid:", e);
     console.error("Código Mermaid gerado:\n", mermaidCode);
@@ -261,36 +329,35 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
   }
 
   document.getElementById("infoProcesso").innerHTML =
-    "<b>Processo:</b> " + processo + "<br>" +
-    "<b>Analista:</b> " + analista;
+    "<b>Processo:</b> " + (processo || "Não informado") + "<br>" +
+    "<b>Analista:</b> " + (analista || "Não informado");
 
   atividadesTempo.sort((a, b) => b.tempo - a.tempo);
 
   const top3HTML = atividadesTempo
     .slice(0, 3)
     .map(a => {
-      const pct = tempoTotal
-        ? ((a.tempo / tempoTotal) * 100).toFixed(1).replace(".", ",")
-        : "0,0";
+      const pct = tempoTotal ? formatarPercentual((a.tempo / tempoTotal) * 100) : "0,0";
 
-      return '<div class="analytics-item">' +
-        a.atividade +
-        ' — <span class="icon-time">⏱</span>' + formatarTempo(a.tempo) +
-        ' <span class="icon-pct">٪</span>' + pct + '%' +
-        '</div>';
+      return (
+        '<div class="analytics-item">' +
+          a.atividade +
+          ' — <span class="icon-time">⏱</span>' + formatarTempo(a.tempo) +
+          ' <span class="icon-pct">%</span>' + pct + '%' +
+        '</div>'
+      );
     })
     .join("");
 
   let paretoHTML = "";
   atividadesTempo.forEach(a => {
-    const pct = tempoTotal
-      ? ((a.tempo / tempoTotal) * 100).toFixed(1).replace(".", ",")
-      : "0,0";
+    const pct = tempoTotal ? formatarPercentual((a.tempo / tempoTotal) * 100) : "0,0";
 
-    paretoHTML += '<div class="analytics-item">' +
-      a.atividade +
-      ' — <span class="icon-time">⏱</span>' + formatarTempo(a.tempo) +
-      ' <span class="icon-pct">٪</span>' + pct + '%' +
+    paretoHTML +=
+      '<div class="analytics-item">' +
+        a.atividade +
+        ' — <span class="icon-time">⏱</span>' + formatarTempo(a.tempo) +
+        ' <span class="icon-pct">%</span>' + pct + '%' +
       '</div>';
   });
 
@@ -298,14 +365,13 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
 
   let tiposHTML = "";
   tiposOrdenados.forEach(([tipo, tempo]) => {
-    const pct = tempoTotal
-      ? ((tempo / tempoTotal) * 100).toFixed(1).replace(".", ",")
-      : "0,0";
+    const pct = tempoTotal ? formatarPercentual((tempo / tempoTotal) * 100) : "0,0";
 
-    tiposHTML += '<div class="analytics-item">' +
-      tipo +
-      ' — <span class="icon-time">⏱</span>' + formatarTempo(tempo) +
-      ' <span class="icon-pct">٪</span>' + pct + '%' +
+    tiposHTML +=
+      '<div class="analytics-item">' +
+        tipo +
+        ' — <span class="icon-time">⏱</span>' + formatarTempo(tempo) +
+        ' <span class="icon-pct">%</span>' + pct + '%' +
       '</div>';
   });
 
@@ -317,11 +383,11 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
   });
 
   const impactoPotencialRetrabalho = tempoTotal
-    ? ((tempoPotencialRetrabalho / tempoTotal) * 100).toFixed(1).replace(".", ",")
+    ? formatarPercentual((tempoPotencialRetrabalho / tempoTotal) * 100)
     : "0,0";
 
   const taxaDecisao = etapas.length
-    ? ((decisoes / etapas.length) * 100).toFixed(1).replace(".", ",")
+    ? formatarPercentual((decisoes / etapas.length) * 100)
     : "0,0";
 
   document.getElementById("metricas").innerHTML =
@@ -337,8 +403,8 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
           '<br>' +
 
           '<div class="analytics-item"><b>Loops detectados:</b> ' + loops + '</div>' +
-          '<div class="analytics-item"><b>Impacto potencial de retrabalho:</b> <span class="icon-time">⏱</span>' + formatarTempo(tempoPotencialRetrabalho) + ' <span class="icon-pct">٪</span>' + impactoPotencialRetrabalho + '%</div>' +
-          '<div class="analytics-item"><b>Taxa de decisão:</b> ' + decisoes + ' etapa(s) <span class="icon-pct">٪</span>' + taxaDecisao + '%</div>' +
+          '<div class="analytics-item"><b>Impacto potencial de retrabalho:</b> <span class="icon-time">⏱</span>' + formatarTempo(tempoPotencialRetrabalho) + ' <span class="icon-pct">%</span>' + impactoPotencialRetrabalho + '%</div>' +
+          '<div class="analytics-item"><b>Taxa de decisão:</b> ' + decisoes + ' etapa(s) <span class="icon-pct">%</span>' + taxaDecisao + '%</div>' +
         '</div>' +
 
         '<div class="analytics-section">' +
@@ -357,12 +423,12 @@ classDef red fill:#ef476f,stroke:#000,stroke-width:1.5px,color:#000;
     '</div>';
 }
 
-function baixarPNG() {
+function obterSVGPronto() {
   const svgOriginal = document.querySelector("#diagram svg");
 
   if (!svgOriginal) {
     alert("Gere o fluxo primeiro.");
-    return;
+    return null;
   }
 
   const svg = svgOriginal.cloneNode(true);
@@ -372,16 +438,12 @@ function baixarPNG() {
   const larguraReal = Math.ceil(bbox.width + padding * 2);
   const alturaReal = Math.ceil(bbox.height + padding * 2);
 
-  const larguraExportacao = 9000; // pode reduzir para 5000 - 7000 ou 9000 se quiser arquivo menor
-  const escala = larguraExportacao / larguraReal;
-  const alturaExportacao = Math.ceil(alturaReal * escala);
-
   svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   svg.setAttribute("width", larguraReal);
   svg.setAttribute("height", alturaReal);
   svg.setAttribute(
     "viewBox",
-    (bbox.x - padding) + " " + (bbox.y - padding) + " " + larguraReal + " " + alturaReal
+    `${bbox.x - padding} ${bbox.y - padding} ${larguraReal} ${alturaReal}`
   );
 
   const fundo = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -391,6 +453,71 @@ function baixarPNG() {
   fundo.setAttribute("height", alturaReal);
   fundo.setAttribute("fill", "white");
   svg.insertBefore(fundo, svg.firstChild);
+
+  return {
+    svg,
+    larguraReal,
+    alturaReal
+  };
+}
+
+function baixarSVG() {
+  const resultado = obterSVGPronto();
+  if (!resultado) return;
+
+  const { svg } = resultado;
+  const serializer = new XMLSerializer();
+  const source = serializer.serializeToString(svg);
+  const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${ultimoNomeArquivo}.svg`;
+  link.click();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function baixarPDF() {
+  const resultado = obterSVGPronto();
+  if (!resultado) return;
+
+  const { svg, larguraReal, alturaReal } = resultado;
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const orientacao = larguraReal >= alturaReal ? "landscape" : "portrait";
+
+    const pdf = new jsPDF({
+      orientation: orientacao,
+      unit: "pt",
+      format: [larguraReal, alturaReal]
+    });
+
+    await pdf.svg(svg, {
+      x: 0,
+      y: 0,
+      width: larguraReal,
+      height: alturaReal
+    });
+
+    pdf.save(`${ultimoNomeArquivo}.pdf`);
+  } catch (erro) {
+    console.error("Erro ao gerar PDF vetorial:", erro);
+    alert("Não foi possível gerar o PDF vetorial. Veja o console (F12).");
+  }
+}
+
+function baixarPNG() {
+  const resultado = obterSVGPronto();
+  if (!resultado) return;
+
+  const { svg, larguraReal, alturaReal } = resultado;
+
+  const larguraExportacao = 9000;
+  const escala = larguraExportacao / larguraReal;
+  const alturaExportacao = Math.ceil(alturaReal * escala);
 
   const serializer = new XMLSerializer();
   const source = serializer.serializeToString(svg);
@@ -412,9 +539,14 @@ function baixarPNG() {
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
     const link = document.createElement("a");
-    link.download = "fluxograma.png";
+    link.download = `${ultimoNomeArquivo}.png`;
     link.href = canvas.toDataURL("image/png");
     link.click();
+  };
+
+  img.onerror = function (erro) {
+    console.error("Erro ao gerar PNG:", erro);
+    alert("Não foi possível gerar o PNG.");
   };
 
   img.src = image64;
