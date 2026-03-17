@@ -96,6 +96,22 @@ function escapeMermaidText(texto) {
     .trim();
 }
 
+function quebrarTextoPorPalavras(texto, palavrasPorLinha = 3) {
+  const palavras = String(texto || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!palavras.length) return "";
+
+  const linhas = [];
+  for (let i = 0; i < palavras.length; i += palavrasPorLinha) {
+    linhas.push(palavras.slice(i, i + palavrasPorLinha).join(" "));
+  }
+
+  return linhas.join("<br/>");
+}
+
 function gerarNomeArquivo() {
   const processo = limpar(document.getElementById("processo").value) || "fluxograma";
   return processo
@@ -208,7 +224,8 @@ async function gerarFluxo() {
 
   etapas.forEach((etapa) => {
     const id = etapa.id;
-    const atividade = escapeMermaidText(etapa.atividade);
+    const atividadeOriginal = escapeMermaidText(etapa.atividade);
+    const atividade = quebrarTextoPorPalavras(atividadeOriginal, 3);
     const tipo = etapa.tipo;
     const sistema = escapeMermaidText(etapa.sistema || "Sem sistema informado");
     const tempo = etapa.tempo;
