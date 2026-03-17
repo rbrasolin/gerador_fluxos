@@ -5,9 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Gerador de Fluxograma</title>
 
+  <!-- Mermaid -->
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+  <!-- jsPDF -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/svg2pdf.js@2.5.0/dist/svg2pdf.min.js"></script>
+
+  <!-- SVG → PDF (VERSÃO CORRETA) -->
+  <script src="https://cdn.jsdelivr.net/npm/svg2pdf.js@2.5.0/dist/svg2pdf.umd.min.js"></script>
 
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -19,21 +24,21 @@
     <div class="top-form">
       <div class="field">
         <label for="processo">Nome do Processo</label>
-        <input id="processo" type="text" placeholder="Ex.: Fechamento OPEX" />
+        <input id="processo" type="text" />
       </div>
 
       <div class="field">
         <label for="analista">Analista</label>
-        <input id="analista" type="text" placeholder="Ex.: Ricardo" />
+        <input id="analista" type="text" />
       </div>
     </div>
 
     <h3>Cole a tabela do Excel</h3>
-    <textarea id="entrada" placeholder="Cole aqui a tabela copiada do Excel"></textarea>
+    <textarea id="entrada"></textarea>
 
     <div class="actions">
-      <button type="button" onclick="gerarFluxo()">GERAR FLUXO</button>
-      <button type="button" class="secondary" onclick="limparTudo()">LIMPAR</button>
+      <button onclick="gerarFluxo()">GERAR FLUXO</button>
+      <button class="secondary" onclick="limparTudo()">LIMPAR</button>
     </div>
 
     <hr>
@@ -41,9 +46,9 @@
     <div class="section-header">
       <h3>Fluxo</h3>
       <div class="actions inline-actions">
-        <button type="button" onclick="baixarSVG()">Baixar SVG</button>
-        <button type="button" onclick="baixarPDF()">Baixar PDF Vetorial</button>
-        <button type="button" onclick="baixarPNG()">Baixar PNG</button>
+        <button onclick="baixarSVG()">Baixar SVG</button>
+        <button onclick="baixarPDF()">Baixar PDF</button>
+        <button onclick="baixarPNG()">Baixar PNG</button>
       </div>
     </div>
 
