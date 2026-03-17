@@ -499,16 +499,25 @@ async function baixarPDF() {
       format: [larguraReal, alturaReal]
     });
 
-    if (typeof pdf.svg !== "function") {
-      throw new Error("Plugin svg2pdf.js não foi acoplado ao jsPDF.");
+    // Cenário 1: plugin acoplado ao jsPDF (modo ideal/documentado)
+    if (typeof pdf.svg === "function") {
+      await pdf.svg(svg, {
+        x: 0,
+        y: 0,
+        width: larguraReal,
+        height: alturaReal
+      });
     }
-
-    await pdf.svg(svg, {
-      x: 0,
-      y: 0,
-      width: larguraReal,
-      height: alturaReal
-    });
+    // Cenário 2: função global disponível
+    else if (typeof window.svg2pdf === "function") {
+      await window.svg2pdf(svg, pdf, {
+        xOffset: 0,
+        yOffset: 0,
+        scale: 1
+      });
+    } else {
+      throw new Error("svg2pdf.js carregou sem expor integração utilizável.");
+    }
 
     pdf.save(`${ultimoNomeArquivo}.pdf`);
   } catch (erro) {
@@ -516,6 +525,3 @@ async function baixarPDF() {
     alert("Não foi possível gerar o PDF vetorial. Veja o console (F12).");
   }
 }
-
-
-
