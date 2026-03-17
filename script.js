@@ -423,6 +423,78 @@ linkStyle default stroke:#222222,stroke-width:2.2px;
     '</div>';
 }
 
+function prepararSVGParaPDF(svgOriginal) {
+  const svg = svgOriginal.cloneNode(true);
+
+  const seletores = "svg, g, path, rect, polygon, circle, ellipse, line, polyline, text, tspan";
+  const elementos = svg.querySelectorAll(seletores);
+  const originalElements = svgOriginal.querySelectorAll(seletores);
+
+  elementos.forEach((el, i) => {
+    const original = originalElements[i];
+    if (!original) return;
+
+    const cs = window.getComputedStyle(original);
+
+    const props = [
+      "fill",
+      "fill-opacity",
+      "stroke",
+      "stroke-width",
+      "stroke-opacity",
+      "stroke-linecap",
+      "stroke-linejoin",
+      "stroke-dasharray",
+      "opacity",
+      "color",
+      "font-family",
+      "font-size",
+      "font-weight",
+      "font-style",
+      "text-anchor",
+      "dominant-baseline"
+    ];
+
+    let styleInline = "";
+    props.forEach((prop) => {
+      const val = cs.getPropertyValue(prop);
+      if (val && val !== "normal" && val !== "auto") {
+        styleInline += `${prop}:${val};`;
+      }
+    });
+
+    const tag = el.tagName.toLowerCase();
+
+    if (["text", "tspan"].includes(tag)) {
+      const fill = cs.getPropertyValue("fill");
+      if (!fill || fill === "none") {
+        styleInline += "fill:#111111;";
+      }
+    }
+
+    if (["path", "rect", "polygon", "circle", "ellipse", "line", "polyline"].includes(tag)) {
+      const stroke = cs.getPropertyValue("stroke");
+      const fill = cs.getPropertyValue("fill");
+
+      if (!stroke || stroke === "none") {
+        styleInline += "stroke:#111111;";
+      }
+
+      if (!fill || fill === "none") {
+        styleInline += "fill:none;";
+      }
+    }
+
+    const existing = el.getAttribute("style") || "";
+    el.setAttribute("style", `${existing};${styleInline}`);
+  });
+
+  svg.querySelectorAll("[filter]").forEach(el => el.removeAttribute("filter"));
+  svg.querySelectorAll("[mask]").forEach(el => el.removeAttribute("mask"));
+
+  return svg;
+}
+
 function obterSVGPronto() {
   const svgOriginal = document.querySelector("#diagram svg");
 
@@ -431,7 +503,7 @@ function obterSVGPronto() {
     return null;
   }
 
-  const svg = svgOriginal.cloneNode(true);
+  const svg = prepararSVGParaPDF(svgOriginal);
   const bbox = svgOriginal.getBBox();
   const padding = 40;
 
@@ -499,7 +571,6 @@ async function baixarPDF() {
       format: [larguraReal, alturaReal]
     });
 
-    // Cenário 1: plugin acoplado ao jsPDF (modo ideal/documentado)
     if (typeof pdf.svg === "function") {
       await pdf.svg(svg, {
         x: 0,
@@ -507,16 +578,14 @@ async function baixarPDF() {
         width: larguraReal,
         height: alturaReal
       });
-    }
-    // Cenário 2: função global disponível
-    else if (typeof window.svg2pdf === "function") {
+    } else if (typeof window.svg2pdf === "function") {
       await window.svg2pdf(svg, pdf, {
         xOffset: 0,
         yOffset: 0,
         scale: 1
       });
     } else {
-      throw new Error("svg2pdf.js carregou sem expor integração utilizável.");
+      throw new Error("svg2pdf.js não expôs integração utilizável.");
     }
 
     pdf.save(`${ultimoNomeArquivo}.pdf`);
@@ -524,4 +593,47 @@ async function baixarPDF() {
     console.error("Erro ao gerar PDF vetorial:", erro);
     alert("Não foi possível gerar o PDF vetorial. Veja o console (F12).");
   }
+}
+
+function baixarPNG() {
+  const resultado = obterSVGPronto();
+  if (!resultado) return;
+
+  const { svg, larguraReal, alturaReal } = resultado;
+
+  const larguraExportacao = 9000;
+  const escala = larguraExportacao / larguraReal;
+  const alturaExportacao = Math.ceil(alturaReal * escala);
+
+  const serializer = new XMLSerializer();
+  const source = serializer.serializeToString(svg);
+  const svg64 = btoa(unescape(encodeURIComponent(source)));
+  const image64 = "data:image/svg+xml;base64," + svg64;
+
+  const img = new Image();
+
+  img.onload = function () {
+    const canvas = document.createElement("canvas");
+    canvas.width = larguraExportacao;
+    canvas.height = alturaExportacao;
+
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    const link = document.createElement("a");
+    link.download = `${ultimoNomeArquivo}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  };
+
+  img.onerror = function (erro) {
+    console.error("Erro ao gerar PNG:", erro);
+    alert("Não foi possível gerar o PNG.");
+  };
+
+  img.src = image64;
 }
