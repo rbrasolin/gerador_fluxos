@@ -486,8 +486,11 @@ async function baixarPDF() {
   const { svg, larguraReal, alturaReal } = resultado;
 
   try {
-    const { jsPDF } = window.jspdf;
+    if (!window.jspdf || typeof window.jspdf.jsPDF !== "function") {
+      throw new Error("jsPDF não carregado corretamente.");
+    }
 
+    const { jsPDF } = window.jspdf;
     const orientacao = larguraReal >= alturaReal ? "landscape" : "portrait";
 
     const pdf = new jsPDF({
@@ -496,14 +499,15 @@ async function baixarPDF() {
       format: [larguraReal, alturaReal]
     });
 
-    if (typeof window.svg2pdf !== "function") {
-      throw new Error("Biblioteca svg2pdf não carregada corretamente.");
+    if (typeof pdf.svg !== "function") {
+      throw new Error("Plugin svg2pdf.js não foi acoplado ao jsPDF.");
     }
 
-    await window.svg2pdf(svg, pdf, {
-      xOffset: 0,
-      yOffset: 0,
-      scale: 1
+    await pdf.svg(svg, {
+      x: 0,
+      y: 0,
+      width: larguraReal,
+      height: alturaReal
     });
 
     pdf.save(`${ultimoNomeArquivo}.pdf`);
@@ -513,45 +517,5 @@ async function baixarPDF() {
   }
 }
 
-function baixarPNG() {
-  const resultado = obterSVGPronto();
-  if (!resultado) return;
 
-  const { svg, larguraReal, alturaReal } = resultado;
 
-  const larguraExportacao = 9000;
-  const escala = larguraExportacao / larguraReal;
-  const alturaExportacao = Math.ceil(alturaReal * escala);
-
-  const serializer = new XMLSerializer();
-  const source = serializer.serializeToString(svg);
-  const svg64 = btoa(unescape(encodeURIComponent(source)));
-  const image64 = "data:image/svg+xml;base64," + svg64;
-
-  const img = new Image();
-
-  img.onload = function () {
-    const canvas = document.createElement("canvas");
-    canvas.width = larguraExportacao;
-    canvas.height = alturaExportacao;
-
-    const ctx = canvas.getContext("2d");
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.fillStyle = "white";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-    const link = document.createElement("a");
-    link.download = `${ultimoNomeArquivo}.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
-  };
-
-  img.onerror = function (erro) {
-    console.error("Erro ao gerar PNG:", erro);
-    alert("Não foi possível gerar o PNG.");
-  };
-
-  img.src = image64;
-}
