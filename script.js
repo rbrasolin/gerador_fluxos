@@ -18,7 +18,7 @@ mermaid.initialize({
   },
   flowchart: {
     useMaxWidth: false,
-    htmlLabels: true,
+    htmlLabels: false,
     curve: "basis",
     nodeSpacing: 80,
     rankSpacing: 130,
@@ -186,7 +186,7 @@ async function gerarFluxo() {
   });
 
   let mermaidCode = "flowchart LR\n";
-  mermaidCode += "%%{init: {'flowchart': {'curve': 'basis'}}}%%\n";
+  mermaidCode += "%%{init: {'flowchart': {'curve': 'basis', 'htmlLabels': false}}}%%\n";
 
   const nodes = [];
   const links = [];
@@ -226,7 +226,7 @@ async function gerarFluxo() {
       decisoes++;
     }
 
-    const label = `${atividade}<br/>${sistema}<br/><b>${formatarTempo(tempo)}</b>`;
+    const label = `${atividade}<br/>${sistema}<br/>${formatarTempo(tempo)}`;
 
     if (etapa.atividade.includes("?")) {
       nodes.push(`${id}{"${label}"}`);
@@ -487,6 +487,7 @@ async function baixarPDF() {
 
   try {
     const { jsPDF } = window.jspdf;
+
     const orientacao = larguraReal >= alturaReal ? "landscape" : "portrait";
 
     const pdf = new jsPDF({
@@ -495,11 +496,14 @@ async function baixarPDF() {
       format: [larguraReal, alturaReal]
     });
 
-    await pdf.svg(svg, {
-      x: 0,
-      y: 0,
-      width: larguraReal,
-      height: alturaReal
+    if (typeof window.svg2pdf !== "function") {
+      throw new Error("Biblioteca svg2pdf não carregada corretamente.");
+    }
+
+    await window.svg2pdf(svg, pdf, {
+      xOffset: 0,
+      yOffset: 0,
+      scale: 1
     });
 
     pdf.save(`${ultimoNomeArquivo}.pdf`);
