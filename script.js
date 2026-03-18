@@ -14,7 +14,12 @@ const CONFIG = {
   lineWidth: 2.2,
   cornerRadius: 12,
   decisionSize: 140,
-  routeGap: 28
+  routeGap: 28,
+
+  entryExitGap: 40,
+  laneGap: 36,
+  sameRowTolerance: 1,
+  sameColTolerance: 1
 };
 
 function limpar(txt) {
@@ -271,122 +276,347 @@ function createPolylinePath(points) {
   return d;
 }
 
-function escolherRota(origem, destino, tipoRotulo = "", offset = 0) {
-  const origemPergunta = origem.isDecision;
-  const destinoCentroX = destino.x + destino.w / 2;
-  const destinoCentroY = destino.y + destino.h / 2;
-  const origemCentroX = origem.x + origem.w / 2;
-  const origemCentroY = origem.y + origem.h / 2;
+function normalizarPontos(points) {
+  const resultado = [];
 
-  // regras específicas para decisão
-  if (origemPergunta && tipoRotulo === "Sim") {
+  points.forEach((point) => {
+    if (!point) return;
+
+    const p = {
+      x: Number(point.x.toFixed(1)),
+      y: Number(point.y.toFixed(1))
+    };
+
+    const ultimo = resultado[resultado.length - 1];
+    if (ultimo && ultimo.x === p.x && ultimo.y === p.y) {
+      return;
+    }
+
+    resultado.push(p);
+  });
+
+  if (resultado.length <= 2) return resultado;
+
+  const simplificado = [resultado[0]];
+
+  for (let i = 1; i < resultado.length - 1; i++) {
+    const anterior = simplificado[simplificado.length - 1];
+    const atual = resultado[i];
+    const proximo = resultado[i + 1];
+
+    const mesmoX = anterior.x === atual.x && atual.x === proximo.x;
+    const mesmoY = anterior.y === atual.y && atual.y === proximo.y;
+
+    if (!mesmoX && !mesmoY) {
+      simplificado.push(atual);
+    }
+  }
+
+  simplificado.push(resultado[resultado.length - 1]);
+  return simplificado;
+}
+
+function estaAlinhadoHorizontalmente(a, b) {
+  return Math.abs((a.y + a.h / 2) - (b.y + b.h / 2)) <= CONFIG.sameRowTolerance;
+}
+
+function estaAlinhadoVerticalmente(a, b) {
+  return Math.abs((a.x + a.w / 2) - (b.x + b.w / 2)) <= CONFIG.sameColTolerance;
+}
+
+function existeNoEntreMesmaLinha(origem, destino, posicoes) {
+  const yCentro = origem.y + origem.h / 2;
+  const xMin = Math.min(origem.x + origem.w, destino.x + destino.w);
+  const xMax = Math.max(origem.x, destino.x);
+
+  return Object.values(posicoes).some((node) => {
+    if (!node || !node.id) return false;
+    if (node.id === origem.id || node.id === destino.id) return false;
+    if (node.id === "__INICIO__" || node.id === "__FIM__") return false;
+
+    const nodeCentroY = node.y + node.h / 2;
+    const alinhado = Math.abs(nodeCentroY - yCentro) <= CONFIG.sameRowTolerance;
+    if (!alinhado) return false;
+
+    return node.x < xMax && (node.x + node.w) > xMin;
+  });
+}
+
+function existeNoEntreMesmaColuna(origem, destino, posicoes) {
+  const xCentro = origem.x + origem.w / 2;
+  const yMin = Math.min(origem.y + origem.h, destino.y + destino.h);
+  const yMax = Math.max(origem.y, destino.y);
+
+  return Object.values(posicoes).some((node) => {
+    if (!node || !node.id) return false;
+    if (node.id === origem.id || node.id === destino.id) return false;
+    if (node.id === "__INICIO__" || node.id === "__FIM__") return false;
+
+    const nodeCentroX = node.x + node.w / 2;
+    const alinhado = Math.abs(nodeCentroX - xCentro) <= CONFIG.sameColTolerance;
+    if (!alinhado) return false;
+
+    return node.y < yMax && (node.y + node.h) > yMin;
+  });
+}
+
+function montarRotaReta(start, end, label) {
+  return {
+    points: normalizarPontos([start, end]),
+    label
+  };
+}
+
+function montarRotaOrtogonal(points, label) {
+  return {
+    points: normalizarPontos(points),
+    label
+  };
+}
+
+function escolherRota(origem, destino, contexto = {}) {
+  const rotulo = contexto.rotulo || "";
+  const ordemConexao = contexto.ordemConexao || 0;
+  const posicoes = contexto.posicoes || {};
+  const offset = ordemConexao * 14;
+
+  const origemPergunta = origem.isDecision;
+  const mesmaLinha = estaAlinhadoHorizontalmente(origem, destino);
+  const mesmaColuna = estaAlinhadoVerticalmente(origem, destino);
+  const temBloqueioHorizontal = mesmaLinha && existeNoEntreMesmaLinha(origem, destino, posicoes);
+  const temBloqueioVertical = mesmaColuna && existeNoEntreMesmaColuna(origem, destino, posicoes);
+
+  if (origem.id === "__INICIO__" && mesmaLinha) {
     const start = getAnchorPoint(origem, "right");
-    const end = destinoCentroX >= origemCentroX
+    const end = getAnchorPoint(destino, "left");
+
+    return montarRotaReta(start, end, {
+      x: (start.x + end.x) / 2,
+      y: start.y - 10
+    });
+  }
+
+  if (destino.id === "__FIM__" && mesmaLinha) {
+    const start = getAnchorPoint(origem, "right");
+    const end = getAnchorPoint(destino, "left");
+
+    return montarRotaReta(start, end, {
+      x: (start.x + end.x) / 2,
+      y: start.y - 10
+    });
+  }
+
+  if (origemPergunta && rotulo === "Sim") {
+    const start = getAnchorPoint(origem, "right");
+
+    if (mesmaLinha && destino.x >= origem.x && !temBloqueioHorizontal) {
+      const end = getAnchorPoint(destino, "left");
+      return montarRotaReta(start, end, {
+        x: (start.x + end.x) / 2,
+        y: start.y - 10
+      });
+    }
+
+    const end = destino.x >= origem.x
       ? getAnchorPoint(destino, "left")
       : getAnchorPoint(destino, "right");
 
-    const midX = Math.max(start.x + CONFIG.routeGap + offset, (start.x + end.x) / 2);
+    const laneX = Math.max(
+      start.x + CONFIG.routeGap + offset,
+      end.x + CONFIG.routeGap + offset
+    );
 
-    return {
-      points: [
-        start,
-        { x: midX, y: start.y },
-        { x: midX, y: end.y },
-        end
-      ],
-      label: { x: midX, y: start.y - 10 }
-    };
+    return montarRotaOrtogonal([
+      start,
+      { x: laneX, y: start.y },
+      { x: laneX, y: end.y },
+      end
+    ], {
+      x: start.x + 18,
+      y: start.y - 10
+    });
   }
 
-  if (origemPergunta && tipoRotulo === "Não") {
+  if (origemPergunta && rotulo === "Não") {
     const start = getAnchorPoint(origem, "bottom");
-    const end = destinoCentroY >= origemCentroY
+
+    if (mesmaColuna && destino.y >= origem.y && !temBloqueioVertical) {
+      const end = getAnchorPoint(destino, "top");
+      return montarRotaReta(start, end, {
+        x: start.x + 18,
+        y: (start.y + end.y) / 2 - 8
+      });
+    }
+
+    const end = destino.y >= origem.y
       ? getAnchorPoint(destino, "top")
       : getAnchorPoint(destino, "bottom");
 
-    const midY = Math.max(start.y + CONFIG.routeGap + offset, (start.y + end.y) / 2);
+    const laneY = Math.max(
+      start.y + CONFIG.routeGap + offset,
+      end.y + CONFIG.routeGap + offset
+    );
 
-    return {
-      points: [
-        start,
-        { x: start.x, y: midY },
-        { x: end.x, y: midY },
-        end
-      ],
-      label: { x: start.x + 18, y: midY - 8 }
-    };
+    return montarRotaOrtogonal([
+      start,
+      { x: start.x, y: laneY },
+      { x: end.x, y: laneY },
+      end
+    ], {
+      x: start.x + 18,
+      y: start.y + 18
+    });
   }
 
-  // padrão: destino à direita
+  if (mesmaLinha && destino.x > origem.x && !temBloqueioHorizontal) {
+    const start = getAnchorPoint(origem, "right");
+    const end = getAnchorPoint(destino, "left");
+
+    return montarRotaReta(start, end, {
+      x: (start.x + end.x) / 2,
+      y: start.y - 10
+    });
+  }
+
+  if (mesmaLinha && destino.x < origem.x && !temBloqueioHorizontal) {
+    const start = getAnchorPoint(origem, "left");
+    const end = getAnchorPoint(destino, "right");
+
+    return montarRotaReta(start, end, {
+      x: (start.x + end.x) / 2,
+      y: start.y - 10
+    });
+  }
+
+  if (mesmaColuna && destino.y > origem.y && !temBloqueioVertical) {
+    const start = getAnchorPoint(origem, "bottom");
+    const end = getAnchorPoint(destino, "top");
+
+    return montarRotaReta(start, end, {
+      x: start.x + 18,
+      y: (start.y + end.y) / 2 - 8
+    });
+  }
+
+  if (mesmaColuna && destino.y < origem.y && !temBloqueioVertical) {
+    const start = getAnchorPoint(origem, "top");
+    const end = getAnchorPoint(destino, "bottom");
+
+    return montarRotaReta(start, end, {
+      x: start.x + 18,
+      y: (start.y + end.y) / 2 - 8
+    });
+  }
+
+  if (mesmaColuna && temBloqueioVertical) {
+    const usarEsquerda = (origem.gridCol || 1) <= (destino.gridCol || 1);
+    const start = getAnchorPoint(origem, usarEsquerda ? "left" : "right");
+    const end = getAnchorPoint(destino, usarEsquerda ? "left" : "right");
+
+    const laneX = usarEsquerda
+      ? Math.min(origem.x, destino.x) - CONFIG.laneGap - offset
+      : Math.max(origem.x + origem.w, destino.x + destino.w) + CONFIG.laneGap + offset;
+
+    return montarRotaOrtogonal([
+      start,
+      { x: laneX, y: start.y },
+      { x: laneX, y: end.y },
+      end
+    ], {
+      x: laneX,
+      y: start.y - 10
+    });
+  }
+
+  if (mesmaLinha && temBloqueioHorizontal) {
+    const usarTopo = (origem.gridRow || 1) <= (destino.gridRow || 1);
+    const start = getAnchorPoint(origem, usarTopo ? "top" : "bottom");
+    const end = getAnchorPoint(destino, usarTopo ? "top" : "bottom");
+
+    const laneY = usarTopo
+      ? Math.min(origem.y, destino.y) - CONFIG.laneGap - offset
+      : Math.max(origem.y + origem.h, destino.y + destino.h) + CONFIG.laneGap + offset;
+
+    return montarRotaOrtogonal([
+      start,
+      { x: start.x, y: laneY },
+      { x: end.x, y: laneY },
+      end
+    ], {
+      x: start.x + 18,
+      y: laneY - 8
+    });
+  }
+
   if (destino.x >= origem.x + origem.w) {
     const start = getAnchorPoint(origem, "right");
     const end = getAnchorPoint(destino, "left");
     const midX = (start.x + end.x) / 2 + offset;
 
-    return {
-      points: [
-        start,
-        { x: midX, y: start.y },
-        { x: midX, y: end.y },
-        end
-      ],
-      label: { x: midX, y: start.y - 10 }
-    };
+    return montarRotaOrtogonal([
+      start,
+      { x: midX, y: start.y },
+      { x: midX, y: end.y },
+      end
+    ], {
+      x: midX,
+      y: start.y - 10
+    });
   }
 
-  // destino abaixo
   if (destino.y >= origem.y + origem.h) {
     const start = getAnchorPoint(origem, "bottom");
     const end = getAnchorPoint(destino, "top");
     const midY = (start.y + end.y) / 2 + offset;
 
-    return {
-      points: [
-        start,
-        { x: start.x, y: midY },
-        { x: end.x, y: midY },
-        end
-      ],
-      label: { x: start.x + 18, y: midY - 8 }
-    };
+    return montarRotaOrtogonal([
+      start,
+      { x: start.x, y: midY },
+      { x: end.x, y: midY },
+      end
+    ], {
+      x: start.x + 18,
+      y: midY - 8
+    });
   }
 
-  // destino acima
   if (destino.y + destino.h <= origem.y) {
     const start = getAnchorPoint(origem, "top");
     const end = getAnchorPoint(destino, "bottom");
     const midY = (start.y + end.y) / 2 - offset;
 
-    return {
-      points: [
-        start,
-        { x: start.x, y: midY },
-        { x: end.x, y: midY },
-        end
-      ],
-      label: { x: start.x + 18, y: midY - 8 }
-    };
+    return montarRotaOrtogonal([
+      start,
+      { x: start.x, y: midY },
+      { x: end.x, y: midY },
+      end
+    ], {
+      x: start.x + 18,
+      y: midY - 8
+    });
   }
 
-  // fallback para esquerda
   const start = getAnchorPoint(origem, "left");
   const end = getAnchorPoint(destino, "right");
   const midX = (start.x + end.x) / 2 - offset;
 
-  return {
-    points: [
-      start,
-      { x: midX, y: start.y },
-      { x: midX, y: end.y },
-      end
-    ],
-    label: { x: midX, y: start.y - 10 }
-  };
+  return montarRotaOrtogonal([
+    start,
+    { x: midX, y: start.y },
+    { x: midX, y: end.y },
+    end
+  ], {
+    x: midX,
+    y: start.y - 10
+  });
 }
 
-function desenharConexao(svg, origem, destino, rotulo = "", ordemConexao = 0) {
-  const offset = ordemConexao * 10;
-  const rota = escolherRota(origem, destino, rotulo, offset);
+function desenharConexao(svg, origem, destino, rotulo = "", ordemConexao = 0, posicoes = {}) {
+  const rota = escolherRota(origem, destino, {
+    rotulo,
+    ordemConexao,
+    posicoes
+  });
 
   const path = criarElementoSVG("path");
   path.setAttribute("d", createPolylinePath(rota.points));
@@ -531,48 +761,57 @@ function gerarFluxo() {
     const y = CONFIG.marginY + (e.linha - 1) * (CONFIG.boxHeight + CONFIG.rowGap);
 
     posicoes[e.id] = {
+      id: e.id,
       x,
       y,
       w,
       h,
-      isDecision: pergunta
+      isDecision: pergunta,
+      gridCol: e.coluna,
+      gridRow: e.linha
     };
   });
 
   const primeiraEtapa = etapas[0];
   const ultimaEtapa = etapas[etapas.length - 1];
+  const primeiraPos = posicoes[primeiraEtapa.id];
+  const ultimaPos = posicoes[ultimaEtapa.id];
 
   posicoes["__INICIO__"] = {
-    x: 20,
-    y: posicoes[primeiraEtapa.id].y + 20,
+    id: "__INICIO__",
+    x: Math.max(20, primeiraPos.x - 60 - CONFIG.entryExitGap),
+    y: primeiraPos.y + (primeiraPos.h - 36) / 2,
     w: 60,
     h: 36,
-    isDecision: false
+    isDecision: false,
+    gridCol: Math.max(0, primeiraPos.gridCol - 1),
+    gridRow: primeiraPos.gridRow
   };
 
   posicoes["__FIM__"] = {
-    x: svgWidth - 100,
-    y: posicoes[ultimaEtapa.id].y + 20,
+    id: "__FIM__",
+    x: ultimaPos.x + ultimaPos.w + CONFIG.entryExitGap,
+    y: ultimaPos.y + (ultimaPos.h - 36) / 2,
     w: 60,
     h: 36,
-    isDecision: false
+    isDecision: false,
+    gridCol: ultimaPos.gridCol + 1,
+    gridRow: ultimaPos.gridRow
   };
 
   desenharCapsula(svg, "Início", posicoes["__INICIO__"].x, posicoes["__INICIO__"].y, 60, 36);
   desenharCapsula(svg, "Fim", posicoes["__FIM__"].x, posicoes["__FIM__"].y, 60, 36);
 
-  // nós
   etapas.forEach((etapa) => {
     desenharNo(svg, etapa, posicoes[etapa.id]);
   });
 
-  // conectores
   let loops = 0;
   let decisoes = 0;
   let conexoesExtrasCount = 0;
   const etapasOrigemComRetorno = new Set();
 
-  desenharConexao(svg, posicoes["__INICIO__"], posicoes[primeiraEtapa.id]);
+  desenharConexao(svg, posicoes["__INICIO__"], posicoes[primeiraEtapa.id], "", 0, posicoes);
 
   etapas.forEach((etapa) => {
     const origem = posicoes[etapa.id];
@@ -596,7 +835,8 @@ function gerarFluxo() {
         origem,
         posicoes[destinoId],
         pergunta ? (indice === 0 ? "Sim" : `Sim ${indice + 1}`) : "",
-        indice
+        indice,
+        posicoes
       );
     });
 
@@ -611,7 +851,8 @@ function gerarFluxo() {
         origem,
         posicoes[destinoId],
         pergunta ? (indice === 0 ? "Não" : `Não ${indice + 1}`) : (indice === 0 ? "Não" : `Não ${indice + 1}`),
-        indice
+        indice,
+        posicoes
       );
     });
 
@@ -622,7 +863,7 @@ function gerarFluxo() {
       }
 
       conexoesExtrasCount++;
-      desenharConexao(svg, origem, posicoes[destinoId], "", indice + 1);
+      desenharConexao(svg, origem, posicoes[destinoId], "", indice + 1, posicoes);
     });
   });
 
@@ -632,7 +873,7 @@ function gerarFluxo() {
     const destinosExtras = quebrarListaIds(etapa.conexoesExtras).filter(destino => destinoEhValido(destino, idsValidos));
 
     if (destinosSim.length === 0 && destinosNao.length === 0 && destinosExtras.length === 0) {
-      desenharConexao(svg, posicoes[etapa.id], posicoes["__FIM__"]);
+      desenharConexao(svg, posicoes[etapa.id], posicoes["__FIM__"], "", 0, posicoes);
     }
   });
 
@@ -645,7 +886,6 @@ function gerarFluxo() {
     "<b>Processo:</b> " + (processo || "Não informado") + "<br>" +
     "<b>Analista:</b> " + (analista || "Não informado");
 
-  // métricas
   let tempoTotal = 0;
   const atividadesTempo = [];
   const tiposTempo = {};
