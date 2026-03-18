@@ -5,7 +5,7 @@ const CONFIG = {
   boxHeight: 110,
   colGap: 140,
   rowGap: 70,
-  marginX: 80,
+  marginX: 120,
   marginY: 60,
   fontFamily: "Arial, sans-serif",
   fontSize: 16,
@@ -19,7 +19,9 @@ const CONFIG = {
   entryExitGap: 40,
   laneGap: 36,
   sameRowTolerance: 1,
-  sameColTolerance: 1
+  sameColTolerance: 1,
+  arrowInset: 10,
+  sharedMergeGap: 34
 };
 
 function limpar(txt) {
@@ -316,6 +318,30 @@ function normalizarPontos(points) {
   return simplificado;
 }
 
+function ajustarPontaSeta(points) {
+  if (!points || points.length < 2) return points || [];
+
+  const ajustados = points.map(p => ({ x: p.x, y: p.y }));
+  const ultimo = ajustados[ajustados.length - 1];
+  const penultimo = ajustados[ajustados.length - 2];
+
+  if (ultimo.x === penultimo.x) {
+    if (ultimo.y > penultimo.y) {
+      ultimo.y -= CONFIG.arrowInset;
+    } else {
+      ultimo.y += CONFIG.arrowInset;
+    }
+  } else if (ultimo.y === penultimo.y) {
+    if (ultimo.x > penultimo.x) {
+      ultimo.x -= CONFIG.arrowInset;
+    } else {
+      ultimo.x += CONFIG.arrowInset;
+    }
+  }
+
+  return normalizarPontos(ajustados);
+}
+
 function estaAlinhadoHorizontalmente(a, b) {
   return Math.abs((a.y + a.h / 2) - (b.y + b.h / 2)) <= CONFIG.sameRowTolerance;
 }
@@ -360,18 +386,75 @@ function existeNoEntreMesmaColuna(origem, destino, posicoes) {
   });
 }
 
-function montarRotaReta(start, end, label) {
+function montarRotaReta(start, end, label, endSide = "") {
   return {
     points: normalizarPontos([start, end]),
-    label
+    label,
+    endSide
   };
 }
 
-function montarRotaOrtogonal(points, label) {
+function montarRotaOrtogonal(points, label, endSide = "") {
   return {
     points: normalizarPontos(points),
-    label
+    label,
+    endSide
   };
+}
+
+function getMergePoint(end, side, gap = CONFIG.sharedMergeGap) {
+  switch (side) {
+    case "left":
+      return { x: end.x - gap, y: end.y };
+    case "right":
+      return { x: end.x + gap, y: end.y };
+    case "top":
+      return { x: end.x, y: end.y - gap };
+    case "bottom":
+      return { x: end.x, y: end.y + gap };
+    default:
+      return { x: end.x - gap, y: end.y };
+  }
+}
+
+function montarCaminhoAteMerge(start, mergePoint, endSide, ordemConexao = 0) {
+  const offset = ordemConexao * 12;
+
+  if (endSide === "left" || endSide === "right") {
+    if (start.y === mergePoint.y) {
+      return normalizarPontos([start, mergePoint]);
+    }
+
+    const laneX = endSide === "left"
+      ? mergePoint.x - offset
+      : mergePoint.x + offset;
+
+    return normalizarPontos([
+      start,
+      { x: laneX, y: start.y },
+      { x: laneX, y: mergePoint.y },
+      mergePoint
+    ]);
+  }
+
+  if (endSide === "top" || endSide === "bottom") {
+    if (start.x === mergePoint.x) {
+      return normalizarPontos([start, mergePoint]);
+    }
+
+    const laneY = endSide === "top"
+      ? mergePoint.y - offset
+      : mergePoint.y + offset;
+
+    return normalizarPontos([
+      start,
+      { x: start.x, y: laneY },
+      { x: mergePoint.x, y: laneY },
+      mergePoint
+    ]);
+  }
+
+  return normalizarPontos([start, mergePoint]);
 }
 
 function escolherRota(origem, destino, contexto = {}) {
@@ -393,7 +476,7 @@ function escolherRota(origem, destino, contexto = {}) {
     return montarRotaReta(start, end, {
       x: (start.x + end.x) / 2,
       y: start.y - 10
-    });
+    }, "left");
   }
 
   if (destino.id === "__FIM__" && mesmaLinha) {
@@ -403,7 +486,7 @@ function escolherRota(origem, destino, contexto = {}) {
     return montarRotaReta(start, end, {
       x: (start.x + end.x) / 2,
       y: start.y - 10
-    });
+    }, "left");
   }
 
   if (origemPergunta && rotulo === "Sim") {
@@ -414,16 +497,15 @@ function escolherRota(origem, destino, contexto = {}) {
       return montarRotaReta(start, end, {
         x: (start.x + end.x) / 2,
         y: start.y - 10
-      });
+      }, "left");
     }
 
-    const end = destino.x >= origem.x
-      ? getAnchorPoint(destino, "left")
-      : getAnchorPoint(destino, "right");
+    const endSide = destino.x >= origem.x ? "left" : "right";
+    const end = getAnchorPoint(destino, endSide);
 
     const laneX = Math.max(
       start.x + CONFIG.routeGap + offset,
-      end.x + CONFIG.routeGap + offset
+      end.x + (endSide === "left" ? -CONFIG.routeGap : CONFIG.routeGap) + offset
     );
 
     return montarRotaOrtogonal([
@@ -434,7 +516,7 @@ function escolherRota(origem, destino, contexto = {}) {
     ], {
       x: start.x + 18,
       y: start.y - 10
-    });
+    }, endSide);
   }
 
   if (origemPergunta && rotulo === "Não") {
@@ -445,16 +527,15 @@ function escolherRota(origem, destino, contexto = {}) {
       return montarRotaReta(start, end, {
         x: start.x + 18,
         y: (start.y + end.y) / 2 - 8
-      });
+      }, "top");
     }
 
-    const end = destino.y >= origem.y
-      ? getAnchorPoint(destino, "top")
-      : getAnchorPoint(destino, "bottom");
+    const endSide = destino.y >= origem.y ? "top" : "bottom";
+    const end = getAnchorPoint(destino, endSide);
 
     const laneY = Math.max(
       start.y + CONFIG.routeGap + offset,
-      end.y + CONFIG.routeGap + offset
+      end.y + (endSide === "top" ? -CONFIG.routeGap : CONFIG.routeGap) + offset
     );
 
     return montarRotaOrtogonal([
@@ -465,7 +546,7 @@ function escolherRota(origem, destino, contexto = {}) {
     ], {
       x: start.x + 18,
       y: start.y + 18
-    });
+    }, endSide);
   }
 
   if (mesmaLinha && destino.x > origem.x && !temBloqueioHorizontal) {
@@ -475,7 +556,7 @@ function escolherRota(origem, destino, contexto = {}) {
     return montarRotaReta(start, end, {
       x: (start.x + end.x) / 2,
       y: start.y - 10
-    });
+    }, "left");
   }
 
   if (mesmaLinha && destino.x < origem.x && !temBloqueioHorizontal) {
@@ -485,7 +566,7 @@ function escolherRota(origem, destino, contexto = {}) {
     return montarRotaReta(start, end, {
       x: (start.x + end.x) / 2,
       y: start.y - 10
-    });
+    }, "right");
   }
 
   if (mesmaColuna && destino.y > origem.y && !temBloqueioVertical) {
@@ -495,7 +576,7 @@ function escolherRota(origem, destino, contexto = {}) {
     return montarRotaReta(start, end, {
       x: start.x + 18,
       y: (start.y + end.y) / 2 - 8
-    });
+    }, "top");
   }
 
   if (mesmaColuna && destino.y < origem.y && !temBloqueioVertical) {
@@ -505,13 +586,14 @@ function escolherRota(origem, destino, contexto = {}) {
     return montarRotaReta(start, end, {
       x: start.x + 18,
       y: (start.y + end.y) / 2 - 8
-    });
+    }, "bottom");
   }
 
   if (mesmaColuna && temBloqueioVertical) {
     const usarEsquerda = (origem.gridCol || 1) <= (destino.gridCol || 1);
     const start = getAnchorPoint(origem, usarEsquerda ? "left" : "right");
-    const end = getAnchorPoint(destino, usarEsquerda ? "left" : "right");
+    const endSide = usarEsquerda ? "left" : "right";
+    const end = getAnchorPoint(destino, endSide);
 
     const laneX = usarEsquerda
       ? Math.min(origem.x, destino.x) - CONFIG.laneGap - offset
@@ -525,13 +607,14 @@ function escolherRota(origem, destino, contexto = {}) {
     ], {
       x: laneX,
       y: start.y - 10
-    });
+    }, endSide);
   }
 
   if (mesmaLinha && temBloqueioHorizontal) {
     const usarTopo = (origem.gridRow || 1) <= (destino.gridRow || 1);
     const start = getAnchorPoint(origem, usarTopo ? "top" : "bottom");
-    const end = getAnchorPoint(destino, usarTopo ? "top" : "bottom");
+    const endSide = usarTopo ? "top" : "bottom";
+    const end = getAnchorPoint(destino, endSide);
 
     const laneY = usarTopo
       ? Math.min(origem.y, destino.y) - CONFIG.laneGap - offset
@@ -545,7 +628,7 @@ function escolherRota(origem, destino, contexto = {}) {
     ], {
       x: start.x + 18,
       y: laneY - 8
-    });
+    }, endSide);
   }
 
   if (destino.x >= origem.x + origem.w) {
@@ -561,7 +644,7 @@ function escolherRota(origem, destino, contexto = {}) {
     ], {
       x: midX,
       y: start.y - 10
-    });
+    }, "left");
   }
 
   if (destino.y >= origem.y + origem.h) {
@@ -577,7 +660,7 @@ function escolherRota(origem, destino, contexto = {}) {
     ], {
       x: start.x + 18,
       y: midY - 8
-    });
+    }, "top");
   }
 
   if (destino.y + destino.h <= origem.y) {
@@ -593,7 +676,7 @@ function escolherRota(origem, destino, contexto = {}) {
     ], {
       x: start.x + 18,
       y: midY - 8
-    });
+    }, "bottom");
   }
 
   const start = getAnchorPoint(origem, "left");
@@ -608,15 +691,78 @@ function escolherRota(origem, destino, contexto = {}) {
   ], {
     x: midX,
     y: start.y - 10
-  });
+  }, "right");
 }
 
-function desenharConexao(svg, origem, destino, rotulo = "", ordemConexao = 0, posicoes = {}) {
-  const rota = escolherRota(origem, destino, {
+function construirRotaCompartilhada(origem, sharedInfo, ordemConexao = 0) {
+  const start = {
+    x: sharedInfo.originalStart.x,
+    y: sharedInfo.originalStart.y
+  };
+
+  const mergePoint = {
+    x: sharedInfo.mergePoint.x,
+    y: sharedInfo.mergePoint.y
+  };
+
+  const caminhoAteMerge = montarCaminhoAteMerge(start, mergePoint, sharedInfo.endSide, ordemConexao);
+  const pontos = [...caminhoAteMerge, { x: sharedInfo.end.x, y: sharedInfo.end.y }];
+
+  return {
+    points: normalizarPontos(pontos),
+    label: sharedInfo.label,
+    endSide: sharedInfo.endSide
+  };
+}
+
+function desenharConexao(
+  svg,
+  origem,
+  destino,
+  rotulo = "",
+  ordemConexao = 0,
+  posicoes = {},
+  sharedRegistry = {}
+) {
+  let rota = escolherRota(origem, destino, {
     rotulo,
     ordemConexao,
     posicoes
   });
+
+  const sharedKey = `${destino.id}__${rota.endSide || "auto"}`;
+  const destinoCompartilhado = sharedRegistry[sharedKey];
+
+  if (
+    destino.id !== "__FIM__" &&
+    destino.id !== "__INICIO__" &&
+    destinoCompartilhado &&
+    origem.id !== destinoCompartilhado.origemId
+  ) {
+    const startReal = rota.points[0];
+    rota = construirRotaCompartilhada(
+      { ...origem, startReal },
+      {
+        ...destinoCompartilhado,
+        originalStart: startReal
+      },
+      ordemConexao
+    );
+  } else if (destino.id !== "__FIM__" && destino.id !== "__INICIO__") {
+    const pointsBase = rota.points.map(p => ({ x: p.x, y: p.y }));
+    const end = pointsBase[pointsBase.length - 1];
+    const mergePoint = getMergePoint(end, rota.endSide || "left");
+
+    sharedRegistry[sharedKey] = {
+      origemId: origem.id,
+      endSide: rota.endSide || "left",
+      end: { x: end.x, y: end.y },
+      mergePoint,
+      label: rota.label
+    };
+  }
+
+  rota.points = ajustarPontaSeta(rota.points);
 
   const path = criarElementoSVG("path");
   path.setAttribute("d", createPolylinePath(rota.points));
@@ -738,7 +884,7 @@ function gerarFluxo() {
   marker.setAttribute("id", "arrow");
   marker.setAttribute("markerWidth", "10");
   marker.setAttribute("markerHeight", "10");
-  marker.setAttribute("refX", "9");
+  marker.setAttribute("refX", "10");
   marker.setAttribute("refY", "3");
   marker.setAttribute("orient", "auto");
   marker.setAttribute("markerUnits", "strokeWidth");
@@ -779,7 +925,7 @@ function gerarFluxo() {
 
   posicoes["__INICIO__"] = {
     id: "__INICIO__",
-    x: Math.max(20, primeiraPos.x - 60 - CONFIG.entryExitGap),
+    x: primeiraPos.x - 60 - CONFIG.entryExitGap,
     y: primeiraPos.y + (primeiraPos.h - 36) / 2,
     w: 60,
     h: 36,
@@ -810,8 +956,9 @@ function gerarFluxo() {
   let decisoes = 0;
   let conexoesExtrasCount = 0;
   const etapasOrigemComRetorno = new Set();
+  const sharedRegistry = {};
 
-  desenharConexao(svg, posicoes["__INICIO__"], posicoes[primeiraEtapa.id], "", 0, posicoes);
+  desenharConexao(svg, posicoes["__INICIO__"], posicoes[primeiraEtapa.id], "", 0, posicoes, sharedRegistry);
 
   etapas.forEach((etapa) => {
     const origem = posicoes[etapa.id];
@@ -836,7 +983,8 @@ function gerarFluxo() {
         posicoes[destinoId],
         pergunta ? (indice === 0 ? "Sim" : `Sim ${indice + 1}`) : "",
         indice,
-        posicoes
+        posicoes,
+        sharedRegistry
       );
     });
 
@@ -852,7 +1000,8 @@ function gerarFluxo() {
         posicoes[destinoId],
         pergunta ? (indice === 0 ? "Não" : `Não ${indice + 1}`) : (indice === 0 ? "Não" : `Não ${indice + 1}`),
         indice,
-        posicoes
+        posicoes,
+        sharedRegistry
       );
     });
 
@@ -863,7 +1012,7 @@ function gerarFluxo() {
       }
 
       conexoesExtrasCount++;
-      desenharConexao(svg, origem, posicoes[destinoId], "", indice + 1, posicoes);
+      desenharConexao(svg, origem, posicoes[destinoId], "", indice + 1, posicoes, sharedRegistry);
     });
   });
 
@@ -873,7 +1022,7 @@ function gerarFluxo() {
     const destinosExtras = quebrarListaIds(etapa.conexoesExtras).filter(destino => destinoEhValido(destino, idsValidos));
 
     if (destinosSim.length === 0 && destinosNao.length === 0 && destinosExtras.length === 0) {
-      desenharConexao(svg, posicoes[etapa.id], posicoes["__FIM__"], "", 0, posicoes);
+      desenharConexao(svg, posicoes[etapa.id], posicoes["__FIM__"], "", 0, posicoes, sharedRegistry);
     }
   });
 
