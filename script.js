@@ -20,7 +20,6 @@ const CONFIG = {
   laneGap: 36,
   sameRowTolerance: 1,
   sameColTolerance: 1,
-  arrowInset: 10,
   sharedMergeGap: 34
 };
 
@@ -318,30 +317,6 @@ function normalizarPontos(points) {
   return simplificado;
 }
 
-function ajustarPontaSeta(points) {
-  if (!points || points.length < 2) return points || [];
-
-  const ajustados = points.map(p => ({ x: p.x, y: p.y }));
-  const ultimo = ajustados[ajustados.length - 1];
-  const penultimo = ajustados[ajustados.length - 2];
-
-  if (ultimo.x === penultimo.x) {
-    if (ultimo.y > penultimo.y) {
-      ultimo.y -= CONFIG.arrowInset;
-    } else {
-      ultimo.y += CONFIG.arrowInset;
-    }
-  } else if (ultimo.y === penultimo.y) {
-    if (ultimo.x > penultimo.x) {
-      ultimo.x -= CONFIG.arrowInset;
-    } else {
-      ultimo.x += CONFIG.arrowInset;
-    }
-  }
-
-  return normalizarPontos(ajustados);
-}
-
 function estaAlinhadoHorizontalmente(a, b) {
   return Math.abs((a.y + a.h / 2) - (b.y + b.h / 2)) <= CONFIG.sameRowTolerance;
 }
@@ -472,7 +447,6 @@ function escolherRota(origem, destino, contexto = {}) {
   if (origem.id === "__INICIO__" && mesmaLinha) {
     const start = getAnchorPoint(origem, "right");
     const end = getAnchorPoint(destino, "left");
-
     return montarRotaReta(start, end, {
       x: (start.x + end.x) / 2,
       y: start.y - 10
@@ -482,7 +456,6 @@ function escolherRota(origem, destino, contexto = {}) {
   if (destino.id === "__FIM__" && mesmaLinha) {
     const start = getAnchorPoint(origem, "right");
     const end = getAnchorPoint(destino, "left");
-
     return montarRotaReta(start, end, {
       x: (start.x + end.x) / 2,
       y: start.y - 10
@@ -552,7 +525,6 @@ function escolherRota(origem, destino, contexto = {}) {
   if (mesmaLinha && destino.x > origem.x && !temBloqueioHorizontal) {
     const start = getAnchorPoint(origem, "right");
     const end = getAnchorPoint(destino, "left");
-
     return montarRotaReta(start, end, {
       x: (start.x + end.x) / 2,
       y: start.y - 10
@@ -562,7 +534,6 @@ function escolherRota(origem, destino, contexto = {}) {
   if (mesmaLinha && destino.x < origem.x && !temBloqueioHorizontal) {
     const start = getAnchorPoint(origem, "left");
     const end = getAnchorPoint(destino, "right");
-
     return montarRotaReta(start, end, {
       x: (start.x + end.x) / 2,
       y: start.y - 10
@@ -572,7 +543,6 @@ function escolherRota(origem, destino, contexto = {}) {
   if (mesmaColuna && destino.y > origem.y && !temBloqueioVertical) {
     const start = getAnchorPoint(origem, "bottom");
     const end = getAnchorPoint(destino, "top");
-
     return montarRotaReta(start, end, {
       x: start.x + 18,
       y: (start.y + end.y) / 2 - 8
@@ -582,7 +552,6 @@ function escolherRota(origem, destino, contexto = {}) {
   if (mesmaColuna && destino.y < origem.y && !temBloqueioVertical) {
     const start = getAnchorPoint(origem, "top");
     const end = getAnchorPoint(destino, "bottom");
-
     return montarRotaReta(start, end, {
       x: start.x + 18,
       y: (start.y + end.y) / 2 - 8
@@ -591,8 +560,8 @@ function escolherRota(origem, destino, contexto = {}) {
 
   if (mesmaColuna && temBloqueioVertical) {
     const usarEsquerda = (origem.gridCol || 1) <= (destino.gridCol || 1);
-    const start = getAnchorPoint(origem, usarEsquerda ? "left" : "right");
     const endSide = usarEsquerda ? "left" : "right";
+    const start = getAnchorPoint(origem, endSide);
     const end = getAnchorPoint(destino, endSide);
 
     const laneX = usarEsquerda
@@ -612,8 +581,8 @@ function escolherRota(origem, destino, contexto = {}) {
 
   if (mesmaLinha && temBloqueioHorizontal) {
     const usarTopo = (origem.gridRow || 1) <= (destino.gridRow || 1);
-    const start = getAnchorPoint(origem, usarTopo ? "top" : "bottom");
     const endSide = usarTopo ? "top" : "bottom";
+    const start = getAnchorPoint(origem, endSide);
     const end = getAnchorPoint(destino, endSide);
 
     const laneY = usarTopo
@@ -694,19 +663,17 @@ function escolherRota(origem, destino, contexto = {}) {
   }, "right");
 }
 
-function construirRotaCompartilhada(origem, sharedInfo, ordemConexao = 0) {
-  const start = {
-    x: sharedInfo.originalStart.x,
-    y: sharedInfo.originalStart.y
-  };
-
+function construirRotaCompartilhada(start, sharedInfo, ordemConexao = 0) {
   const mergePoint = {
     x: sharedInfo.mergePoint.x,
     y: sharedInfo.mergePoint.y
   };
 
-  const caminhoAteMerge = montarCaminhoAteMerge(start, mergePoint, sharedInfo.endSide, ordemConexao);
-  const pontos = [...caminhoAteMerge, { x: sharedInfo.end.x, y: sharedInfo.end.y }];
+  const finalPoints = montarCaminhoAteMerge(start, mergePoint, sharedInfo.endSide, ordemConexao);
+  const pontos = [
+    ...finalPoints,
+    { x: sharedInfo.end.x, y: sharedInfo.end.y }
+  ];
 
   return {
     points: normalizarPontos(pontos),
@@ -731,38 +698,25 @@ function desenharConexao(
   });
 
   const sharedKey = `${destino.id}__${rota.endSide || "auto"}`;
-  const destinoCompartilhado = sharedRegistry[sharedKey];
+  const startReal = { ...rota.points[0] };
 
   if (
     destino.id !== "__FIM__" &&
     destino.id !== "__INICIO__" &&
-    destinoCompartilhado &&
-    origem.id !== destinoCompartilhado.origemId
+    sharedRegistry[sharedKey] &&
+    origem.id !== sharedRegistry[sharedKey].origemId
   ) {
-    const startReal = rota.points[0];
-    rota = construirRotaCompartilhada(
-      { ...origem, startReal },
-      {
-        ...destinoCompartilhado,
-        originalStart: startReal
-      },
-      ordemConexao
-    );
+    rota = construirRotaCompartilhada(startReal, sharedRegistry[sharedKey], ordemConexao);
   } else if (destino.id !== "__FIM__" && destino.id !== "__INICIO__") {
-    const pointsBase = rota.points.map(p => ({ x: p.x, y: p.y }));
-    const end = pointsBase[pointsBase.length - 1];
-    const mergePoint = getMergePoint(end, rota.endSide || "left");
-
+    const end = rota.points[rota.points.length - 1];
     sharedRegistry[sharedKey] = {
       origemId: origem.id,
       endSide: rota.endSide || "left",
       end: { x: end.x, y: end.y },
-      mergePoint,
+      mergePoint: getMergePoint(end, rota.endSide || "left"),
       label: rota.label
     };
   }
-
-  rota.points = ajustarPontaSeta(rota.points);
 
   const path = criarElementoSVG("path");
   path.setAttribute("d", createPolylinePath(rota.points));
@@ -770,6 +724,8 @@ function desenharConexao(
   path.setAttribute("stroke", "#111111");
   path.setAttribute("stroke-width", CONFIG.lineWidth);
   path.setAttribute("marker-end", "url(#arrow)");
+  path.setAttribute("stroke-linejoin", "round");
+  path.setAttribute("stroke-linecap", "round");
   svg.appendChild(path);
 
   if (rotulo) {
@@ -884,7 +840,7 @@ function gerarFluxo() {
   marker.setAttribute("id", "arrow");
   marker.setAttribute("markerWidth", "10");
   marker.setAttribute("markerHeight", "10");
-  marker.setAttribute("refX", "10");
+  marker.setAttribute("refX", "9");
   marker.setAttribute("refY", "3");
   marker.setAttribute("orient", "auto");
   marker.setAttribute("markerUnits", "strokeWidth");
