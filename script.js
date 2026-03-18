@@ -41,12 +41,6 @@ function normalizarCor(cor) {
   return permitidas.includes(c) ? c : "white";
 }
 
-function normalizarTipoConexao(tipoConexao) {
-  const valor = limpar(tipoConexao).toUpperCase();
-  const permitidos = ["NORMAL", "PARALELO", "JOIN"];
-  return permitidos.includes(valor) ? valor : "NORMAL";
-}
-
 function ehCabecalho(colunas) {
   if (!colunas || colunas.length === 0) return false;
   return limpar(colunas[0]).toLowerCase() === "ordem";
@@ -165,6 +159,24 @@ function destinoEhValido(destinoId, idsValidos) {
   return !!destinoId && idsValidos.has(destinoId);
 }
 
+function normalizarGrupoVertical(valor) {
+  return limpar(valor);
+}
+
+function normalizarOrdemVertical(valor) {
+  const num = Number(limpar(valor));
+  return Number.isFinite(num) && num > 0 ? num : null;
+}
+
+function adicionarLoopSeNecessario(origemId, destinoId, etapaPorId, etapaAtual, etapasOrigemComRetornoRef) {
+  const destino = etapaPorId[destinoId];
+  if (destino && destino.ordem < etapaAtual.ordem) {
+    etapasOrigemComRetornoRef.add(origemId);
+    return 1;
+  }
+  return 0;
+}
+
 async function gerarFluxo() {
   const texto = document.getElementById("entrada").value;
 
@@ -192,7 +204,7 @@ async function gerarFluxo() {
   const idsValidos = new Set();
 
   linhas.forEach((col) => {
-    while (col.length < 11) col.push("");
+    while (col.length < 12) col.push("");
 
     const ordem = Number(limpar(col[0])) || 0;
     const id = limpar(col[1]);
@@ -203,8 +215,9 @@ async function gerarFluxo() {
     const proxSim = limpar(col[6]);
     const proxNao = limpar(col[7]);
     const conexoesExtras = limpar(col[8]);
-    const tipoConexao = normalizarTipoConexao(col[9]);
-    const cor = normalizarCor(col[10]);
+    const grupoVertical = normalizarGrupoVertical(col[9]);
+    const ordemVertical = normalizarOrdemVertical(col[10]);
+    const cor = normalizarCor(col[11]);
 
     if (!id || !atividade) return;
 
@@ -218,7 +231,8 @@ async function gerarFluxo() {
       proxSim,
       proxNao,
       conexoesExtras,
-      tipoConexao,
+      grupoVertical,
+      ordemVertical,
       cor
     });
 
@@ -243,6 +257,7 @@ async function gerarFluxo() {
   const nodes = [];
   const links = [];
   const classLines = [];
+  const linksAuxiliaresLayout = [];
 
   let tempoTotal = 0;
   const atividadesTempo = [];
@@ -316,81 +331,66 @@ async function gerarFluxo() {
   etapas.forEach((etapa) => {
     const id = etapa.id;
     const decisao = etapa.atividade.includes("?");
-    const tipoConexao = etapa.tipoConexao || "NORMAL";
 
     const destinosSim = quebrarListaIds(etapa.proxSim).filter(destino => destinoEhValido(destino, idsValidos));
     const destinosNao = quebrarListaIds(etapa.proxNao).filter(destino => destinoEhValido(destino, idsValidos));
     const destinosExtras = quebrarListaIds(etapa.conexoesExtras).filter(destino => destinoEhValido(destino, idsValidos));
 
-    if (tipoConexao === "PARALELO") {
-      destinosSim.forEach((destinoId) => {
-        const destino = etapaPorId[destinoId];
+    if (destinosSim.length > 0) {
+      destinosSim.forEach((destinoId, indice) => {
+        loops += adicionarLoopSeNecessario(id, destinoId, etapaPorId, etapa, etapasOrigemComRetorno);
 
-        if (destino && destino.ordem < etapa.ordem) {
-          loops++;
-          etapasOrigemComRetorno.add(id);
+        if (decisao) {
+          const rotulo = indice === 0 ? "Sim" : `Sim ${indice + 1}`;
+          links.push(`${id} -->|${rotulo}| ${destinoId}`);
+        } else {
+          links.push(`${id} --> ${destinoId}`);
         }
-
-        links.push(`${id} --> ${destinoId}`);
       });
+    }
 
+    if (destinosNao.length > 0) {
       destinosNao.forEach((destinoId, indice) => {
-        const destino = etapaPorId[destinoId];
-
-        if (destino && destino.ordem < etapa.ordem) {
-          loops++;
-          etapasOrigemComRetorno.add(id);
-        }
+        loops += adicionarLoopSeNecessario(id, destinoId, etapaPorId, etapa, etapasOrigemComRetorno);
 
         const rotulo = indice === 0 ? "Não" : `Não ${indice + 1}`;
         links.push(`${id} -->|${rotulo}| ${destinoId}`);
       });
-    } else {
-      if (destinosSim.length > 0) {
-        destinosSim.forEach((destinoId, indice) => {
-          const destinoSim = etapaPorId[destinoId];
-
-          if (destinoSim && destinoSim.ordem < etapa.ordem) {
-            loops++;
-            etapasOrigemComRetorno.add(id);
-          }
-
-          if (decisao) {
-            const rotulo = indice === 0 ? "Sim" : `Sim ${indice + 1}`;
-            links.push(`${id} -->|${rotulo}| ${destinoId}`);
-          } else {
-            links.push(`${id} --> ${destinoId}`);
-          }
-        });
-      }
-
-      if (destinosNao.length > 0) {
-        destinosNao.forEach((destinoId, indice) => {
-          const destinoNao = etapaPorId[destinoId];
-
-          if (destinoNao && destinoNao.ordem < etapa.ordem) {
-            loops++;
-            etapasOrigemComRetorno.add(id);
-          }
-
-          const rotulo = indice === 0 ? "Não" : `Não ${indice + 1}`;
-          links.push(`${id} -->|${rotulo}| ${destinoId}`);
-        });
-      }
     }
 
     if (destinosExtras.length > 0) {
       destinosExtras.forEach((destinoId) => {
-        const destinoExtra = etapaPorId[destinoId];
-
-        if (destinoExtra && destinoExtra.ordem < etapa.ordem) {
-          loops++;
-          etapasOrigemComRetorno.add(id);
-        }
-
+        loops += adicionarLoopSeNecessario(id, destinoId, etapaPorId, etapa, etapasOrigemComRetorno);
         conexoesExtrasCount++;
-        links.push(`${id} -.-> ${destinoId}`);
+        links.push(`${id} --> ${destinoId}`);
       });
+    }
+  });
+
+  // Força agrupamento vertical por grupo + ordem
+  const gruposVerticais = {};
+  etapas.forEach((etapa) => {
+    if (!etapa.grupoVertical) return;
+
+    if (!gruposVerticais[etapa.grupoVertical]) {
+      gruposVerticais[etapa.grupoVertical] = [];
+    }
+
+    gruposVerticais[etapa.grupoVertical].push(etapa);
+  });
+
+  Object.values(gruposVerticais).forEach((grupo) => {
+    grupo.sort((a, b) => {
+      const ordemA = a.ordemVertical ?? 999999;
+      const ordemB = b.ordemVertical ?? 999999;
+      if (ordemA !== ordemB) return ordemA - ordemB;
+      return a.ordem - b.ordem;
+    });
+
+    for (let i = 0; i < grupo.length - 1; i++) {
+      const atual = grupo[i];
+      const proximo = grupo[i + 1];
+      linksAuxiliaresLayout.push(`${atual.id} ~~~ ${proximo.id}`);
     }
   });
 
@@ -403,6 +403,10 @@ async function gerarFluxo() {
   });
 
   links.forEach(l => {
+    mermaidCode += `${l}\n`;
+  });
+
+  linksAuxiliaresLayout.forEach(l => {
     mermaidCode += `${l}\n`;
   });
 
