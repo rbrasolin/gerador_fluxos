@@ -192,7 +192,7 @@ async function gerarFluxo() {
   const idsValidos = new Set();
 
   linhas.forEach((col) => {
-    while (col.length < 10) col.push("");
+    while (col.length < 11) col.push("");
 
     const ordem = Number(limpar(col[0])) || 0;
     const id = limpar(col[1]);
@@ -202,8 +202,9 @@ async function gerarFluxo() {
     const tempo = tempoParaSegundos(limpar(col[5]));
     const proxSim = limpar(col[6]);
     const proxNao = limpar(col[7]);
-    const cor = normalizarCor(col[8]);
+    const conexoesExtras = limpar(col[8]);
     const tipoConexao = normalizarTipoConexao(col[9]);
+    const cor = normalizarCor(col[10]);
 
     if (!id || !atividade) return;
 
@@ -216,8 +217,9 @@ async function gerarFluxo() {
       tempo,
       proxSim,
       proxNao,
-      cor,
-      tipoConexao
+      conexoesExtras,
+      tipoConexao,
+      cor
     });
 
     idsValidos.add(id);
@@ -248,6 +250,7 @@ async function gerarFluxo() {
 
   let loops = 0;
   let decisoes = 0;
+  let conexoesExtrasCount = 0;
   const etapasOrigemComRetorno = new Set();
 
   const primeiroId = etapas[0].id;
@@ -294,11 +297,13 @@ async function gerarFluxo() {
 
     const destinosSim = quebrarListaIds(etapa.proxSim).filter(destino => destinoEhValido(destino, idsValidos));
     const destinosNao = quebrarListaIds(etapa.proxNao).filter(destino => destinoEhValido(destino, idsValidos));
+    const destinosExtras = quebrarListaIds(etapa.conexoesExtras).filter(destino => destinoEhValido(destino, idsValidos));
 
     const semProxSim = destinosSim.length === 0;
     const semProxNao = destinosNao.length === 0;
+    const semExtras = destinosExtras.length === 0;
 
-    if (semProxSim && semProxNao) {
+    if (semProxSim && semProxNao && semExtras) {
       ultimoIds.push(id);
     }
   });
@@ -315,6 +320,7 @@ async function gerarFluxo() {
 
     const destinosSim = quebrarListaIds(etapa.proxSim).filter(destino => destinoEhValido(destino, idsValidos));
     const destinosNao = quebrarListaIds(etapa.proxNao).filter(destino => destinoEhValido(destino, idsValidos));
+    const destinosExtras = quebrarListaIds(etapa.conexoesExtras).filter(destino => destinoEhValido(destino, idsValidos));
 
     if (tipoConexao === "PARALELO") {
       destinosSim.forEach((destinoId) => {
@@ -328,7 +334,7 @@ async function gerarFluxo() {
         links.push(`${id} --> ${destinoId}`);
       });
 
-      destinosNao.forEach((destinoId) => {
+      destinosNao.forEach((destinoId, indice) => {
         const destino = etapaPorId[destinoId];
 
         if (destino && destino.ordem < etapa.ordem) {
@@ -336,41 +342,54 @@ async function gerarFluxo() {
           etapasOrigemComRetorno.add(id);
         }
 
-        links.push(`${id} -->|Não| ${destinoId}`);
-      });
-
-      return;
-    }
-
-    if (destinosSim.length > 0) {
-      destinosSim.forEach((destinoId, indice) => {
-        const destinoSim = etapaPorId[destinoId];
-
-        if (destinoSim && destinoSim.ordem < etapa.ordem) {
-          loops++;
-          etapasOrigemComRetorno.add(id);
-        }
-
-        if (decisao) {
-          const rotulo = indice === 0 ? "Sim" : `Sim ${indice + 1}`;
-          links.push(`${id} -->|${rotulo}| ${destinoId}`);
-        } else {
-          links.push(`${id} --> ${destinoId}`);
-        }
-      });
-    }
-
-    if (destinosNao.length > 0) {
-      destinosNao.forEach((destinoId, indice) => {
-        const destinoNao = etapaPorId[destinoId];
-
-        if (destinoNao && destinoNao.ordem < etapa.ordem) {
-          loops++;
-          etapasOrigemComRetorno.add(id);
-        }
-
         const rotulo = indice === 0 ? "Não" : `Não ${indice + 1}`;
         links.push(`${id} -->|${rotulo}| ${destinoId}`);
+      });
+    } else {
+      if (destinosSim.length > 0) {
+        destinosSim.forEach((destinoId, indice) => {
+          const destinoSim = etapaPorId[destinoId];
+
+          if (destinoSim && destinoSim.ordem < etapa.ordem) {
+            loops++;
+            etapasOrigemComRetorno.add(id);
+          }
+
+          if (decisao) {
+            const rotulo = indice === 0 ? "Sim" : `Sim ${indice + 1}`;
+            links.push(`${id} -->|${rotulo}| ${destinoId}`);
+          } else {
+            links.push(`${id} --> ${destinoId}`);
+          }
+        });
+      }
+
+      if (destinosNao.length > 0) {
+        destinosNao.forEach((destinoId, indice) => {
+          const destinoNao = etapaPorId[destinoId];
+
+          if (destinoNao && destinoNao.ordem < etapa.ordem) {
+            loops++;
+            etapasOrigemComRetorno.add(id);
+          }
+
+          const rotulo = indice === 0 ? "Não" : `Não ${indice + 1}`;
+          links.push(`${id} -->|${rotulo}| ${destinoId}`);
+        });
+      }
+    }
+
+    if (destinosExtras.length > 0) {
+      destinosExtras.forEach((destinoId) => {
+        const destinoExtra = etapaPorId[destinoId];
+
+        if (destinoExtra && destinoExtra.ordem < etapa.ordem) {
+          loops++;
+          etapasOrigemComRetorno.add(id);
+        }
+
+        conexoesExtrasCount++;
+        links.push(`${id} -.-> ${destinoId}`);
       });
     }
   });
@@ -498,6 +517,7 @@ linkStyle default stroke:#222222,stroke-width:2.2px;
           '<br>' +
 
           '<div class="analytics-item"><b>Loops detectados:</b> ' + loops + '</div>' +
+          '<div class="analytics-item"><b>Conexões extras:</b> ' + conexoesExtrasCount + '</div>' +
           '<div class="analytics-item"><b>Impacto potencial de retrabalho:</b> <span class="icon-time">⏱</span>' + formatarTempo(tempoPotencialRetrabalho) + ' <span class="icon-pct">%</span>' + impactoPotencialRetrabalho + '%</div>' +
           '<div class="analytics-item"><b>Taxa de decisão:</b> ' + decisoes + ' etapa(s) <span class="icon-pct">%</span>' + taxaDecisao + '%</div>' +
         '</div>' +
