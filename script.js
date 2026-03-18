@@ -41,6 +41,12 @@ function normalizarCor(cor) {
   return permitidas.includes(c) ? c : "white";
 }
 
+function normalizarTipoConexao(tipoConexao) {
+  const valor = limpar(tipoConexao).toUpperCase();
+  const permitidos = ["NORMAL", "PARALELO", "JOIN"];
+  return permitidos.includes(valor) ? valor : "NORMAL";
+}
+
 function ehCabecalho(colunas) {
   if (!colunas || colunas.length === 0) return false;
   return limpar(colunas[0]).toLowerCase() === "ordem";
@@ -148,6 +154,17 @@ function limparTudo() {
   ultimoNomeArquivo = "fluxograma_processo";
 }
 
+function quebrarListaIds(valor) {
+  return String(valor || "")
+    .split(",")
+    .map(item => limpar(item))
+    .filter(Boolean);
+}
+
+function destinoEhValido(destinoId, idsValidos) {
+  return !!destinoId && idsValidos.has(destinoId);
+}
+
 async function gerarFluxo() {
   const texto = document.getElementById("entrada").value;
 
@@ -175,7 +192,7 @@ async function gerarFluxo() {
   const idsValidos = new Set();
 
   linhas.forEach((col) => {
-    while (col.length < 9) col.push("");
+    while (col.length < 10) col.push("");
 
     const ordem = Number(limpar(col[0])) || 0;
     const id = limpar(col[1]);
@@ -186,6 +203,7 @@ async function gerarFluxo() {
     const proxSim = limpar(col[6]);
     const proxNao = limpar(col[7]);
     const cor = normalizarCor(col[8]);
+    const tipoConexao = normalizarTipoConexao(col[9]);
 
     if (!id || !atividade) return;
 
@@ -198,7 +216,8 @@ async function gerarFluxo() {
       tempo,
       proxSim,
       proxNao,
-      cor
+      cor,
+      tipoConexao
     });
 
     idsValidos.add(id);
@@ -273,8 +292,11 @@ async function gerarFluxo() {
 
     classLines.push(`class ${id} ${cor}`);
 
-    const semProxSim = !etapa.proxSim || !idsValidos.has(etapa.proxSim);
-    const semProxNao = !etapa.proxNao || !idsValidos.has(etapa.proxNao);
+    const destinosSim = quebrarListaIds(etapa.proxSim).filter(destino => destinoEhValido(destino, idsValidos));
+    const destinosNao = quebrarListaIds(etapa.proxNao).filter(destino => destinoEhValido(destino, idsValidos));
+
+    const semProxSim = destinosSim.length === 0;
+    const semProxNao = destinosNao.length === 0;
 
     if (semProxSim && semProxNao) {
       ultimoIds.push(id);
@@ -289,31 +311,67 @@ async function gerarFluxo() {
   etapas.forEach((etapa) => {
     const id = etapa.id;
     const decisao = etapa.atividade.includes("?");
+    const tipoConexao = etapa.tipoConexao || "NORMAL";
 
-    if (etapa.proxSim && idsValidos.has(etapa.proxSim)) {
-      const destinoSim = etapaPorId[etapa.proxSim];
+    const destinosSim = quebrarListaIds(etapa.proxSim).filter(destino => destinoEhValido(destino, idsValidos));
+    const destinosNao = quebrarListaIds(etapa.proxNao).filter(destino => destinoEhValido(destino, idsValidos));
 
-      if (destinoSim && destinoSim.ordem < etapa.ordem) {
-        loops++;
-        etapasOrigemComRetorno.add(id);
-      }
+    if (tipoConexao === "PARALELO") {
+      destinosSim.forEach((destinoId) => {
+        const destino = etapaPorId[destinoId];
 
-      if (decisao) {
-        links.push(`${id} -->|Sim| ${etapa.proxSim}`);
-      } else {
-        links.push(`${id} --> ${etapa.proxSim}`);
-      }
+        if (destino && destino.ordem < etapa.ordem) {
+          loops++;
+          etapasOrigemComRetorno.add(id);
+        }
+
+        links.push(`${id} --> ${destinoId}`);
+      });
+
+      destinosNao.forEach((destinoId) => {
+        const destino = etapaPorId[destinoId];
+
+        if (destino && destino.ordem < etapa.ordem) {
+          loops++;
+          etapasOrigemComRetorno.add(id);
+        }
+
+        links.push(`${id} -->|Não| ${destinoId}`);
+      });
+
+      return;
     }
 
-    if (etapa.proxNao && idsValidos.has(etapa.proxNao)) {
-      const destinoNao = etapaPorId[etapa.proxNao];
+    if (destinosSim.length > 0) {
+      destinosSim.forEach((destinoId, indice) => {
+        const destinoSim = etapaPorId[destinoId];
 
-      if (destinoNao && destinoNao.ordem < etapa.ordem) {
-        loops++;
-        etapasOrigemComRetorno.add(id);
-      }
+        if (destinoSim && destinoSim.ordem < etapa.ordem) {
+          loops++;
+          etapasOrigemComRetorno.add(id);
+        }
 
-      links.push(`${id} -->|Não| ${etapa.proxNao}`);
+        if (decisao) {
+          const rotulo = indice === 0 ? "Sim" : `Sim ${indice + 1}`;
+          links.push(`${id} -->|${rotulo}| ${destinoId}`);
+        } else {
+          links.push(`${id} --> ${destinoId}`);
+        }
+      });
+    }
+
+    if (destinosNao.length > 0) {
+      destinosNao.forEach((destinoId, indice) => {
+        const destinoNao = etapaPorId[destinoId];
+
+        if (destinoNao && destinoNao.ordem < etapa.ordem) {
+          loops++;
+          etapasOrigemComRetorno.add(id);
+        }
+
+        const rotulo = indice === 0 ? "Não" : `Não ${indice + 1}`;
+        links.push(`${id} -->|${rotulo}| ${destinoId}`);
+      });
     }
   });
 
@@ -588,3 +646,89 @@ function baixarSVG() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+async function baixarPDF() {
+  const resultado = obterSVGPronto();
+  if (!resultado) return;
+
+  const { svg, larguraReal, alturaReal } = resultado;
+
+  try {
+    if (!window.jspdf || typeof window.jspdf.jsPDF !== "function") {
+      throw new Error("jsPDF não carregado corretamente.");
+    }
+
+    const { jsPDF } = window.jspdf;
+    const orientacao = larguraReal >= alturaReal ? "landscape" : "portrait";
+
+    const pdf = new jsPDF({
+      orientation: orientacao,
+      unit: "pt",
+      format: [larguraReal, alturaReal]
+    });
+
+    if (typeof pdf.svg === "function") {
+      await pdf.svg(svg, {
+        x: 0,
+        y: 0,
+        width: larguraReal,
+        height: alturaReal
+      });
+    } else if (typeof window.svg2pdf === "function") {
+      await window.svg2pdf(svg, pdf, {
+        xOffset: 0,
+        yOffset: 0,
+        scale: 1
+      });
+    } else {
+      throw new Error("svg2pdf.js não expôs integração utilizável.");
+    }
+
+    pdf.save(`${ultimoNomeArquivo}.pdf`);
+  } catch (erro) {
+    console.error("Erro ao gerar PDF vetorial:", erro);
+    alert("Não foi possível gerar o PDF vetorial. Veja o console (F12).");
+  }
+}
+
+function baixarPNG() {
+  const resultado = obterSVGPronto();
+  if (!resultado) return;
+
+  const { svg, larguraReal, alturaReal } = resultado;
+
+  const larguraExportacao = 9000;
+  const escala = larguraExportacao / larguraReal;
+  const alturaExportacao = Math.ceil(alturaReal * escala);
+
+  const serializer = new XMLSerializer();
+  const source = serializer.serializeToString(svg);
+  const svg64 = btoa(unescape(encodeURIComponent(source)));
+  const image64 = "data:image/svg+xml;base64," + svg64;
+
+  const img = new Image();
+
+  img.onload = function () {
+    const canvas = document.createElement("canvas");
+    canvas.width = larguraExportacao;
+    canvas.height = alturaExportacao;
+
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    const link = document.createElement("a");
+    link.download = `${ultimoNomeArquivo}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  };
+
+  img.onerror = function (erro) {
+    console.error("Erro ao gerar PNG:", erro);
+    alert("Não foi possível gerar o PNG.");
+  };
+
+  img.src = image64;
+}
