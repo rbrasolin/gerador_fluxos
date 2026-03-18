@@ -1,44 +1,38 @@
-let ultimoMermaidCode = "";
 let ultimoNomeArquivo = "fluxograma_processo";
 
-mermaid.initialize({
-  startOnLoad: false,
-  securityLevel: "loose",
-  theme: "base",
-  themeVariables: {
-    fontFamily: "Arial, sans-serif",
-    fontSize: "18px",
-    primaryTextColor: "#111111",
-    lineColor: "#222222",
-    textColor: "#111111",
-    nodeBorder: "#111111",
-    clusterBorder: "#111111",
-    edgeLabelBackground: "#ffffff",
-    mainBkg: "#ffffff"
-  },
-  flowchart: {
-    useMaxWidth: false,
-    htmlLabels: false,
-    curve: "basis",
-    nodeSpacing: 80,
-    rankSpacing: 130,
-    padding: 20
-  }
-});
+const CONFIG = {
+  boxWidth: 250,
+  boxHeight: 110,
+  colGap: 140,
+  rowGap: 70,
+  marginX: 80,
+  marginY: 60,
+  fontFamily: "Arial, sans-serif",
+  fontSize: 16,
+  smallFontSize: 14,
+  stroke: "#111111"
+};
 
 function limpar(txt) {
   if (txt === null || txt === undefined) return "";
-  return String(txt)
-    .replace(/"/g, "")
-    .replace(/\(/g, "")
-    .replace(/\)/g, "")
-    .trim();
+  return String(txt).replace(/"/g, "").replace(/\(/g, "").replace(/\)/g, "").trim();
 }
 
 function normalizarCor(cor) {
   const c = limpar(cor).toLowerCase();
   const permitidas = ["blue", "yellow", "green", "red", "white"];
   return permitidas.includes(c) ? c : "white";
+}
+
+function corHex(cor) {
+  const mapa = {
+    white: "#ffffff",
+    blue: "#8ecae6",
+    yellow: "#ffd166",
+    green: "#95d5b2",
+    red: "#ef476f"
+  };
+  return mapa[cor] || "#ffffff";
 }
 
 function ehCabecalho(colunas) {
@@ -60,7 +54,7 @@ function tempoParaSegundos(tempo) {
   const m = Number(partes[1]) || 0;
   const s = Number(partes[2]) || 0;
 
-  return (h * 3600) + (m * 60) + s;
+  return h * 3600 + m * 60 + s;
 }
 
 function segundosParaTempo(seg) {
@@ -85,15 +79,15 @@ function formatarPercentual(valor) {
   return (Number(valor) || 0).toFixed(1).replace(".", ",");
 }
 
-function escapeMermaidText(texto) {
-  return String(texto || "")
-    .replace(/&/g, "&amp;")
-    .replace(/#/g, " ")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\|/g, "/")
-    .replace(/"/g, "'")
-    .trim();
+function quebrarListaIds(valor) {
+  return String(valor || "")
+    .split(",")
+    .map(item => limpar(item))
+    .filter(Boolean);
+}
+
+function destinoEhValido(destinoId, idsValidos) {
+  return !!destinoId && idsValidos.has(destinoId);
 }
 
 function quebrarTextoAutomatico(texto, maxPalavrasPorLinha = 3, maxCaracteresPorLinha = 18) {
@@ -102,7 +96,7 @@ function quebrarTextoAutomatico(texto, maxPalavrasPorLinha = 3, maxCaracteresPor
     .split(/\s+/)
     .filter(Boolean);
 
-  if (!palavras.length) return "";
+  if (!palavras.length) return [];
 
   const linhas = [];
   let linhaAtual = [];
@@ -124,7 +118,7 @@ function quebrarTextoAutomatico(texto, maxPalavrasPorLinha = 3, maxCaracteresPor
     linhas.push(linhaAtual.join(" "));
   }
 
-  return linhas.join("<br/>");
+  return linhas;
 }
 
 function gerarNomeArquivo() {
@@ -144,11 +138,58 @@ function limparTudo() {
   document.getElementById("diagram").innerHTML = "";
   document.getElementById("infoProcesso").innerHTML = "";
   document.getElementById("metricas").innerHTML = "";
-  ultimoMermaidCode = "";
   ultimoNomeArquivo = "fluxograma_processo";
 }
 
-async function gerarFluxo() {
+function criarElementoSVG(tag) {
+  return document.createElementNS("http://www.w3.org/2000/svg", tag);
+}
+
+function obterPontoSaida(origem, destino) {
+  const ox = origem.x;
+  const oy = origem.y;
+  const dx = destino.x;
+  const dy = destino.y;
+
+  const ow = CONFIG.boxWidth;
+  const oh = CONFIG.boxHeight;
+
+  const saidaDireita = { x: ox + ow, y: oy + oh / 2 };
+  const saidaEsquerda = { x: ox, y: oy + oh / 2 };
+  const saidaTopo = { x: ox + ow / 2, y: oy };
+  const saidaBase = { x: ox + ow / 2, y: oy + oh };
+
+  const entradaDireita = { x: dx + ow, y: dy + oh / 2 };
+  const entradaEsquerda = { x: dx, y: dy + oh / 2 };
+  const entradaTopo = { x: dx + ow / 2, y: dy };
+  const entradaBase = { x: dx + ow / 2, y: dy + oh };
+
+  if (dx > ox + ow) {
+    return { start: saidaDireita, end: entradaEsquerda };
+  }
+
+  if (dx + ow < ox) {
+    return { start: saidaEsquerda, end: entradaDireita };
+  }
+
+  if (dy > oy) {
+    return { start: saidaBase, end: entradaTopo };
+  }
+
+  return { start: saidaTopo, end: entradaBase };
+}
+
+function criarPathConector(origem, destino) {
+  const { start, end } = obterPontoSaida(origem, destino);
+  const meioX = start.x + (end.x - start.x) / 2;
+
+  return `M ${start.x} ${start.y}
+          C ${meioX} ${start.y},
+            ${meioX} ${end.y},
+            ${end.x} ${end.y}`;
+}
+
+function gerarFluxo() {
   const texto = document.getElementById("entrada").value;
 
   if (!texto.trim()) {
@@ -175,7 +216,7 @@ async function gerarFluxo() {
   const idsValidos = new Set();
 
   linhas.forEach((col) => {
-    while (col.length < 9) col.push("");
+    while (col.length < 12) col.push("");
 
     const ordem = Number(limpar(col[0])) || 0;
     const id = limpar(col[1]);
@@ -185,7 +226,10 @@ async function gerarFluxo() {
     const tempo = tempoParaSegundos(limpar(col[5]));
     const proxSim = limpar(col[6]);
     const proxNao = limpar(col[7]);
-    const cor = normalizarCor(col[8]);
+    const conexoesExtras = limpar(col[8]);
+    const coluna = Number(limpar(col[9])) || 1;
+    const linha = Number(limpar(col[10])) || 1;
+    const cor = normalizarCor(col[11]);
 
     if (!id || !atividade) return;
 
@@ -198,6 +242,9 @@ async function gerarFluxo() {
       tempo,
       proxSim,
       proxNao,
+      conexoesExtras,
+      coluna,
+      linha,
       cor
     });
 
@@ -216,158 +263,315 @@ async function gerarFluxo() {
     etapaPorId[e.id] = e;
   });
 
-  let mermaidCode = "flowchart LR\n";
-  mermaidCode += "%%{init: {'flowchart': {'curve': 'basis', 'htmlLabels': false}}}%%\n";
+  const maxColuna = Math.max(...etapas.map(e => e.coluna), 1) + 1;
+  const maxLinha = Math.max(...etapas.map(e => e.linha), 1) + 1;
 
-  const nodes = [];
-  const links = [];
-  const classLines = [];
+  const svgWidth =
+    CONFIG.marginX * 2 +
+    maxColuna * CONFIG.boxWidth +
+    (maxColuna - 1) * CONFIG.colGap;
 
-  let tempoTotal = 0;
-  const atividadesTempo = [];
-  const tiposTempo = {};
+  const svgHeight =
+    CONFIG.marginY * 2 +
+    maxLinha * CONFIG.boxHeight +
+    (maxLinha - 1) * CONFIG.rowGap;
 
+  const svg = criarElementoSVG("svg");
+  svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  svg.setAttribute("width", svgWidth);
+  svg.setAttribute("height", svgHeight);
+  svg.setAttribute("viewBox", `0 0 ${svgWidth} ${svgHeight}`);
+  svg.setAttribute("style", "background:#ffffff");
+
+  const defs = criarElementoSVG("defs");
+  const marker = criarElementoSVG("marker");
+  marker.setAttribute("id", "arrow");
+  marker.setAttribute("markerWidth", "10");
+  marker.setAttribute("markerHeight", "10");
+  marker.setAttribute("refX", "9");
+  marker.setAttribute("refY", "3");
+  marker.setAttribute("orient", "auto");
+  marker.setAttribute("markerUnits", "strokeWidth");
+
+  const markerPath = criarElementoSVG("path");
+  markerPath.setAttribute("d", "M0,0 L10,3 L0,6 Z");
+  markerPath.setAttribute("fill", "#111111");
+  marker.appendChild(markerPath);
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+
+  const posicoes = {};
+
+  etapas.forEach((e) => {
+    const x = CONFIG.marginX + (e.coluna - 1) * (CONFIG.boxWidth + CONFIG.colGap);
+    const y = CONFIG.marginY + (e.linha - 1) * (CONFIG.boxHeight + CONFIG.rowGap);
+
+    posicoes[e.id] = { x, y };
+  });
+
+  // Início e fim
+  const inicio = { x: 20, y: CONFIG.marginY + ((etapas[0].linha - 1) * (CONFIG.boxHeight + CONFIG.rowGap)) + 20 };
+  const fim = { x: svgWidth - 100, y: CONFIG.marginY + ((etapas[etapas.length - 1].linha - 1) * (CONFIG.boxHeight + CONFIG.rowGap)) + 20 };
+
+  posicoes["__INICIO__"] = { x: inicio.x, y: inicio.y, w: 60, h: 36 };
+  posicoes["__FIM__"] = { x: fim.x, y: fim.y, w: 60, h: 36 };
+
+  function desenharCapsula(idInterno, texto, x, y) {
+    const g = criarElementoSVG("g");
+
+    const rect = criarElementoSVG("rect");
+    rect.setAttribute("x", x);
+    rect.setAttribute("y", y);
+    rect.setAttribute("width", 60);
+    rect.setAttribute("height", 36);
+    rect.setAttribute("rx", 18);
+    rect.setAttribute("ry", 18);
+    rect.setAttribute("fill", "#ffffff");
+    rect.setAttribute("stroke", CONFIG.stroke);
+    rect.setAttribute("stroke-width", "2");
+    g.appendChild(rect);
+
+    const t = criarElementoSVG("text");
+    t.setAttribute("x", x + 30);
+    t.setAttribute("y", y + 23);
+    t.setAttribute("text-anchor", "middle");
+    t.setAttribute("font-family", CONFIG.fontFamily);
+    t.setAttribute("font-size", "14");
+    t.setAttribute("fill", "#111111");
+    t.textContent = texto;
+    g.appendChild(t);
+
+    svg.appendChild(g);
+  }
+
+  desenharCapsula("__INICIO__", "Início", inicio.x, inicio.y);
+  desenharCapsula("__FIM__", "Fim", fim.x, fim.y);
+
+  // Conectores
+  function desenharConexao(origemId, destinoId, rotulo = "") {
+    if (!posicoes[origemId] || !posicoes[destinoId]) return;
+
+    const origem = origemId === "__INICIO__" || origemId === "__FIM__"
+      ? {
+          x: posicoes[origemId].x,
+          y: posicoes[origemId].y,
+          w: 60,
+          h: 36
+        }
+      : {
+          x: posicoes[origemId].x,
+          y: posicoes[origemId].y,
+          w: CONFIG.boxWidth,
+          h: CONFIG.boxHeight
+        };
+
+    const destino = destinoId === "__INICIO__" || destinoId === "__FIM__"
+      ? {
+          x: posicoes[destinoId].x,
+          y: posicoes[destinoId].y,
+          w: 60,
+          h: 36
+        }
+      : {
+          x: posicoes[destinoId].x,
+          y: posicoes[destinoId].y,
+          w: CONFIG.boxWidth,
+          h: CONFIG.boxHeight
+        };
+
+    const adaptOrigem = {
+      x: origem.x,
+      y: origem.y
+    };
+
+    const adaptDestino = {
+      x: destino.x,
+      y: destino.y
+    };
+
+    const larguraOrigem = origem.w || CONFIG.boxWidth;
+    const alturaOrigem = origem.h || CONFIG.boxHeight;
+    const larguraDestino = destino.w || CONFIG.boxWidth;
+    const alturaDestino = destino.h || CONFIG.boxHeight;
+
+    const saidaDireita = { x: adaptOrigem.x + larguraOrigem, y: adaptOrigem.y + alturaOrigem / 2 };
+    const saidaEsquerda = { x: adaptOrigem.x, y: adaptOrigem.y + alturaOrigem / 2 };
+    const saidaTopo = { x: adaptOrigem.x + larguraOrigem / 2, y: adaptOrigem.y };
+    const saidaBase = { x: adaptOrigem.x + larguraOrigem / 2, y: adaptOrigem.y + alturaOrigem };
+
+    const entradaDireita = { x: adaptDestino.x + larguraDestino, y: adaptDestino.y + alturaDestino / 2 };
+    const entradaEsquerda = { x: adaptDestino.x, y: adaptDestino.y + alturaDestino / 2 };
+    const entradaTopo = { x: adaptDestino.x + larguraDestino / 2, y: adaptDestino.y };
+    const entradaBase = { x: adaptDestino.x + larguraDestino / 2, y: adaptDestino.y + alturaDestino };
+
+    let start;
+    let end;
+
+    if (adaptDestino.x > adaptOrigem.x + larguraOrigem) {
+      start = saidaDireita;
+      end = entradaEsquerda;
+    } else if (adaptDestino.x + larguraDestino < adaptOrigem.x) {
+      start = saidaEsquerda;
+      end = entradaDireita;
+    } else if (adaptDestino.y > adaptOrigem.y) {
+      start = saidaBase;
+      end = entradaTopo;
+    } else {
+      start = saidaTopo;
+      end = entradaBase;
+    }
+
+    const meioX = start.x + (end.x - start.x) / 2;
+
+    const path = criarElementoSVG("path");
+    path.setAttribute(
+      "d",
+      `M ${start.x} ${start.y} C ${meioX} ${start.y}, ${meioX} ${end.y}, ${end.x} ${end.y}`
+    );
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "#111111");
+    path.setAttribute("stroke-width", "2.2");
+    path.setAttribute("marker-end", "url(#arrow)");
+    svg.appendChild(path);
+
+    if (rotulo) {
+      const tx = criarElementoSVG("text");
+      tx.setAttribute("x", meioX);
+      tx.setAttribute("y", start.y - 8);
+      tx.setAttribute("text-anchor", "middle");
+      tx.setAttribute("font-family", CONFIG.fontFamily);
+      tx.setAttribute("font-size", "12");
+      tx.setAttribute("fill", "#111111");
+      tx.textContent = rotulo;
+      svg.appendChild(tx);
+    }
+  }
+
+  // início -> primeira etapa
+  desenharConexao("__INICIO__", etapas[0].id);
+
+  // nós
+  etapas.forEach((e) => {
+    const x = posicoes[e.id].x;
+    const y = posicoes[e.id].y;
+
+    const g = criarElementoSVG("g");
+
+    const rect = criarElementoSVG("rect");
+    rect.setAttribute("x", x);
+    rect.setAttribute("y", y);
+    rect.setAttribute("width", CONFIG.boxWidth);
+    rect.setAttribute("height", CONFIG.boxHeight);
+    rect.setAttribute("fill", corHex(e.cor));
+    rect.setAttribute("stroke", CONFIG.stroke);
+    rect.setAttribute("stroke-width", "2");
+    g.appendChild(rect);
+
+    const linhas = [
+      ...quebrarTextoAutomatico(e.atividade, 3, 18),
+      ...quebrarTextoAutomatico(e.sistema || "Sem sistema informado", 3, 20),
+      formatarTempo(e.tempo)
+    ];
+
+    const totalAlturaTexto = linhas.length * 18;
+    const inicioYTexto = y + (CONFIG.boxHeight - totalAlturaTexto) / 2 + 14;
+
+    linhas.forEach((linha, i) => {
+      const text = criarElementoSVG("text");
+      text.setAttribute("x", x + CONFIG.boxWidth / 2);
+      text.setAttribute("y", inicioYTexto + i * 18);
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("font-family", CONFIG.fontFamily);
+      text.setAttribute("font-size", i === linhas.length - 1 ? CONFIG.smallFontSize : CONFIG.fontSize);
+      text.setAttribute("fill", "#111111");
+      text.textContent = linha;
+      g.appendChild(text);
+    });
+
+    svg.appendChild(g);
+  });
+
+  // setas entre etapas
   let loops = 0;
   let decisoes = 0;
+  let conexoesExtrasCount = 0;
   const etapasOrigemComRetorno = new Set();
 
-  const primeiroId = etapas[0].id;
-  const ultimoIds = [];
-
-  nodes.push('INICIO(["Início"])');
-  classLines.push("class INICIO white");
-
   etapas.forEach((etapa) => {
-    const id = etapa.id;
-    const atividadeOriginal = escapeMermaidText(etapa.atividade);
-    const atividade = quebrarTextoAutomatico(atividadeOriginal, 3, 18);
-    const tipo = etapa.tipo;
-
-    const sistemaOriginal = escapeMermaidText(etapa.sistema || "Sem sistema informado");
-    const sistema = sistemaOriginal.length > 22
-      ? quebrarTextoAutomatico(sistemaOriginal, 3, 20)
-      : sistemaOriginal;
-
-    const tempo = etapa.tempo;
-    const cor = etapa.cor;
-
-    tempoTotal += tempo;
-    atividadesTempo.push({ atividade: etapa.atividade, tempo });
-
-    if (!tiposTempo[tipo]) {
-      tiposTempo[tipo] = 0;
-    }
-    tiposTempo[tipo] += tempo;
+    const destinosSim = quebrarListaIds(etapa.proxSim).filter(destino => destinoEhValido(destino, idsValidos));
+    const destinosNao = quebrarListaIds(etapa.proxNao).filter(destino => destinoEhValido(destino, idsValidos));
+    const destinosExtras = quebrarListaIds(etapa.conexoesExtras).filter(destino => destinoEhValido(destino, idsValidos));
 
     if (etapa.atividade.includes("?")) {
       decisoes++;
     }
 
-    const label = `${atividade}<br/>${sistema}<br/>${formatarTempo(tempo)}`;
+    destinosSim.forEach((destinoId, indice) => {
+      const destino = etapaPorId[destinoId];
+      if (destino && destino.ordem < etapa.ordem) {
+        loops++;
+        etapasOrigemComRetorno.add(etapa.id);
+      }
 
-    if (etapa.atividade.includes("?")) {
-      nodes.push(`${id}{"${label}"}`);
-    } else {
-      nodes.push(`${id}["${label}"]`);
-    }
+      desenharConexao(etapa.id, destinoId, etapa.atividade.includes("?") ? (indice === 0 ? "Sim" : `Sim ${indice + 1}`) : "");
+    });
 
-    classLines.push(`class ${id} ${cor}`);
+    destinosNao.forEach((destinoId, indice) => {
+      const destino = etapaPorId[destinoId];
+      if (destino && destino.ordem < etapa.ordem) {
+        loops++;
+        etapasOrigemComRetorno.add(etapa.id);
+      }
 
-    const semProxSim = !etapa.proxSim || !idsValidos.has(etapa.proxSim);
-    const semProxNao = !etapa.proxNao || !idsValidos.has(etapa.proxNao);
+      desenharConexao(etapa.id, destinoId, indice === 0 ? "Não" : `Não ${indice + 1}`);
+    });
 
-    if (semProxSim && semProxNao) {
-      ultimoIds.push(id);
-    }
+    destinosExtras.forEach((destinoId) => {
+      const destino = etapaPorId[destinoId];
+      if (destino && destino.ordem < etapa.ordem) {
+        loops++;
+        etapasOrigemComRetorno.add(etapa.id);
+      }
+
+      conexoesExtrasCount++;
+      desenharConexao(etapa.id, destinoId);
+    });
   });
 
-  nodes.push('FIM(["Fim"])');
-  classLines.push("class FIM white");
-
-  links.push(`INICIO --> ${primeiroId}`);
-
+  // finais -> fim
   etapas.forEach((etapa) => {
-    const id = etapa.id;
-    const decisao = etapa.atividade.includes("?");
+    const destinosSim = quebrarListaIds(etapa.proxSim).filter(destino => destinoEhValido(destino, idsValidos));
+    const destinosNao = quebrarListaIds(etapa.proxNao).filter(destino => destinoEhValido(destino, idsValidos));
+    const destinosExtras = quebrarListaIds(etapa.conexoesExtras).filter(destino => destinoEhValido(destino, idsValidos));
 
-    if (etapa.proxSim && idsValidos.has(etapa.proxSim)) {
-      const destinoSim = etapaPorId[etapa.proxSim];
-
-      if (destinoSim && destinoSim.ordem < etapa.ordem) {
-        loops++;
-        etapasOrigemComRetorno.add(id);
-      }
-
-      if (decisao) {
-        links.push(`${id} -->|Sim| ${etapa.proxSim}`);
-      } else {
-        links.push(`${id} --> ${etapa.proxSim}`);
-      }
-    }
-
-    if (etapa.proxNao && idsValidos.has(etapa.proxNao)) {
-      const destinoNao = etapaPorId[etapa.proxNao];
-
-      if (destinoNao && destinoNao.ordem < etapa.ordem) {
-        loops++;
-        etapasOrigemComRetorno.add(id);
-      }
-
-      links.push(`${id} -->|Não| ${etapa.proxNao}`);
+    if (destinosSim.length === 0 && destinosNao.length === 0 && destinosExtras.length === 0) {
+      desenharConexao(etapa.id, "__FIM__");
     }
   });
 
-  ultimoIds.forEach(id => {
-    links.push(`${id} --> FIM`);
-  });
+  document.getElementById("diagram").innerHTML = "";
+  document.getElementById("diagram").appendChild(svg);
 
-  nodes.forEach(n => {
-    mermaidCode += `${n}\n`;
-  });
-
-  links.forEach(l => {
-    mermaidCode += `${l}\n`;
-  });
-
-  classLines.forEach(c => {
-    mermaidCode += `${c}\n`;
-  });
-
-  mermaidCode += `
-classDef white fill:#ffffff,stroke:#111111,stroke-width:2px,color:#111111;
-classDef blue fill:#8ecae6,stroke:#111111,stroke-width:2px,color:#111111;
-classDef yellow fill:#ffd166,stroke:#111111,stroke-width:2px,color:#111111;
-classDef green fill:#95d5b2,stroke:#111111,stroke-width:2px,color:#111111;
-classDef red fill:#ef476f,stroke:#111111,stroke-width:2px,color:#111111;
-
-linkStyle default stroke:#222222,stroke-width:2.2px;
-`;
-
-  ultimoMermaidCode = mermaidCode;
   ultimoNomeArquivo = gerarNomeArquivo();
-
-  try {
-    const renderId = `mermaid_${Date.now()}`;
-    const { svg } = await mermaid.render(renderId, mermaidCode);
-
-    document.getElementById("diagram").innerHTML = svg;
-
-    const svgElement = document.querySelector("#diagram svg");
-    if (svgElement) {
-      svgElement.style.maxWidth = "none";
-      svgElement.style.height = "auto";
-      svgElement.setAttribute("preserveAspectRatio", "xMinYMin meet");
-    }
-  } catch (e) {
-    console.error("Erro Mermaid:", e);
-    console.error("Código Mermaid gerado:\n", mermaidCode);
-    alert("Erro ao gerar fluxo. Veja o console (F12).");
-    return;
-  }
 
   document.getElementById("infoProcesso").innerHTML =
     "<b>Processo:</b> " + (processo || "Não informado") + "<br>" +
     "<b>Analista:</b> " + (analista || "Não informado");
+
+  // métricas
+  let tempoTotal = 0;
+  const atividadesTempo = [];
+  const tiposTempo = {};
+
+  etapas.forEach((etapa) => {
+    tempoTotal += etapa.tempo;
+    atividadesTempo.push({ atividade: etapa.atividade, tempo: etapa.tempo });
+
+    if (!tiposTempo[etapa.tipo]) {
+      tiposTempo[etapa.tipo] = 0;
+    }
+    tiposTempo[etapa.tipo] += etapa.tempo;
+  });
 
   atividadesTempo.sort((a, b) => b.tempo - a.tempo);
 
@@ -375,27 +579,22 @@ linkStyle default stroke:#222222,stroke-width:2.2px;
     .slice(0, 3)
     .map(a => {
       const pct = tempoTotal ? formatarPercentual((a.tempo / tempoTotal) * 100) : "0,0";
-
-      return (
-        '<div class="analytics-item">' +
-          a.atividade +
-          ' — <span class="icon-time">⏱</span>' + formatarTempo(a.tempo) +
-          ' <span class="icon-pct">%</span>' + pct + '%' +
-        '</div>'
-      );
+      return '<div class="analytics-item">' +
+        a.atividade +
+        ' — <span class="icon-time">⏱</span>' + formatarTempo(a.tempo) +
+        ' <span class="icon-pct">%</span>' + pct + '%' +
+      '</div>';
     })
     .join("");
 
   let paretoHTML = "";
   atividadesTempo.forEach(a => {
     const pct = tempoTotal ? formatarPercentual((a.tempo / tempoTotal) * 100) : "0,0";
-
-    paretoHTML +=
-      '<div class="analytics-item">' +
-        a.atividade +
-        ' — <span class="icon-time">⏱</span>' + formatarTempo(a.tempo) +
-        ' <span class="icon-pct">%</span>' + pct + '%' +
-      '</div>';
+    paretoHTML += '<div class="analytics-item">' +
+      a.atividade +
+      ' — <span class="icon-time">⏱</span>' + formatarTempo(a.tempo) +
+      ' <span class="icon-pct">%</span>' + pct + '%' +
+    '</div>';
   });
 
   const tiposOrdenados = Object.entries(tiposTempo).sort((a, b) => b[1] - a[1]);
@@ -403,13 +602,11 @@ linkStyle default stroke:#222222,stroke-width:2.2px;
   let tiposHTML = "";
   tiposOrdenados.forEach(([tipo, tempo]) => {
     const pct = tempoTotal ? formatarPercentual((tempo / tempoTotal) * 100) : "0,0";
-
-    tiposHTML +=
-      '<div class="analytics-item">' +
-        tipo +
-        ' — <span class="icon-time">⏱</span>' + formatarTempo(tempo) +
-        ' <span class="icon-pct">%</span>' + pct + '%' +
-      '</div>';
+    tiposHTML += '<div class="analytics-item">' +
+      tipo +
+      ' — <span class="icon-time">⏱</span>' + formatarTempo(tempo) +
+      ' <span class="icon-pct">%</span>' + pct + '%' +
+    '</div>';
   });
 
   let tempoPotencialRetrabalho = 0;
@@ -429,152 +626,46 @@ linkStyle default stroke:#222222,stroke-width:2.2px;
 
   document.getElementById("metricas").innerHTML =
     '<div class="analytics-grid">' +
-
       '<div class="analytics-col">' +
         '<div class="analytics-section">' +
           '<div class="metric-highlight"><b>Tempo total do processo:</b> <span class="icon-time">⏱</span>' + formatarTempo(tempoTotal) + '</div>' +
-
           '<div class="analytics-title">Top 3 gargalos</div>' +
           top3HTML +
-
           '<br>' +
-
           '<div class="analytics-item"><b>Loops detectados:</b> ' + loops + '</div>' +
+          '<div class="analytics-item"><b>Conexões extras:</b> ' + conexoesExtrasCount + '</div>' +
           '<div class="analytics-item"><b>Impacto potencial de retrabalho:</b> <span class="icon-time">⏱</span>' + formatarTempo(tempoPotencialRetrabalho) + ' <span class="icon-pct">%</span>' + impactoPotencialRetrabalho + '%</div>' +
           '<div class="analytics-item"><b>Taxa de decisão:</b> ' + decisoes + ' etapa(s) <span class="icon-pct">%</span>' + taxaDecisao + '%</div>' +
         '</div>' +
-
         '<div class="analytics-section">' +
           '<div class="analytics-title">Tempo por tipo</div>' +
           tiposHTML +
         '</div>' +
       '</div>' +
-
       '<div class="analytics-col">' +
         '<div class="analytics-section">' +
           '<div class="analytics-title">Pareto de tempo</div>' +
           paretoHTML +
         '</div>' +
       '</div>' +
-
     '</div>';
-}
-
-function prepararSVGParaPDF(svgOriginal) {
-  const svg = svgOriginal.cloneNode(true);
-
-  const seletores = "svg, g, path, rect, polygon, circle, ellipse, line, polyline, text, tspan";
-  const elementos = svg.querySelectorAll(seletores);
-  const originalElements = svgOriginal.querySelectorAll(seletores);
-
-  elementos.forEach((el, i) => {
-    const original = originalElements[i];
-    if (!original) return;
-
-    const cs = window.getComputedStyle(original);
-
-    const props = [
-      "fill",
-      "fill-opacity",
-      "stroke",
-      "stroke-width",
-      "stroke-opacity",
-      "stroke-linecap",
-      "stroke-linejoin",
-      "stroke-dasharray",
-      "opacity",
-      "color",
-      "font-family",
-      "font-size",
-      "font-weight",
-      "font-style",
-      "text-anchor",
-      "dominant-baseline"
-    ];
-
-    let styleInline = "";
-    props.forEach((prop) => {
-      const val = cs.getPropertyValue(prop);
-      if (val && val !== "normal" && val !== "auto") {
-        styleInline += `${prop}:${val};`;
-      }
-    });
-
-    const tag = el.tagName.toLowerCase();
-
-    if (["text", "tspan"].includes(tag)) {
-      const fill = cs.getPropertyValue("fill");
-      if (!fill || fill === "none") {
-        styleInline += "fill:#111111;";
-      }
-    }
-
-    if (["path", "rect", "polygon", "circle", "ellipse", "line", "polyline"].includes(tag)) {
-      const stroke = cs.getPropertyValue("stroke");
-      const fill = cs.getPropertyValue("fill");
-
-      if (!stroke || stroke === "none") {
-        styleInline += "stroke:#111111;";
-      }
-
-      if (!fill || fill === "none") {
-        styleInline += "fill:none;";
-      }
-    }
-
-    const existing = el.getAttribute("style") || "";
-    el.setAttribute("style", `${existing};${styleInline}`);
-  });
-
-  svg.querySelectorAll("[filter]").forEach(el => el.removeAttribute("filter"));
-  svg.querySelectorAll("[mask]").forEach(el => el.removeAttribute("mask"));
-
-  return svg;
 }
 
 function obterSVGPronto() {
   const svgOriginal = document.querySelector("#diagram svg");
-
   if (!svgOriginal) {
     alert("Gere o fluxo primeiro.");
     return null;
   }
 
-  const svg = prepararSVGParaPDF(svgOriginal);
-  const bbox = svgOriginal.getBBox();
-  const padding = 40;
-
-  const larguraReal = Math.ceil(bbox.width + padding * 2);
-  const alturaReal = Math.ceil(bbox.height + padding * 2);
-
-  svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  svg.setAttribute("width", larguraReal);
-  svg.setAttribute("height", alturaReal);
-  svg.setAttribute(
-    "viewBox",
-    `${bbox.x - padding} ${bbox.y - padding} ${larguraReal} ${alturaReal}`
-  );
-
-  const fundo = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-  fundo.setAttribute("x", bbox.x - padding);
-  fundo.setAttribute("y", bbox.y - padding);
-  fundo.setAttribute("width", larguraReal);
-  fundo.setAttribute("height", alturaReal);
-  fundo.setAttribute("fill", "white");
-  svg.insertBefore(fundo, svg.firstChild);
-
-  return {
-    svg,
-    larguraReal,
-    alturaReal
-  };
+  const clone = svgOriginal.cloneNode(true);
+  return clone;
 }
 
 function baixarSVG() {
-  const resultado = obterSVGPronto();
-  if (!resultado) return;
+  const svg = obterSVGPronto();
+  if (!svg) return;
 
-  const { svg } = resultado;
   const serializer = new XMLSerializer();
   const source = serializer.serializeToString(svg);
   const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
@@ -588,3 +679,47 @@ function baixarSVG() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// compatibilidade com botão antigo
+function baixarFluxo() {
+  baixarSVG();
+}
+
+function baixarPNG() {
+  const svg = obterSVGPronto();
+  if (!svg) return;
+
+  const larguraReal = Number(svg.getAttribute("width")) || 2000;
+  const alturaReal = Number(svg.getAttribute("height")) || 1200;
+
+  const serializer = new XMLSerializer();
+  const source = serializer.serializeToString(svg);
+  const svg64 = btoa(unescape(encodeURIComponent(source)));
+  const image64 = "data:image/svg+xml;base64," + svg64;
+
+  const img = new Image();
+
+  img.onload = function () {
+    const canvas = document.createElement("canvas");
+    canvas.width = larguraReal;
+    canvas.height = alturaReal;
+
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    const link = document.createElement("a");
+    link.download = `${ultimoNomeArquivo}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  };
+
+  img.onerror = function (erro) {
+    console.error("Erro ao gerar PNG:", erro);
+    alert("Não foi possível gerar o PNG.");
+  };
+
+  img.src = image64;
+}
