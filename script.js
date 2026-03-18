@@ -12,7 +12,7 @@ mermaid.initialize({
     lineColor: "#222222",
     textColor: "#111111",
     nodeBorder: "#111111",
-    clusterBorder: "#111111",
+    clusterBorder: "#ffffff",
     edgeLabelBackground: "#ffffff",
     mainBkg: "#ffffff"
   },
@@ -177,6 +177,25 @@ function adicionarLoopSeNecessario(origemId, destinoId, etapaPorId, etapaAtual, 
   return 0;
 }
 
+function gerarDefinicaoNo(etapa) {
+  const id = etapa.id;
+  const atividadeOriginal = escapeMermaidText(etapa.atividade);
+  const atividade = quebrarTextoAutomatico(atividadeOriginal, 3, 18);
+
+  const sistemaOriginal = escapeMermaidText(etapa.sistema || "Sem sistema informado");
+  const sistema = sistemaOriginal.length > 22
+    ? quebrarTextoAutomatico(sistemaOriginal, 3, 20)
+    : sistemaOriginal;
+
+  const label = `${atividade}<br/>${sistema}<br/>${formatarTempo(etapa.tempo)}`;
+
+  if (etapa.atividade.includes("?")) {
+    return `${id}{"${label}"}`;
+  }
+
+  return `${id}["${label}"]`;
+}
+
 async function gerarFluxo() {
   const texto = document.getElementById("entrada").value;
 
@@ -254,10 +273,10 @@ async function gerarFluxo() {
   let mermaidCode = "flowchart LR\n";
   mermaidCode += "%%{init: {'flowchart': {'curve': 'basis', 'htmlLabels': false}}}%%\n";
 
-  const nodes = [];
+  const nodesSemGrupo = [];
   const links = [];
   const classLines = [];
-  const linksAuxiliaresLayout = [];
+  const gruposVerticais = {};
 
   let tempoTotal = 0;
   const atividadesTempo = [];
@@ -271,59 +290,43 @@ async function gerarFluxo() {
   const primeiroId = etapas[0].id;
   const ultimoIds = [];
 
-  nodes.push('INICIO(["Início"])');
+  nodesSemGrupo.push('INICIO(["Início"])');
   classLines.push("class INICIO white");
 
   etapas.forEach((etapa) => {
-    const id = etapa.id;
-    const atividadeOriginal = escapeMermaidText(etapa.atividade);
-    const atividade = quebrarTextoAutomatico(atividadeOriginal, 3, 18);
-    const tipo = etapa.tipo;
+    tempoTotal += etapa.tempo;
+    atividadesTempo.push({ atividade: etapa.atividade, tempo: etapa.tempo });
 
-    const sistemaOriginal = escapeMermaidText(etapa.sistema || "Sem sistema informado");
-    const sistema = sistemaOriginal.length > 22
-      ? quebrarTextoAutomatico(sistemaOriginal, 3, 20)
-      : sistemaOriginal;
-
-    const tempo = etapa.tempo;
-    const cor = etapa.cor;
-
-    tempoTotal += tempo;
-    atividadesTempo.push({ atividade: etapa.atividade, tempo });
-
-    if (!tiposTempo[tipo]) {
-      tiposTempo[tipo] = 0;
+    if (!tiposTempo[etapa.tipo]) {
+      tiposTempo[etapa.tipo] = 0;
     }
-    tiposTempo[tipo] += tempo;
+    tiposTempo[etapa.tipo] += etapa.tempo;
 
     if (etapa.atividade.includes("?")) {
       decisoes++;
     }
 
-    const label = `${atividade}<br/>${sistema}<br/>${formatarTempo(tempo)}`;
-
-    if (etapa.atividade.includes("?")) {
-      nodes.push(`${id}{"${label}"}`);
+    if (etapa.grupoVertical) {
+      if (!gruposVerticais[etapa.grupoVertical]) {
+        gruposVerticais[etapa.grupoVertical] = [];
+      }
+      gruposVerticais[etapa.grupoVertical].push(etapa);
     } else {
-      nodes.push(`${id}["${label}"]`);
+      nodesSemGrupo.push(gerarDefinicaoNo(etapa));
     }
 
-    classLines.push(`class ${id} ${cor}`);
+    classLines.push(`class ${etapa.id} ${etapa.cor}`);
 
     const destinosSim = quebrarListaIds(etapa.proxSim).filter(destino => destinoEhValido(destino, idsValidos));
     const destinosNao = quebrarListaIds(etapa.proxNao).filter(destino => destinoEhValido(destino, idsValidos));
     const destinosExtras = quebrarListaIds(etapa.conexoesExtras).filter(destino => destinoEhValido(destino, idsValidos));
 
-    const semProxSim = destinosSim.length === 0;
-    const semProxNao = destinosNao.length === 0;
-    const semExtras = destinosExtras.length === 0;
-
-    if (semProxSim && semProxNao && semExtras) {
-      ultimoIds.push(id);
+    if (destinosSim.length === 0 && destinosNao.length === 0 && destinosExtras.length === 0) {
+      ultimoIds.push(etapa.id);
     }
   });
 
-  nodes.push('FIM(["Fim"])');
+  nodesSemGrupo.push('FIM(["Fim"])');
   classLines.push("class FIM white");
 
   links.push(`INICIO --> ${primeiroId}`);
@@ -367,46 +370,36 @@ async function gerarFluxo() {
     }
   });
 
-  // Força agrupamento vertical por grupo + ordem
-  const gruposVerticais = {};
-  etapas.forEach((etapa) => {
-    if (!etapa.grupoVertical) return;
-
-    if (!gruposVerticais[etapa.grupoVertical]) {
-      gruposVerticais[etapa.grupoVertical] = [];
-    }
-
-    gruposVerticais[etapa.grupoVertical].push(etapa);
+  ultimoIds.forEach(id => {
+    links.push(`${id} --> FIM`);
   });
 
-  Object.values(gruposVerticais).forEach((grupo) => {
-    grupo.sort((a, b) => {
+  // Nós sem grupo
+  nodesSemGrupo.forEach(n => {
+    mermaidCode += `${n}\n`;
+  });
+
+  // Subgraphs verticais
+  Object.entries(gruposVerticais).forEach(([grupo, etapasDoGrupo]) => {
+    const grupoOrdenado = [...etapasDoGrupo].sort((a, b) => {
       const ordemA = a.ordemVertical ?? 999999;
       const ordemB = b.ordemVertical ?? 999999;
       if (ordemA !== ordemB) return ordemA - ordemB;
       return a.ordem - b.ordem;
     });
 
-    for (let i = 0; i < grupo.length - 1; i++) {
-      const atual = grupo[i];
-      const proximo = grupo[i + 1];
-      linksAuxiliaresLayout.push(`${atual.id} ~~~ ${proximo.id}`);
-    }
+    mermaidCode += `subgraph ${grupo}[" "]\n`;
+    mermaidCode += `direction TB\n`;
+
+    grupoOrdenado.forEach((etapa) => {
+      mermaidCode += `${gerarDefinicaoNo(etapa)}\n`;
+    });
+
+    mermaidCode += `end\n`;
   });
 
-  ultimoIds.forEach(id => {
-    links.push(`${id} --> FIM`);
-  });
-
-  nodes.forEach(n => {
-    mermaidCode += `${n}\n`;
-  });
-
+  // Links reais
   links.forEach(l => {
-    mermaidCode += `${l}\n`;
-  });
-
-  linksAuxiliaresLayout.forEach(l => {
     mermaidCode += `${l}\n`;
   });
 
@@ -415,6 +408,9 @@ async function gerarFluxo() {
   });
 
   mermaidCode += `
+style INICIO fill:#ffffff,stroke:#111111,stroke-width:2px,color:#111111;
+style FIM fill:#ffffff,stroke:#111111,stroke-width:2px,color:#111111;
+
 classDef white fill:#ffffff,stroke:#111111,stroke-width:2px,color:#111111;
 classDef blue fill:#8ecae6,stroke:#111111,stroke-width:2px,color:#111111;
 classDef yellow fill:#ffd166,stroke:#111111,stroke-width:2px,color:#111111;
