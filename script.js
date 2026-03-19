@@ -502,7 +502,41 @@ function gerarLanesX(posicoes, excludeIds = []) {
   return [...new Set(valores.map(v => Number(v.toFixed(1))))];
 }
 
-function encontrarRotaSegura(start, end, posicoes, excludeIds = []) {
+function detectarLadoEntrada(points) {
+  if (!points || points.length < 2) return "left";
+
+  const end = points[points.length - 1];
+  const prev = points[points.length - 2];
+
+  if (Math.abs(prev.x - end.x) <= CONFIG.sameColTolerance) {
+    return prev.y < end.y ? "top" : "bottom";
+  }
+
+  if (Math.abs(prev.y - end.y) <= CONFIG.sameRowTolerance) {
+    return prev.x < end.x ? "left" : "right";
+  }
+
+  return "left";
+}
+
+function ajustarUltimoTrechoParaLado(points, end, side) {
+  const base = points.slice(0, -1);
+  const prev = base[base.length - 1];
+
+  if (!prev) return normalizarPontos([end]);
+
+  let ajustado;
+
+  if (side === "top" || side === "bottom") {
+    ajustado = { x: end.x, y: prev.y };
+  } else {
+    ajustado = { x: prev.x, y: end.y };
+  }
+
+  return normalizarPontos([...base, ajustado, end]);
+}
+
+function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEndSide = null) {
   const candidatos = [];
 
   if (mesmaLinhaY(start, end) || mesmaColunaX(start, end)) {
@@ -523,33 +557,91 @@ function encontrarRotaSegura(start, end, posicoes, excludeIds = []) {
     candidatos.push(construirHVH(start, end, laneX));
   });
 
-  const validos = candidatos
+  const candidatosComLado = candidatos
     .map(points => normalizarPontos(points))
-    .filter(points => !pathCruzaCaixas(points, posicoes, excludeIds));
+    .map(points => ({
+      points,
+      endSide: detectarLadoEntrada(points)
+    }))
+    .filter(item => !pathCruzaCaixas(item.points, posicoes, excludeIds));
+
+  let validos = candidatosComLado;
+
+  if (preferredEndSide) {
+    const preferidos = candidatosComLado.filter(item => item.endSide === preferredEndSide);
+    if (preferidos.length) {
+      validos = preferidos;
+    }
+  }
 
   if (validos.length) {
     validos.sort((a, b) => {
-      const turnsA = a.length;
-      const turnsB = b.length;
+      const turnsA = a.points.length;
+      const turnsB = b.points.length;
       if (turnsA !== turnsB) return turnsA - turnsB;
-      return calcularComprimento(a) - calcularComprimento(b);
+      return calcularComprimento(a.points) - calcularComprimento(b.points);
     });
-    return validos[0];
+
+    const melhor = validos[0];
+    return {
+      points: ajustarUltimoTrechoParaLado(melhor.points, end, melhor.endSide),
+      endSide: melhor.endSide
+    };
   }
 
-  return normalizarPontos([start, { x: end.x, y: start.y }, end]);
+  const fallback = normalizarPontos([start, { x: end.x, y: start.y }, end]);
+  const endSide = preferredEndSide || detectarLadoEntrada(fallback);
+
+  return {
+    points: ajustarUltimoTrechoParaLado(fallback, end, endSide),
+    endSide
+  };
 }
 
 function buildOrthogonalToMerge(start, mergePoint, end, endSide, posicoes = {}, excludeIds = []) {
-  const ateMerge = encontrarRotaSegura(start, mergePoint, posicoes, excludeIds);
+  const ateMergeObj = encontrarRotaSegura(start, mergePoint, posicoes, excludeIds, null);
+  const ateMerge = ateMergeObj.points;
   return normalizarPontos([...ateMerge, end]);
+}
+
+function escolherAnchorDestino(origem, destino, modo = "auto", rotulo = "") {
+  const origemCx = origem.x + origem.w / 2;
+  const origemCy = origem.y + origem.h / 2;
+  const destinoCx = destino.x + destino.w / 2;
+  const destinoCy = destino.y + destino.h / 2;
+
+  if (modo === "prefer_bottom") return { side: "bottom", point: getAnchorPoint(destino, "bottom") };
+  if (modo === "prefer_top") return { side: "top", point: getAnchorPoint(destino, "top") };
+  if (modo === "prefer_left") return { side: "left", point: getAnchorPoint(destino, "left") };
+  if (modo === "prefer_right") return { side: "right", point: getAnchorPoint(destino, "right") };
+
+  if (rotulo === "Sim") {
+    return { side: "left", point: getAnchorPoint(destino, "left") };
+  }
+
+  if (rotulo === "Não") {
+    return { side: "top", point: getAnchorPoint(destino, "top") };
+  }
+
+  if (origemCy > destinoCy) {
+    return { side: "bottom", point: getAnchorPoint(destino, "bottom") };
+  }
+
+  if (origemCy < destinoCy) {
+    return { side: "top", point: getAnchorPoint(destino, "top") };
+  }
+
+  if (origemCx < destinoCx) {
+    return { side: "left", point: getAnchorPoint(destino, "left") };
+  }
+
+  return { side: "right", point: getAnchorPoint(destino, "right") };
 }
 
 function escolherRota(origem, destino, contexto = {}) {
   const rotulo = contexto.rotulo || "";
   const ordemConexao = contexto.ordemConexao || 0;
   const posicoes = contexto.posicoes || {};
-  const offset = ordemConexao * 14;
   const excludeIds = [origem.id, destino.id, "__INICIO__", "__FIM__"];
 
   const origemPergunta = origem.isDecision;
@@ -570,101 +662,37 @@ function escolherRota(origem, destino, contexto = {}) {
     return montarRotaReta(start, end, { x: (start.x + end.x) / 2, y: start.y - 10 }, "left");
   }
 
+  let startSide = "right";
+  if (destino.y >= origem.y + origem.h) startSide = "bottom";
+  if (destino.y + destino.h <= origem.y) startSide = "top";
+  if (destino.x + destino.w <= origem.x) startSide = "left";
+
   if (origemPergunta && rotulo === "Sim") {
-    const start = getAnchorPoint(origem, "right");
-    const endSide = destino.x >= origem.x ? "left" : "right";
-    const end = getAnchorPoint(destino, endSide);
-
-    if (mesmaLinha && destino.x >= origem.x && !temBloqueioHorizontal) {
-      return montarRotaReta(start, end, { x: (start.x + end.x) / 2, y: start.y - 10 }, endSide);
-    }
-
-    const safe = encontrarRotaSegura(start, end, posicoes, excludeIds);
-    return montarRotaOrtogonal(safe, { x: start.x + 18, y: start.y - 10 }, endSide);
+    startSide = "right";
+  } else if (origemPergunta && rotulo === "Não") {
+    startSide = "bottom";
   }
 
-  if (origemPergunta && rotulo === "Não") {
-    const start = getAnchorPoint(origem, "bottom");
-    const endSide = destino.y >= origem.y ? "top" : "bottom";
-    const end = getAnchorPoint(destino, endSide);
+  const start = getAnchorPoint(origem, startSide);
+  const anchorDestino = escolherAnchorDestino(origem, destino, "auto", rotulo);
+  const end = anchorDestino.point;
+  const preferredEndSide = anchorDestino.side;
 
-    if (mesmaColuna && destino.y >= origem.y && !temBloqueioVertical) {
-      return montarRotaReta(start, end, { x: start.x + 18, y: (start.y + end.y) / 2 - 8 }, endSide);
-    }
-
-    const safe = encontrarRotaSegura(start, end, posicoes, excludeIds);
-    return montarRotaOrtogonal(safe, { x: start.x + 18, y: start.y + 18 }, endSide);
+  if (mesmaLinha && !temBloqueioHorizontal && (preferredEndSide === "left" || preferredEndSide === "right")) {
+    return montarRotaReta(start, end, { x: (start.x + end.x) / 2, y: start.y - 10 }, preferredEndSide);
   }
 
-  if (mesmaLinha && destino.x > origem.x && !temBloqueioHorizontal) {
-    const start = getAnchorPoint(origem, "right");
-    const end = getAnchorPoint(destino, "left");
-    return montarRotaReta(start, end, { x: (start.x + end.x) / 2, y: start.y - 10 }, "left");
+  if (mesmaColuna && !temBloqueioVertical && (preferredEndSide === "top" || preferredEndSide === "bottom")) {
+    return montarRotaReta(start, end, { x: start.x + 18, y: (start.y + end.y) / 2 - 8 }, preferredEndSide);
   }
 
-  if (mesmaLinha && destino.x < origem.x && !temBloqueioHorizontal) {
-    const start = getAnchorPoint(origem, "left");
-    const end = getAnchorPoint(destino, "right");
-    return montarRotaReta(start, end, { x: (start.x + end.x) / 2, y: start.y - 10 }, "right");
-  }
+  const safe = encontrarRotaSegura(start, end, posicoes, excludeIds, preferredEndSide);
 
-  if (mesmaColuna && destino.y > origem.y && !temBloqueioVertical) {
-    const start = getAnchorPoint(origem, "bottom");
-    const end = getAnchorPoint(destino, "top");
-    return montarRotaReta(start, end, { x: start.x + 18, y: (start.y + end.y) / 2 - 8 }, "top");
-  }
-
-  if (mesmaColuna && destino.y < origem.y && !temBloqueioVertical) {
-    const start = getAnchorPoint(origem, "top");
-    const end = getAnchorPoint(destino, "bottom");
-    return montarRotaReta(start, end, { x: start.x + 18, y: (start.y + end.y) / 2 - 8 }, "bottom");
-  }
-
-  if (mesmaColuna && temBloqueioVertical) {
-    const usarEsquerda = (origem.gridCol || 1) <= (destino.gridCol || 1);
-    const endSide = usarEsquerda ? "left" : "right";
-    const start = getAnchorPoint(origem, endSide);
-    const end = getAnchorPoint(destino, endSide);
-
-    const safe = encontrarRotaSegura(start, end, posicoes, excludeIds);
-    return montarRotaOrtogonal(safe, { x: start.x + 18, y: start.y - 10 }, endSide);
-  }
-
-  if (mesmaLinha && temBloqueioHorizontal) {
-    const usarTopo = (origem.gridRow || 1) <= (destino.gridRow || 1);
-    const endSide = usarTopo ? "top" : "bottom";
-    const start = getAnchorPoint(origem, endSide);
-    const end = getAnchorPoint(destino, endSide);
-
-    const safe = encontrarRotaSegura(start, end, posicoes, excludeIds);
-    return montarRotaOrtogonal(safe, { x: start.x + 18, y: start.y - 10 }, endSide);
-  }
-
-  if (destino.x >= origem.x + origem.w) {
-    const start = getAnchorPoint(origem, "right");
-    const end = getAnchorPoint(destino, "left");
-    const safe = encontrarRotaSegura(start, end, posicoes, excludeIds);
-    return montarRotaOrtogonal(safe, { x: start.x + 18, y: start.y - 10 }, "left");
-  }
-
-  if (destino.y >= origem.y + origem.h) {
-    const start = getAnchorPoint(origem, "bottom");
-    const end = getAnchorPoint(destino, "top");
-    const safe = encontrarRotaSegura(start, end, posicoes, excludeIds);
-    return montarRotaOrtogonal(safe, { x: start.x + 18, y: start.y - 8 }, "top");
-  }
-
-  if (destino.y + destino.h <= origem.y) {
-    const start = getAnchorPoint(origem, "top");
-    const end = getAnchorPoint(destino, "bottom");
-    const safe = encontrarRotaSegura(start, end, posicoes, excludeIds);
-    return montarRotaOrtogonal(safe, { x: start.x + 18, y: start.y - 8 }, "bottom");
-  }
-
-  const start = getAnchorPoint(origem, "left");
-  const end = getAnchorPoint(destino, "right");
-  const safe = encontrarRotaSegura(start, end, posicoes, excludeIds);
-  return montarRotaOrtogonal(safe, { x: start.x + 18, y: start.y - 10 }, "right");
+  return montarRotaOrtogonal(
+    safe.points,
+    { x: start.x + 18, y: start.y - 10 },
+    safe.endSide || preferredEndSide
+  );
 }
 
 function construirRotaCompartilhada(start, sharedInfo, posicoes = {}, excludeIds = []) {
