@@ -614,6 +614,11 @@ function construirRotaCompartilhada(start, sharedInfo) {
   };
 }
 
+function podeCompartilharDestino(origem, sharedInfo) {
+  if (!sharedInfo) return false;
+  return origem.gridCol === sharedInfo.sourceGridCol;
+}
+
 function desenharConexao(
   svg,
   origem,
@@ -631,18 +636,21 @@ function desenharConexao(
 
   const sharedKey = `${destino.id}__${rota.endSide || "auto"}`;
   const startReal = { ...rota.points[0] };
+  const sharedInfo = sharedRegistry[sharedKey];
 
   if (
     destino.id !== "__FIM__" &&
     destino.id !== "__INICIO__" &&
-    sharedRegistry[sharedKey] &&
-    origem.id !== sharedRegistry[sharedKey].origemId
+    sharedInfo &&
+    origem.id !== sharedInfo.origemId &&
+    podeCompartilharDestino(origem, sharedInfo)
   ) {
-    rota = construirRotaCompartilhada(startReal, sharedRegistry[sharedKey]);
+    rota = construirRotaCompartilhada(startReal, sharedInfo);
   } else if (destino.id !== "__FIM__" && destino.id !== "__INICIO__") {
     const end = rota.points[rota.points.length - 1];
     sharedRegistry[sharedKey] = {
       origemId: origem.id,
+      sourceGridCol: origem.gridCol,
       endSide: rota.endSide || "left",
       end: { x: end.x, y: end.y },
       mergePoint: getMergePoint(end, rota.endSide || "left"),
