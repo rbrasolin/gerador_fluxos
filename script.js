@@ -371,18 +371,20 @@ function existeNoEntreMesmaColuna(origem, destino, posicoes) {
   });
 }
 
-function montarRotaReta(start, end, label, endSide = "") {
+function montarRotaReta(start, end, label, startSide = "", endSide = "") {
   return {
     points: normalizarPontos([start, end]),
     label,
+    startSide,
     endSide
   };
 }
 
-function montarRotaOrtogonal(points, label, endSide = "") {
+function montarRotaOrtogonal(points, label, startSide = "", endSide = "") {
   return {
     points: normalizarPontos(points),
     label,
+    startSide,
     endSide
   };
 }
@@ -519,6 +521,23 @@ function detectarLadoEntrada(points) {
   return "left";
 }
 
+function detectarLadoSaida(points) {
+  if (!points || points.length < 2) return "right";
+
+  const start = points[0];
+  const next = points[1];
+
+  if (Math.abs(start.x - next.x) <= CONFIG.sameColTolerance) {
+    return next.y > start.y ? "bottom" : "top";
+  }
+
+  if (Math.abs(start.y - next.y) <= CONFIG.sameRowTolerance) {
+    return next.x > start.x ? "right" : "left";
+  }
+
+  return "right";
+}
+
 function ajustarUltimoTrechoParaLado(points, end, side) {
   const base = points.slice(0, -1);
   const prev = base[base.length - 1];
@@ -536,7 +555,24 @@ function ajustarUltimoTrechoParaLado(points, end, side) {
   return normalizarPontos([...base, ajustado, end]);
 }
 
-function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEndSide = null) {
+function ajustarPrimeiroTrechoParaLado(points, start, side) {
+  const rest = points.slice(1);
+  const next = rest[0];
+
+  if (!next) return normalizarPontos([start]);
+
+  let ajustado;
+
+  if (side === "top" || side === "bottom") {
+    ajustado = { x: start.x, y: next.y };
+  } else {
+    ajustado = { x: next.x, y: start.y };
+  }
+
+  return normalizarPontos([start, ajustado, ...rest]);
+}
+
+function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEndSide = null, preferredStartSide = null) {
   const candidatos = [];
 
   if (mesmaLinhaY(start, end) || mesmaColunaX(start, end)) {
@@ -557,20 +593,28 @@ function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEnd
     candidatos.push(construirHVH(start, end, laneX));
   });
 
-  const candidatosComLado = candidatos
+  const candidatosComLados = candidatos
     .map(points => normalizarPontos(points))
     .map(points => ({
       points,
+      startSide: detectarLadoSaida(points),
       endSide: detectarLadoEntrada(points)
     }))
     .filter(item => !pathCruzaCaixas(item.points, posicoes, excludeIds));
 
-  let validos = candidatosComLado;
+  let validos = candidatosComLados;
+
+  if (preferredStartSide) {
+    const preferidosSaida = validos.filter(item => item.startSide === preferredStartSide);
+    if (preferidosSaida.length) {
+      validos = preferidosSaida;
+    }
+  }
 
   if (preferredEndSide) {
-    const preferidos = candidatosComLado.filter(item => item.endSide === preferredEndSide);
-    if (preferidos.length) {
-      validos = preferidos;
+    const preferidosEntrada = validos.filter(item => item.endSide === preferredEndSide);
+    if (preferidosEntrada.length) {
+      validos = preferidosEntrada;
     }
   }
 
@@ -583,23 +627,34 @@ function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEnd
     });
 
     const melhor = validos[0];
+    let ajustado = melhor.points;
+
+    ajustado = ajustarPrimeiroTrechoParaLado(ajustado, start, preferredStartSide || melhor.startSide);
+    ajustado = ajustarUltimoTrechoParaLado(ajustado, end, preferredEndSide || melhor.endSide);
+
     return {
-      points: ajustarUltimoTrechoParaLado(melhor.points, end, melhor.endSide),
-      endSide: melhor.endSide
+      points: ajustado,
+      startSide: preferredStartSide || melhor.startSide,
+      endSide: preferredEndSide || melhor.endSide
     };
   }
 
-  const fallback = normalizarPontos([start, { x: end.x, y: start.y }, end]);
+  let fallback = normalizarPontos([start, { x: end.x, y: start.y }, end]);
+  const startSide = preferredStartSide || detectarLadoSaida(fallback);
   const endSide = preferredEndSide || detectarLadoEntrada(fallback);
 
+  fallback = ajustarPrimeiroTrechoParaLado(fallback, start, startSide);
+  fallback = ajustarUltimoTrechoParaLado(fallback, end, endSide);
+
   return {
-    points: ajustarUltimoTrechoParaLado(fallback, end, endSide),
+    points: fallback,
+    startSide,
     endSide
   };
 }
 
-function buildOrthogonalToMerge(start, mergePoint, end, endSide, posicoes = {}, excludeIds = []) {
-  const ateMergeObj = encontrarRotaSegura(start, mergePoint, posicoes, excludeIds, null);
+function buildOrthogonalToMerge(start, mergePoint, end, endSide, posicoes = {}, excludeIds = [], preferredStartSide = null) {
+  const ateMergeObj = encontrarRotaSegura(start, mergePoint, posicoes, excludeIds, null, preferredStartSide);
   const ateMerge = ateMergeObj.points;
   return normalizarPontos([...ateMerge, end]);
 }
@@ -638,6 +693,35 @@ function escolherAnchorDestino(origem, destino, modo = "auto", rotulo = "") {
   return { side: "right", point: getAnchorPoint(destino, "right") };
 }
 
+function escolherAnchorOrigem(origem, destino, rotulo = "") {
+  const origemCx = origem.x + origem.w / 2;
+  const origemCy = origem.y + origem.h / 2;
+  const destinoCx = destino.x + destino.w / 2;
+  const destinoCy = destino.y + destino.h / 2;
+
+  if (rotulo === "Sim") {
+    return { side: "right", point: getAnchorPoint(origem, "right") };
+  }
+
+  if (rotulo === "Não") {
+    return { side: "bottom", point: getAnchorPoint(origem, "bottom") };
+  }
+
+  if (destinoCy > origemCy) {
+    return { side: "bottom", point: getAnchorPoint(origem, "bottom") };
+  }
+
+  if (destinoCy < origemCy) {
+    return { side: "top", point: getAnchorPoint(origem, "top") };
+  }
+
+  if (destinoCx > origemCx) {
+    return { side: "right", point: getAnchorPoint(origem, "right") };
+  }
+
+  return { side: "left", point: getAnchorPoint(origem, "left") };
+}
+
 function escolherRota(origem, destino, contexto = {}) {
   const rotulo = contexto.rotulo || "";
   const ordemConexao = contexto.ordemConexao || 0;
@@ -653,56 +737,50 @@ function escolherRota(origem, destino, contexto = {}) {
   if (origem.id === "__INICIO__" && mesmaLinha) {
     const start = getAnchorPoint(origem, "right");
     const end = getAnchorPoint(destino, "left");
-    return montarRotaReta(start, end, { x: (start.x + end.x) / 2, y: start.y - 10 }, "left");
+    return montarRotaReta(start, end, { x: (start.x + end.x) / 2, y: start.y - 10 }, "right", "left");
   }
 
   if (destino.id === "__FIM__" && mesmaLinha) {
     const start = getAnchorPoint(origem, "right");
     const end = getAnchorPoint(destino, "left");
-    return montarRotaReta(start, end, { x: (start.x + end.x) / 2, y: start.y - 10 }, "left");
+    return montarRotaReta(start, end, { x: (start.x + end.x) / 2, y: start.y - 10 }, "right", "left");
   }
 
-  let startSide = "right";
-  if (destino.y >= origem.y + origem.h) startSide = "bottom";
-  if (destino.y + destino.h <= origem.y) startSide = "top";
-  if (destino.x + destino.w <= origem.x) startSide = "left";
+  const anchorOrigem = escolherAnchorOrigem(origem, destino, origemPergunta ? rotulo : "");
+  const anchorDestino = escolherAnchorDestino(origem, destino, "auto", origemPergunta ? rotulo : "");
 
-  if (origemPergunta && rotulo === "Sim") {
-    startSide = "right";
-  } else if (origemPergunta && rotulo === "Não") {
-    startSide = "bottom";
-  }
-
-  const start = getAnchorPoint(origem, startSide);
-  const anchorDestino = escolherAnchorDestino(origem, destino, "auto", rotulo);
+  const start = anchorOrigem.point;
   const end = anchorDestino.point;
+  const preferredStartSide = anchorOrigem.side;
   const preferredEndSide = anchorDestino.side;
 
-  if (mesmaLinha && !temBloqueioHorizontal && (preferredEndSide === "left" || preferredEndSide === "right")) {
-    return montarRotaReta(start, end, { x: (start.x + end.x) / 2, y: start.y - 10 }, preferredEndSide);
+  if (mesmaLinha && !temBloqueioHorizontal && (preferredStartSide === "left" || preferredStartSide === "right") && (preferredEndSide === "left" || preferredEndSide === "right")) {
+    return montarRotaReta(start, end, { x: (start.x + end.x) / 2, y: start.y - 10 }, preferredStartSide, preferredEndSide);
   }
 
-  if (mesmaColuna && !temBloqueioVertical && (preferredEndSide === "top" || preferredEndSide === "bottom")) {
-    return montarRotaReta(start, end, { x: start.x + 18, y: (start.y + end.y) / 2 - 8 }, preferredEndSide);
+  if (mesmaColuna && !temBloqueioVertical && (preferredStartSide === "top" || preferredStartSide === "bottom") && (preferredEndSide === "top" || preferredEndSide === "bottom")) {
+    return montarRotaReta(start, end, { x: start.x + 18, y: (start.y + end.y) / 2 - 8 }, preferredStartSide, preferredEndSide);
   }
 
-  const safe = encontrarRotaSegura(start, end, posicoes, excludeIds, preferredEndSide);
+  const safe = encontrarRotaSegura(start, end, posicoes, excludeIds, preferredEndSide, preferredStartSide);
 
   return montarRotaOrtogonal(
     safe.points,
     { x: start.x + 18, y: start.y - 10 },
+    safe.startSide || preferredStartSide,
     safe.endSide || preferredEndSide
   );
 }
 
-function construirRotaCompartilhada(start, sharedInfo, posicoes = {}, excludeIds = []) {
+function construirRotaCompartilhada(start, sharedInfo, posicoes = {}, excludeIds = [], preferredStartSide = null) {
   const mergePoint = { x: sharedInfo.mergePoint.x, y: sharedInfo.mergePoint.y };
   const end = { x: sharedInfo.end.x, y: sharedInfo.end.y };
   const endSide = sharedInfo.endSide;
 
   return {
-    points: buildOrthogonalToMerge(start, mergePoint, end, endSide, posicoes, excludeIds),
+    points: buildOrthogonalToMerge(start, mergePoint, end, endSide, posicoes, excludeIds, preferredStartSide),
     label: sharedInfo.label,
+    startSide: preferredStartSide,
     endSide
   };
 }
@@ -738,11 +816,14 @@ function desenharConexao(
     origem.id !== sharedInfo.origemId &&
     podeCompartilharDestino(origem, sharedInfo)
   ) {
+    const preferredStart = escolherAnchorOrigem(origem, destino, origem.isDecision ? rotulo : "").side;
+
     rota = construirRotaCompartilhada(
       startReal,
       sharedInfo,
       posicoes,
-      [origem.id, destino.id, "__INICIO__", "__FIM__"]
+      [origem.id, destino.id, "__INICIO__", "__FIM__"],
+      preferredStart
     );
   } else if (destino.id !== "__FIM__" && destino.id !== "__INICIO__") {
     const end = rota.points[rota.points.length - 1];
