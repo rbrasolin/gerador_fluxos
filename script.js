@@ -487,11 +487,26 @@ function ajustarPrimeiroTrechoParaLado(points, start, side) {
   const next = rest[0];
   if (!next) return normalizarPontos([start]);
 
-  const ajustado = (side === "top" || side === "bottom")
-    ? { x: start.x, y: next.y }
-    : { x: next.x, y: start.y };
+  let escape;
+  if (side === "top") escape = { x: start.x, y: start.y - CONFIG.routeGap };
+  else if (side === "bottom") escape = { x: start.x, y: start.y + CONFIG.routeGap };
+  else if (side === "left") escape = { x: start.x - CONFIG.routeGap, y: start.y };
+  else escape = { x: start.x + CONFIG.routeGap, y: start.y };
 
-  return normalizarPontos([start, ajustado, ...rest]);
+  const pontos = [start, escape];
+
+  if (side === "top" || side === "bottom") {
+    if (Math.abs(next.x - escape.x) > CONFIG.sameColTolerance) {
+      pontos.push({ x: next.x, y: escape.y });
+    }
+  } else {
+    if (Math.abs(next.y - escape.y) > CONFIG.sameRowTolerance) {
+      pontos.push({ x: escape.x, y: next.y });
+    }
+  }
+
+  pontos.push(...rest);
+  return normalizarPontos(pontos);
 }
 
 function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEndSide = null, preferredStartSide = null) {
@@ -548,7 +563,7 @@ function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEnd
       points: ajustado,
       startSide: preferredStartSide || melhor.startSide,
       endSide: preferredEndSide || melhor.endSide,
-      safe: true
+      safe: !pathCruzaCaixas(ajustado, posicoes, excludeIds)
     };
   }
 
@@ -563,7 +578,7 @@ function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEnd
     points: fallback,
     startSide,
     endSide,
-    safe: false
+    safe: !pathCruzaCaixas(fallback, posicoes, excludeIds)
   };
 }
 
@@ -585,27 +600,19 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
   const dy = destino.gridRow - origem.gridRow;
 
   if (dx === 0 && dy > 0) {
-    return [
-      { startSide: "bottom", endSide: "top" }
-    ];
+    return [{ startSide: "bottom", endSide: "top" }];
   }
 
   if (dx === 0 && dy < 0) {
-    return [
-      { startSide: "top", endSide: "bottom" }
-    ];
+    return [{ startSide: "top", endSide: "bottom" }];
   }
 
   if (dy === 0 && dx > 0) {
-    return [
-      { startSide: "right", endSide: "left" }
-    ];
+    return [{ startSide: "right", endSide: "left" }];
   }
 
   if (dy === 0 && dx < 0) {
-    return [
-      { startSide: "left", endSide: "right" }
-    ];
+    return [{ startSide: "left", endSide: "right" }];
   }
 
   if (dx > 0 && dy > 0) {
