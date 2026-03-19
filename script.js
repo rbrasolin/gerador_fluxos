@@ -14,7 +14,6 @@ const CONFIG = {
   lineWidth: 2.2,
   cornerRadius: 12,
 
-  // losango maior para melhor leitura
   decisionSize: 170,
 
   routeGap: 28,
@@ -749,13 +748,14 @@ function gerarFluxo() {
   });
 
   const rowSlotHeight = Math.max(CONFIG.boxHeight, CONFIG.decisionSize);
+  const colSlotWidth = Math.max(CONFIG.boxWidth, CONFIG.decisionSize);
 
   const maxColuna = Math.max(...etapas.map(e => e.coluna), 1) + 1;
   const maxLinha = Math.max(...etapas.map(e => e.linha), 1) + 1;
 
   const svgWidth =
     CONFIG.marginX * 2 +
-    maxColuna * CONFIG.boxWidth +
+    maxColuna * colSlotWidth +
     (maxColuna - 1) * CONFIG.colGap;
 
   const svgHeight =
@@ -794,8 +794,10 @@ function gerarFluxo() {
     const w = pergunta ? CONFIG.decisionSize : CONFIG.boxWidth;
     const h = pergunta ? CONFIG.decisionSize : CONFIG.boxHeight;
 
-    const x = CONFIG.marginX + (e.coluna - 1) * (CONFIG.boxWidth + CONFIG.colGap);
+    const slotX = CONFIG.marginX + (e.coluna - 1) * (colSlotWidth + CONFIG.colGap);
     const slotY = CONFIG.marginY + (e.linha - 1) * (rowSlotHeight + CONFIG.rowGap);
+
+    const x = slotX + (colSlotWidth - w) / 2;
     const y = slotY + (rowSlotHeight - h) / 2;
 
     posicoes[e.id] = {
