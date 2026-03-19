@@ -475,11 +475,36 @@ function ajustarUltimoTrechoParaLado(points, end, side) {
   const prev = base[base.length - 1];
   if (!prev) return normalizarPontos([end]);
 
-  const ajustado = (side === "top" || side === "bottom")
-    ? { x: end.x, y: prev.y }
-    : { x: prev.x, y: end.y };
+  let preEnd;
+  if (side === "top") preEnd = { x: end.x, y: end.y - CONFIG.routeGap };
+  else if (side === "bottom") preEnd = { x: end.x, y: end.y + CONFIG.routeGap };
+  else if (side === "left") preEnd = { x: end.x - CONFIG.routeGap, y: end.y };
+  else preEnd = { x: end.x + CONFIG.routeGap, y: end.y };
 
-  return normalizarPontos([...base, ajustado, end]);
+  const pontos = [...base];
+
+  if (side === "top" || side === "bottom") {
+    if (Math.abs(prev.y - preEnd.y) > CONFIG.sameRowTolerance) {
+      if (Math.abs(prev.x - preEnd.x) > CONFIG.sameColTolerance) {
+        pontos.push({ x: preEnd.x, y: prev.y });
+      }
+      pontos.push(preEnd);
+    } else {
+      pontos.push(preEnd);
+    }
+  } else {
+    if (Math.abs(prev.x - preEnd.x) > CONFIG.sameColTolerance) {
+      if (Math.abs(prev.y - preEnd.y) > CONFIG.sameRowTolerance) {
+        pontos.push({ x: prev.x, y: preEnd.y });
+      }
+      pontos.push(preEnd);
+    } else {
+      pontos.push(preEnd);
+    }
+  }
+
+  pontos.push(end);
+  return normalizarPontos(pontos);
 }
 
 function ajustarPrimeiroTrechoParaLado(points, start, side) {
@@ -599,33 +624,22 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
   const dx = destino.gridCol - origem.gridCol;
   const dy = destino.gridRow - origem.gridRow;
 
-  // mesma coluna
   if (dx === 0 && dy > 0) {
-    return [
-      { startSide: "bottom", endSide: "top" }
-    ];
+    return [{ startSide: "bottom", endSide: "top" }];
   }
 
   if (dx === 0 && dy < 0) {
-    return [
-      { startSide: "top", endSide: "bottom" }
-    ];
+    return [{ startSide: "top", endSide: "bottom" }];
   }
 
-  // mesma linha
   if (dy === 0 && dx > 0) {
-    return [
-      { startSide: "right", endSide: "left" }
-    ];
+    return [{ startSide: "right", endSide: "left" }];
   }
 
   if (dy === 0 && dx < 0) {
-    return [
-      { startSide: "left", endSide: "right" }
-    ];
+    return [{ startSide: "left", endSide: "right" }];
   }
 
-  // diagonal para a direita -> SEMPRE sai pela direita
   if (dx > 0 && dy > 0) {
     return [
       { startSide: "right", endSide: "left" },
@@ -644,7 +658,6 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
     ];
   }
 
-  // diagonal para a esquerda -> SEMPRE sai pela esquerda
   if (dx < 0 && dy > 0) {
     return [
       { startSide: "left", endSide: "right" },
