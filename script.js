@@ -707,24 +707,27 @@ function escolherAnchorOrigem(origem, destino, rotulo = "") {
     return { side: "bottom", point: getAnchorPoint(origem, "bottom") };
   }
 
-  if (destinoCy > origemCy) {
-    return { side: "bottom", point: getAnchorPoint(origem, "bottom") };
+  const dx = destinoCx - origemCx;
+  const dy = destinoCy - origemCy;
+
+  if (Math.abs(dy) <= CONFIG.sameRowTolerance) {
+    return dx >= 0
+      ? { side: "right", point: getAnchorPoint(origem, "right") }
+      : { side: "left", point: getAnchorPoint(origem, "left") };
   }
 
-  if (destinoCy < origemCy) {
-    return { side: "top", point: getAnchorPoint(origem, "top") };
+  if (dy > 0) {
+    if (dx >= 0) {
+      return { side: "right", point: getAnchorPoint(origem, "right") };
+    }
+    return { side: "left", point: getAnchorPoint(origem, "left") };
   }
 
-  if (destinoCx > origemCx) {
-    return { side: "right", point: getAnchorPoint(origem, "right") };
-  }
-
-  return { side: "left", point: getAnchorPoint(origem, "left") };
+  return { side: "bottom", point: getAnchorPoint(origem, "bottom") };
 }
 
 function escolherRota(origem, destino, contexto = {}) {
   const rotulo = contexto.rotulo || "";
-  const ordemConexao = contexto.ordemConexao || 0;
   const posicoes = contexto.posicoes || {};
   const excludeIds = [origem.id, destino.id, "__INICIO__", "__FIM__"];
 
@@ -806,7 +809,6 @@ function desenharConexao(
   });
 
   const sharedKey = `${destino.id}__${rota.endSide || "auto"}`;
-  const startReal = { ...rota.points[0] };
   const sharedInfo = sharedRegistry[sharedKey];
 
   if (
@@ -816,14 +818,15 @@ function desenharConexao(
     origem.id !== sharedInfo.origemId &&
     podeCompartilharDestino(origem, sharedInfo)
   ) {
-    const preferredStart = escolherAnchorOrigem(origem, destino, origem.isDecision ? rotulo : "").side;
+    const preferredStart = escolherAnchorOrigem(origem, destino, origem.isDecision ? rotulo : "");
+    const startReal = preferredStart.point;
 
     rota = construirRotaCompartilhada(
       startReal,
       sharedInfo,
       posicoes,
       [origem.id, destino.id, "__INICIO__", "__FIM__"],
-      preferredStart
+      preferredStart.side
     );
   } else if (destino.id !== "__FIM__" && destino.id !== "__INICIO__") {
     const end = rota.points[rota.points.length - 1];
