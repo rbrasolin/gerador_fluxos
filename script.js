@@ -13,9 +13,7 @@ const CONFIG = {
   stroke: "#111111",
   lineWidth: 2.2,
   cornerRadius: 12,
-
   decisionSize: 170,
-
   routeGap: 28,
   entryExitGap: 40,
   laneGap: 36,
@@ -54,7 +52,6 @@ function ehCabecalho(colunas) {
 
 function tempoParaSegundos(tempo) {
   if (!tempo) return 0;
-
   tempo = String(tempo).trim();
 
   if (!tempo.includes(":")) {
@@ -71,7 +68,6 @@ function tempoParaSegundos(tempo) {
 
 function segundosParaTempo(seg) {
   seg = Math.round(Number(seg) || 0);
-
   const h = Math.floor(seg / 3600);
   const m = Math.floor((seg % 3600) / 60);
   const s = seg % 60;
@@ -126,10 +122,7 @@ function quebrarTextoAutomatico(texto, maxPalavrasPorLinha = 3, maxCaracteresPor
     }
   }
 
-  if (linhaAtual.length) {
-    linhas.push(linhaAtual.join(" "));
-  }
-
+  if (linhaAtual.length) linhas.push(linhaAtual.join(" "));
   return linhas;
 }
 
@@ -291,10 +284,7 @@ function normalizarPontos(points) {
     };
 
     const ultimo = resultado[resultado.length - 1];
-    if (ultimo && ultimo.x === p.x && ultimo.y === p.y) {
-      return;
-    }
-
+    if (ultimo && ultimo.x === p.x && ultimo.y === p.y) return;
     resultado.push(p);
   });
 
@@ -310,9 +300,7 @@ function normalizarPontos(points) {
     const mesmoX = anterior.x === atual.x && atual.x === proximo.x;
     const mesmoY = anterior.y === atual.y && atual.y === proximo.y;
 
-    if (!mesmoX && !mesmoY) {
-      simplificado.push(atual);
-    }
+    if (!mesmoX && !mesmoY) simplificado.push(atual);
   }
 
   simplificado.push(resultado[resultado.length - 1]);
@@ -335,42 +323,6 @@ function mesmaColunaX(a, b) {
   return Math.abs(a.x - b.x) <= CONFIG.sameColTolerance;
 }
 
-function existeNoEntreMesmaLinha(origem, destino, posicoes) {
-  const yCentro = origem.y + origem.h / 2;
-  const xMin = Math.min(origem.x + origem.w, destino.x + destino.w);
-  const xMax = Math.max(origem.x, destino.x);
-
-  return Object.values(posicoes).some((node) => {
-    if (!node || !node.id) return false;
-    if (node.id === origem.id || node.id === destino.id) return false;
-    if (node.id === "__INICIO__" || node.id === "__FIM__") return false;
-
-    const nodeCentroY = node.y + node.h / 2;
-    const alinhado = Math.abs(nodeCentroY - yCentro) <= CONFIG.sameRowTolerance;
-    if (!alinhado) return false;
-
-    return node.x < xMax && (node.x + node.w) > xMin;
-  });
-}
-
-function existeNoEntreMesmaColuna(origem, destino, posicoes) {
-  const xCentro = origem.x + origem.w / 2;
-  const yMin = Math.min(origem.y + origem.h, destino.y + destino.h);
-  const yMax = Math.max(origem.y, destino.y);
-
-  return Object.values(posicoes).some((node) => {
-    if (!node || !node.id) return false;
-    if (node.id === origem.id || node.id === destino.id) return false;
-    if (node.id === "__INICIO__" || node.id === "__FIM__") return false;
-
-    const nodeCentroX = node.x + node.w / 2;
-    const alinhado = Math.abs(nodeCentroX - xCentro) <= CONFIG.sameColTolerance;
-    if (!alinhado) return false;
-
-    return node.y < yMax && (node.y + node.h) > yMin;
-  });
-}
-
 function montarRotaReta(start, end, label, startSide = "", endSide = "") {
   return {
     points: normalizarPontos([start, end]),
@@ -391,16 +343,11 @@ function montarRotaOrtogonal(points, label, startSide = "", endSide = "") {
 
 function getMergePoint(end, side, gap = CONFIG.sharedMergeGap) {
   switch (side) {
-    case "left":
-      return { x: end.x - gap, y: end.y };
-    case "right":
-      return { x: end.x + gap, y: end.y };
-    case "top":
-      return { x: end.x, y: end.y - gap };
-    case "bottom":
-      return { x: end.x, y: end.y + gap };
-    default:
-      return { x: end.x - gap, y: end.y };
+    case "left": return { x: end.x - gap, y: end.y };
+    case "right": return { x: end.x + gap, y: end.y };
+    case "top": return { x: end.x, y: end.y - gap };
+    case "bottom": return { x: end.x, y: end.y + gap };
+    default: return { x: end.x - gap, y: end.y };
   }
 }
 
@@ -414,20 +361,14 @@ function segmentIntersectsRect(p1, p2, rect, padding = CONFIG.obstaclePadding) {
     const y = p1.y;
     const minX = Math.min(p1.x, p2.x);
     const maxX = Math.max(p1.x, p2.x);
-
-    if (y > ry1 && y < ry2 && maxX > rx1 && minX < rx2) {
-      return true;
-    }
+    if (y > ry1 && y < ry2 && maxX > rx1 && minX < rx2) return true;
   }
 
   if (Math.abs(p1.x - p2.x) <= CONFIG.sameColTolerance) {
     const x = p1.x;
     const minY = Math.min(p1.y, p2.y);
     const maxY = Math.max(p1.y, p2.y);
-
-    if (x > rx1 && x < rx2 && maxY > ry1 && minY < ry2) {
-      return true;
-    }
+    if (x > rx1 && x < rx2 && maxY > ry1 && minY < ry2) return true;
   }
 
   return false;
@@ -435,20 +376,13 @@ function segmentIntersectsRect(p1, p2, rect, padding = CONFIG.obstaclePadding) {
 
 function pathCruzaCaixas(points, posicoes, excludeIds = []) {
   const exclude = new Set(excludeIds);
-
-  const caixas = Object.values(posicoes).filter(node => {
-    if (!node || !node.id) return false;
-    return !exclude.has(node.id);
-  });
+  const caixas = Object.values(posicoes).filter(node => node && node.id && !exclude.has(node.id));
 
   for (let i = 0; i < points.length - 1; i++) {
     for (const caixa of caixas) {
-      if (segmentIntersectsRect(points[i], points[i + 1], caixa)) {
-        return true;
-      }
+      if (segmentIntersectsRect(points[i], points[i + 1], caixa)) return true;
     }
   }
-
   return false;
 }
 
@@ -506,7 +440,6 @@ function gerarLanesX(posicoes, excludeIds = []) {
 
 function detectarLadoEntrada(points) {
   if (!points || points.length < 2) return "left";
-
   const end = points[points.length - 1];
   const prev = points[points.length - 2];
 
@@ -523,7 +456,6 @@ function detectarLadoEntrada(points) {
 
 function detectarLadoSaida(points) {
   if (!points || points.length < 2) return "right";
-
   const start = points[0];
   const next = points[1];
 
@@ -541,16 +473,11 @@ function detectarLadoSaida(points) {
 function ajustarUltimoTrechoParaLado(points, end, side) {
   const base = points.slice(0, -1);
   const prev = base[base.length - 1];
-
   if (!prev) return normalizarPontos([end]);
 
-  let ajustado;
-
-  if (side === "top" || side === "bottom") {
-    ajustado = { x: end.x, y: prev.y };
-  } else {
-    ajustado = { x: prev.x, y: end.y };
-  }
+  const ajustado = (side === "top" || side === "bottom")
+    ? { x: end.x, y: prev.y }
+    : { x: prev.x, y: end.y };
 
   return normalizarPontos([...base, ajustado, end]);
 }
@@ -558,16 +485,11 @@ function ajustarUltimoTrechoParaLado(points, end, side) {
 function ajustarPrimeiroTrechoParaLado(points, start, side) {
   const rest = points.slice(1);
   const next = rest[0];
-
   if (!next) return normalizarPontos([start]);
 
-  let ajustado;
-
-  if (side === "top" || side === "bottom") {
-    ajustado = { x: start.x, y: next.y };
-  } else {
-    ajustado = { x: next.x, y: start.y };
-  }
+  const ajustado = (side === "top" || side === "bottom")
+    ? { x: start.x, y: next.y }
+    : { x: next.x, y: start.y };
 
   return normalizarPontos([start, ajustado, ...rest]);
 }
@@ -585,13 +507,8 @@ function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEnd
   const lanesY = [start.y, end.y, ...gerarLanesY(posicoes, excludeIds)];
   const lanesX = [start.x, end.x, ...gerarLanesX(posicoes, excludeIds)];
 
-  lanesY.forEach(laneY => {
-    candidatos.push(construirVHV(start, end, laneY));
-  });
-
-  lanesX.forEach(laneX => {
-    candidatos.push(construirHVH(start, end, laneX));
-  });
+  lanesY.forEach(laneY => candidatos.push(construirVHV(start, end, laneY)));
+  lanesX.forEach(laneX => candidatos.push(construirHVH(start, end, laneX)));
 
   const candidatosComLados = candidatos
     .map(points => normalizarPontos(points))
@@ -606,16 +523,12 @@ function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEnd
 
   if (preferredStartSide) {
     const preferidosSaida = validos.filter(item => item.startSide === preferredStartSide);
-    if (preferidosSaida.length) {
-      validos = preferidosSaida;
-    }
+    if (preferidosSaida.length) validos = preferidosSaida;
   }
 
   if (preferredEndSide) {
     const preferidosEntrada = validos.filter(item => item.endSide === preferredEndSide);
-    if (preferidosEntrada.length) {
-      validos = preferidosEntrada;
-    }
+    if (preferidosEntrada.length) validos = preferidosEntrada;
   }
 
   if (validos.length) {
@@ -628,14 +541,14 @@ function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEnd
 
     const melhor = validos[0];
     let ajustado = melhor.points;
-
     ajustado = ajustarPrimeiroTrechoParaLado(ajustado, start, preferredStartSide || melhor.startSide);
     ajustado = ajustarUltimoTrechoParaLado(ajustado, end, preferredEndSide || melhor.endSide);
 
     return {
       points: ajustado,
       startSide: preferredStartSide || melhor.startSide,
-      endSide: preferredEndSide || melhor.endSide
+      endSide: preferredEndSide || melhor.endSide,
+      safe: true
     };
   }
 
@@ -649,81 +562,89 @@ function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEnd
   return {
     points: fallback,
     startSide,
-    endSide
+    endSide,
+    safe: false
   };
 }
 
 function buildOrthogonalToMerge(start, mergePoint, end, endSide, posicoes = {}, excludeIds = [], preferredStartSide = null) {
   const ateMergeObj = encontrarRotaSegura(start, mergePoint, posicoes, excludeIds, null, preferredStartSide);
-  const ateMerge = ateMergeObj.points;
-  return normalizarPontos([...ateMerge, end]);
+  return normalizarPontos([...ateMergeObj.points, end]);
 }
 
-function escolherAnchorDestino(origem, destino, modo = "auto", rotulo = "") {
-  const origemCx = origem.x + origem.w / 2;
-  const origemCy = origem.y + origem.h / 2;
-  const destinoCx = destino.x + destino.w / 2;
-  const destinoCy = destino.y + destino.h / 2;
-
-  if (modo === "prefer_bottom") return { side: "bottom", point: getAnchorPoint(destino, "bottom") };
-  if (modo === "prefer_top") return { side: "top", point: getAnchorPoint(destino, "top") };
-  if (modo === "prefer_left") return { side: "left", point: getAnchorPoint(destino, "left") };
-  if (modo === "prefer_right") return { side: "right", point: getAnchorPoint(destino, "right") };
-
-  if (rotulo === "Sim") {
-    return { side: "left", point: getAnchorPoint(destino, "left") };
+function escolherParesCandidatos(origem, destino, rotulo = "") {
+  if (origem.isDecision && rotulo === "Sim") {
+    return [{ startSide: "right", endSide: "left" }];
   }
 
-  if (rotulo === "Não") {
-    return { side: "top", point: getAnchorPoint(destino, "top") };
+  if (origem.isDecision && rotulo === "Não") {
+    return [{ startSide: "bottom", endSide: "top" }];
   }
 
-  if (origemCy > destinoCy) {
-    return { side: "bottom", point: getAnchorPoint(destino, "bottom") };
+  const dx = destino.gridCol - origem.gridCol;
+  const dy = destino.gridRow - origem.gridRow;
+
+  if (dx === 0 && dy > 0) {
+    return [
+      { startSide: "bottom", endSide: "top" }
+    ];
   }
 
-  if (origemCy < destinoCy) {
-    return { side: "top", point: getAnchorPoint(destino, "top") };
+  if (dx === 0 && dy < 0) {
+    return [
+      { startSide: "top", endSide: "bottom" }
+    ];
   }
 
-  if (origemCx < destinoCx) {
-    return { side: "left", point: getAnchorPoint(destino, "left") };
+  if (dy === 0 && dx > 0) {
+    return [
+      { startSide: "right", endSide: "left" }
+    ];
   }
 
-  return { side: "right", point: getAnchorPoint(destino, "right") };
-}
-
-function escolherAnchorOrigem(origem, destino, rotulo = "") {
-  const origemCx = origem.x + origem.w / 2;
-  const origemCy = origem.y + origem.h / 2;
-  const destinoCx = destino.x + destino.w / 2;
-  const destinoCy = destino.y + destino.h / 2;
-
-  if (rotulo === "Sim") {
-    return { side: "right", point: getAnchorPoint(origem, "right") };
+  if (dy === 0 && dx < 0) {
+    return [
+      { startSide: "left", endSide: "right" }
+    ];
   }
 
-  if (rotulo === "Não") {
-    return { side: "bottom", point: getAnchorPoint(origem, "bottom") };
+  if (dx > 0 && dy > 0) {
+    return [
+      { startSide: "bottom", endSide: "left" },
+      { startSide: "right", endSide: "top" },
+      { startSide: "right", endSide: "left" },
+      { startSide: "bottom", endSide: "top" }
+    ];
   }
 
-  const dx = destinoCx - origemCx;
-  const dy = destinoCy - origemCy;
-
-  if (Math.abs(dy) <= CONFIG.sameRowTolerance) {
-    return dx >= 0
-      ? { side: "right", point: getAnchorPoint(origem, "right") }
-      : { side: "left", point: getAnchorPoint(origem, "left") };
+  if (dx < 0 && dy > 0) {
+    return [
+      { startSide: "bottom", endSide: "right" },
+      { startSide: "left", endSide: "top" },
+      { startSide: "left", endSide: "right" },
+      { startSide: "bottom", endSide: "top" }
+    ];
   }
 
-  if (dy > 0) {
-    if (dx >= 0) {
-      return { side: "right", point: getAnchorPoint(origem, "right") };
-    }
-    return { side: "left", point: getAnchorPoint(origem, "left") };
+  if (dx > 0 && dy < 0) {
+    return [
+      { startSide: "left", endSide: "bottom" },
+      { startSide: "top", endSide: "left" },
+      { startSide: "left", endSide: "right" },
+      { startSide: "top", endSide: "bottom" }
+    ];
   }
 
-  return { side: "bottom", point: getAnchorPoint(origem, "bottom") };
+  if (dx < 0 && dy < 0) {
+    return [
+      { startSide: "right", endSide: "bottom" },
+      { startSide: "top", endSide: "right" },
+      { startSide: "right", endSide: "left" },
+      { startSide: "top", endSide: "bottom" }
+    ];
+  }
+
+  return [{ startSide: "right", endSide: "left" }];
 }
 
 function escolherRota(origem, destino, contexto = {}) {
@@ -731,47 +652,49 @@ function escolherRota(origem, destino, contexto = {}) {
   const posicoes = contexto.posicoes || {};
   const excludeIds = [origem.id, destino.id, "__INICIO__", "__FIM__"];
 
-  const origemPergunta = origem.isDecision;
-  const mesmaLinha = estaAlinhadoHorizontalmente(origem, destino);
-  const mesmaColuna = estaAlinhadoVerticalmente(origem, destino);
-  const temBloqueioHorizontal = mesmaLinha && existeNoEntreMesmaLinha(origem, destino, posicoes);
-  const temBloqueioVertical = mesmaColuna && existeNoEntreMesmaColuna(origem, destino, posicoes);
-
-  if (origem.id === "__INICIO__" && mesmaLinha) {
+  if (origem.id === "__INICIO__") {
     const start = getAnchorPoint(origem, "right");
     const end = getAnchorPoint(destino, "left");
-    return montarRotaReta(start, end, { x: (start.x + end.x) / 2, y: start.y - 10 }, "right", "left");
+    const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, "left", "right");
+    return montarRotaOrtogonal(rota.points, { x: (start.x + end.x) / 2, y: start.y - 10 }, rota.startSide, rota.endSide);
   }
 
-  if (destino.id === "__FIM__" && mesmaLinha) {
+  if (destino.id === "__FIM__") {
     const start = getAnchorPoint(origem, "right");
     const end = getAnchorPoint(destino, "left");
-    return montarRotaReta(start, end, { x: (start.x + end.x) / 2, y: start.y - 10 }, "right", "left");
+    const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, "left", "right");
+    return montarRotaOrtogonal(rota.points, { x: (start.x + end.x) / 2, y: start.y - 10 }, rota.startSide, rota.endSide);
   }
 
-  const anchorOrigem = escolherAnchorOrigem(origem, destino, origemPergunta ? rotulo : "");
-  const anchorDestino = escolherAnchorDestino(origem, destino, "auto", origemPergunta ? rotulo : "");
+  const pares = escolherParesCandidatos(origem, destino, rotulo);
+  const tentativas = [];
 
-  const start = anchorOrigem.point;
-  const end = anchorDestino.point;
-  const preferredStartSide = anchorOrigem.side;
-  const preferredEndSide = anchorDestino.side;
+  for (const par of pares) {
+    const start = getAnchorPoint(origem, par.startSide);
+    const end = getAnchorPoint(destino, par.endSide);
+    const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, par.endSide, par.startSide);
 
-  if (mesmaLinha && !temBloqueioHorizontal && (preferredStartSide === "left" || preferredStartSide === "right") && (preferredEndSide === "left" || preferredEndSide === "right")) {
-    return montarRotaReta(start, end, { x: (start.x + end.x) / 2, y: start.y - 10 }, preferredStartSide, preferredEndSide);
+    tentativas.push({
+      ...rota,
+      label: { x: start.x + 18, y: start.y - 10 }
+    });
   }
 
-  if (mesmaColuna && !temBloqueioVertical && (preferredStartSide === "top" || preferredStartSide === "bottom") && (preferredEndSide === "top" || preferredEndSide === "bottom")) {
-    return montarRotaReta(start, end, { x: start.x + 18, y: (start.y + end.y) / 2 - 8 }, preferredStartSide, preferredEndSide);
-  }
+  tentativas.sort((a, b) => {
+    if (a.safe !== b.safe) return a.safe ? -1 : 1;
+    const turnsA = a.points.length;
+    const turnsB = b.points.length;
+    if (turnsA !== turnsB) return turnsA - turnsB;
+    return calcularComprimento(a.points) - calcularComprimento(b.points);
+  });
 
-  const safe = encontrarRotaSegura(start, end, posicoes, excludeIds, preferredEndSide, preferredStartSide);
+  const melhor = tentativas[0];
 
   return montarRotaOrtogonal(
-    safe.points,
-    { x: start.x + 18, y: start.y - 10 },
-    safe.startSide || preferredStartSide,
-    safe.endSide || preferredEndSide
+    melhor.points,
+    melhor.label,
+    melhor.startSide,
+    melhor.endSide
   );
 }
 
@@ -818,15 +741,15 @@ function desenharConexao(
     origem.id !== sharedInfo.origemId &&
     podeCompartilharDestino(origem, sharedInfo)
   ) {
-    const preferredStart = escolherAnchorOrigem(origem, destino, origem.isDecision ? rotulo : "");
-    const startReal = preferredStart.point;
+    const parPreferido = escolherParesCandidatos(origem, destino, origem.isDecision ? rotulo : "")[0];
+    const startReal = getAnchorPoint(origem, parPreferido.startSide);
 
     rota = construirRotaCompartilhada(
       startReal,
       sharedInfo,
       posicoes,
       [origem.id, destino.id, "__INICIO__", "__FIM__"],
-      preferredStart.side
+      parPreferido.startSide
     );
   } else if (destino.id !== "__FIM__" && destino.id !== "__INICIO__") {
     const end = rota.points[rota.points.length - 1];
@@ -1051,9 +974,7 @@ function gerarFluxo() {
     const destinosExtras = quebrarListaIds(etapa.conexoesExtras).filter(destino => destinoEhValido(destino, idsValidos));
 
     const pergunta = isPergunta(etapa.atividade);
-    if (pergunta) {
-      decisoes++;
-    }
+    if (pergunta) decisoes++;
 
     destinosSim.forEach((destinoId, indice) => {
       const destino = etapaPorId[destinoId];
@@ -1127,9 +1048,7 @@ function gerarFluxo() {
     tempoTotal += etapa.tempo;
     atividadesTempo.push({ atividade: etapa.atividade, tempo: etapa.tempo });
 
-    if (!tiposTempo[etapa.tipo]) {
-      tiposTempo[etapa.tipo] = 0;
-    }
+    if (!tiposTempo[etapa.tipo]) tiposTempo[etapa.tipo] = 0;
     tiposTempo[etapa.tipo] += etapa.tempo;
   });
 
@@ -1217,7 +1136,6 @@ function obterSVGPronto() {
     alert("Gere o fluxo primeiro.");
     return null;
   }
-
   return svgOriginal.cloneNode(true);
 }
 
