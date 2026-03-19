@@ -13,9 +13,11 @@ const CONFIG = {
   stroke: "#111111",
   lineWidth: 2.2,
   cornerRadius: 12,
-  decisionSize: 140,
-  routeGap: 28,
 
+  // losango maior para melhor leitura
+  decisionSize: 170,
+
+  routeGap: 28,
   entryExitGap: 40,
   laneGap: 36,
   sameRowTolerance: 1,
@@ -400,6 +402,24 @@ function getMergePoint(end, side, gap = CONFIG.sharedMergeGap) {
   }
 }
 
+function buildOrthogonalToMerge(start, mergePoint, end, endSide) {
+  if (mesmaLinhaY(start, mergePoint)) {
+    return normalizarPontos([start, mergePoint, end]);
+  }
+
+  if (mesmaColunaX(start, mergePoint)) {
+    return normalizarPontos([start, mergePoint, end]);
+  }
+
+  if (endSide === "left" || endSide === "right") {
+    const elbow = { x: mergePoint.x, y: start.y };
+    return normalizarPontos([start, elbow, mergePoint, end]);
+  }
+
+  const elbow = { x: start.x, y: mergePoint.y };
+  return normalizarPontos([start, elbow, mergePoint, end]);
+}
+
 function escolherRota(origem, destino, contexto = {}) {
   const rotulo = contexto.rotulo || "";
   const ordemConexao = contexto.ordemConexao || 0;
@@ -434,6 +454,7 @@ function escolherRota(origem, destino, contexto = {}) {
 
     const endSide = destino.x >= origem.x ? "left" : "right";
     const end = getAnchorPoint(destino, endSide);
+
     const laneX = Math.max(
       start.x + CONFIG.routeGap + offset,
       end.x + (endSide === "left" ? -CONFIG.routeGap : CONFIG.routeGap) + offset
@@ -457,6 +478,7 @@ function escolherRota(origem, destino, contexto = {}) {
 
     const endSide = destino.y >= origem.y ? "top" : "bottom";
     const end = getAnchorPoint(destino, endSide);
+
     const laneY = Math.max(
       start.y + CONFIG.routeGap + offset,
       end.y + (endSide === "top" ? -CONFIG.routeGap : CONFIG.routeGap) + offset
@@ -586,48 +608,8 @@ function construirRotaCompartilhada(start, sharedInfo) {
   const end = { x: sharedInfo.end.x, y: sharedInfo.end.y };
   const endSide = sharedInfo.endSide;
 
-  if (mesmaLinhaY(start, mergePoint)) {
-    return {
-      points: normalizarPontos([start, mergePoint, end]),
-      label: sharedInfo.label,
-      endSide
-    };
-  }
-
-  if (mesmaColunaX(start, mergePoint)) {
-    return {
-      points: normalizarPontos([start, mergePoint, end]),
-      label: sharedInfo.label,
-      endSide
-    };
-  }
-
-  if (endSide === "left" || endSide === "right") {
-    const cotovelo = { x: mergePoint.x, y: start.y };
-
-    if (mesmaLinhaY(cotovelo, mergePoint)) {
-      return {
-        points: normalizarPontos([start, cotovelo, mergePoint, end]),
-        label: sharedInfo.label,
-        endSide
-      };
-    }
-  }
-
-  if (endSide === "top" || endSide === "bottom") {
-    const cotovelo = { x: start.x, y: mergePoint.y };
-
-    if (mesmaColunaX(cotovelo, mergePoint)) {
-      return {
-        points: normalizarPontos([start, cotovelo, mergePoint, end]),
-        label: sharedInfo.label,
-        endSide
-      };
-    }
-  }
-
   return {
-    points: normalizarPontos([start, mergePoint, end]),
+    points: buildOrthogonalToMerge(start, mergePoint, end, endSide),
     label: sharedInfo.label,
     endSide
   };
@@ -766,6 +748,8 @@ function gerarFluxo() {
     etapaPorId[e.id] = e;
   });
 
+  const rowSlotHeight = Math.max(CONFIG.boxHeight, CONFIG.decisionSize);
+
   const maxColuna = Math.max(...etapas.map(e => e.coluna), 1) + 1;
   const maxLinha = Math.max(...etapas.map(e => e.linha), 1) + 1;
 
@@ -776,7 +760,7 @@ function gerarFluxo() {
 
   const svgHeight =
     CONFIG.marginY * 2 +
-    maxLinha * CONFIG.boxHeight +
+    maxLinha * rowSlotHeight +
     (maxLinha - 1) * CONFIG.rowGap;
 
   const svg = criarElementoSVG("svg");
@@ -811,7 +795,8 @@ function gerarFluxo() {
     const h = pergunta ? CONFIG.decisionSize : CONFIG.boxHeight;
 
     const x = CONFIG.marginX + (e.coluna - 1) * (CONFIG.boxWidth + CONFIG.colGap);
-    const y = CONFIG.marginY + (e.linha - 1) * (CONFIG.boxHeight + CONFIG.rowGap);
+    const slotY = CONFIG.marginY + (e.linha - 1) * (rowSlotHeight + CONFIG.rowGap);
+    const y = slotY + (rowSlotHeight - h) / 2;
 
     posicoes[e.id] = {
       id: e.id,
