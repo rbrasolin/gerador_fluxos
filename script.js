@@ -14,8 +14,8 @@ const CONFIG = {
   lineWidth: 2.2,
   cornerRadius: 12,
   decisionWidth: 170,
-  decisionHeight: 250,
-  decisionTextWidthFactor: 0.48,
+  decisionTextWidthFactor: 0.52,
+  decisionHeightFactor: 1.24,
   routeGap: 28,
   entryExitGap: 40,
   laneGap: 36,
@@ -219,12 +219,24 @@ function obterLinhasEtapa(etapa, larguraCaixa) {
   ];
 }
 
+function obterAlturaNo(etapa, alturaPadraoBase) {
+  if (isPergunta(etapa.atividade)) {
+    return Math.ceil(alturaPadraoBase * CONFIG.decisionHeightFactor);
+  }
+
+  return alturaPadraoBase;
+}
+
 function calcularAlturaNecessariaEtapa(etapa) {
   const largura = obterLarguraNo(etapa);
   const linhas = obterLinhasEtapa(etapa, largura);
 
   const alturaTexto = linhas.length * CONFIG.textLineHeight;
   const alturaNecessaria = alturaTexto + CONFIG.textPaddingVertical * 2;
+
+  if (isPergunta(etapa.atividade)) {
+    return Math.max(CONFIG.boxHeight, Math.ceil(alturaNecessaria / CONFIG.decisionHeightFactor));
+  }
 
   return Math.max(CONFIG.boxHeight, alturaNecessaria);
 }
@@ -788,14 +800,24 @@ function escolherRota(origem, destino, contexto = {}) {
     const start = getAnchorPoint(origem, "right");
     const end = getAnchorPoint(destino, "left");
     const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, "left", "right", destino);
-    return montarRotaOrtogonal(rota.points, { x: (start.x + end.x) / 2, y: start.y - 10 }, rota.startSide, rota.endSide);
+    return montarRotaOrtogonal(
+      rota.points,
+      { x: (start.x + end.x) / 2, y: start.y - 10 },
+      rota.startSide,
+      rota.endSide
+    );
   }
 
   if (destino.id === "__FIM__") {
     const start = getAnchorPoint(origem, "right");
     const end = getAnchorPoint(destino, "left");
     const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, "left", "right", destino);
-    return montarRotaOrtogonal(rota.points, { x: (start.x + end.x) / 2, y: start.y - 10 }, rota.startSide, rota.endSide);
+    return montarRotaOrtogonal(
+      rota.points,
+      { x: (start.x + end.x) / 2, y: start.y - 10 },
+      rota.startSide,
+      rota.endSide
+    );
   }
 
   const pares = escolherParesCandidatos(origem, destino, rotulo);
@@ -991,7 +1013,8 @@ function gerarFluxo() {
   });
 
   const alturaPadraoNos = calcularAlturaPadraoNos(etapas);
-  const rowSlotHeight = alturaPadraoNos;
+  const maiorAlturaLosango = Math.ceil(alturaPadraoNos * CONFIG.decisionHeightFactor);
+  const rowSlotHeight = Math.max(alturaPadraoNos, maiorAlturaLosango);
   const colSlotWidth = Math.max(CONFIG.boxWidth, CONFIG.decisionWidth);
 
   const maxColuna = Math.max(...etapas.map(e => e.coluna), 1) + 1;
@@ -1036,13 +1059,13 @@ function gerarFluxo() {
   etapas.forEach((e) => {
     const pergunta = isPergunta(e.atividade);
     const w = pergunta ? CONFIG.decisionWidth : CONFIG.boxWidth;
-    const h = alturaPadraoNos;
+    const h = obterAlturaNo(e, alturaPadraoNos);
 
     const slotX = CONFIG.marginX + (e.coluna - 1) * (colSlotWidth + CONFIG.colGap);
     const slotY = CONFIG.marginY + (e.linha - 1) * (rowSlotHeight + CONFIG.rowGap);
 
     const x = slotX + (colSlotWidth - w) / 2;
-    const y = slotY;
+    const y = slotY + (rowSlotHeight - h) / 2;
 
     posicoes[e.id] = {
       id: e.id,
@@ -1289,4 +1312,44 @@ function baixarSVG() {
 
 function baixarFluxo() {
   baixarSVG();
+}
+
+function baixarPNG() {
+  const svg = obterSVGPronto();
+  if (!svg) return;
+
+  const larguraReal = Number(svg.getAttribute("width")) || 2000;
+  const alturaReal = Number(svg.getAttribute("height")) || 1200;
+
+  const serializer = new XMLSerializer();
+  const source = serializer.serializeToString(svg);
+  const svg64 = btoa(unescape(encodeURIComponent(source)));
+  const image64 = "data:image/svg+xml;base64," + svg64;
+
+  const img = new Image();
+
+  img.onload = function () {
+    const canvas = document.createElement("canvas");
+    canvas.width = larguraReal;
+    canvas.height = alturaReal;
+
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    const link = document.createElement("a");
+    link.download = `${ultimoNomeArquivo}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  };
+
+  img.onerror = function (erro) {
+    console.error("Erro ao gerar PNG:", erro);
+    alert("Não foi possível gerar o PNG.");
+  };
+
+  img.src = image64;
 }
