@@ -13,15 +13,18 @@ const CONFIG = {
   stroke: "#111111",
   lineWidth: 2.2,
   cornerRadius: 12,
-  decisionSize: 170,
-  decisionTextWidthFactor: 0.58,
+  decisionWidth: 170,
+  decisionTextWidthFactor: 0.52,
   routeGap: 28,
   entryExitGap: 40,
   laneGap: 36,
   sameRowTolerance: 1,
   sameColTolerance: 1,
   sharedMergeGap: 34,
-  obstaclePadding: 10
+  obstaclePadding: 10,
+  textLineHeight: 18,
+  textPaddingVertical: 20,
+  rectTextPaddingHorizontal: 16
 };
 
 function limpar(txt) {
@@ -99,12 +102,23 @@ function destinoEhValido(destinoId, idsValidos) {
   return !!destinoId && idsValidos.has(destinoId);
 }
 
+function criarElementoSVG(tag) {
+  return document.createElementNS("http://www.w3.org/2000/svg", tag);
+}
+
+function isPergunta(texto) {
+  return limpar(texto).endsWith("?");
+}
+
 function medirLarguraTexto(texto, fontSize = CONFIG.fontSize, fontWeight = "normal") {
   const svgMedicao = criarElementoSVG("svg");
   svgMedicao.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   svgMedicao.setAttribute("width", "0");
   svgMedicao.setAttribute("height", "0");
-  svgMedicao.setAttribute("style", "position:absolute;left:-9999px;top:-9999px;visibility:hidden;overflow:hidden;");
+  svgMedicao.setAttribute(
+    "style",
+    "position:absolute;left:-9999px;top:-9999px;visibility:hidden;overflow:hidden;"
+  );
 
   const text = criarElementoSVG("text");
   text.setAttribute("font-family", CONFIG.fontFamily);
@@ -161,21 +175,25 @@ function quebrarTextoPorLargura(texto, larguraMaxima, fontSize = CONFIG.fontSize
       }
     }
 
-    if (parteAtual) linhaAtual = parteAtual;
+    if (parteAtual) {
+      linhaAtual = parteAtual;
+    }
   }
 
   if (linhaAtual) linhas.push(linhaAtual);
   return linhas;
 }
 
-function obterLarguraUtilTexto(etapa, larguraCaixa) {
-  const pergunta = isPergunta(etapa.atividade);
+function obterLarguraNo(etapa) {
+  return isPergunta(etapa.atividade) ? CONFIG.decisionWidth : CONFIG.boxWidth;
+}
 
-  if (pergunta) {
-    return Math.max(50, larguraCaixa * CONFIG.decisionTextWidthFactor);
+function obterLarguraUtilTexto(etapa, larguraCaixa) {
+  if (isPergunta(etapa.atividade)) {
+    return Math.max(40, larguraCaixa * CONFIG.decisionTextWidthFactor);
   }
 
-  return Math.max(60, larguraCaixa - 32);
+  return Math.max(60, larguraCaixa - CONFIG.rectTextPaddingHorizontal * 2);
 }
 
 function obterLinhasEtapa(etapa, larguraCaixa) {
@@ -200,24 +218,23 @@ function obterLinhasEtapa(etapa, larguraCaixa) {
   ];
 }
 
+function calcularAlturaNecessariaEtapa(etapa) {
+  const largura = obterLarguraNo(etapa);
+  const linhas = obterLinhasEtapa(etapa, largura);
+
+  const alturaTexto = linhas.length * CONFIG.textLineHeight;
+  const alturaNecessaria = alturaTexto + CONFIG.textPaddingVertical * 2;
+
+  return Math.max(CONFIG.boxHeight, alturaNecessaria);
+}
+
 function calcularAlturaPadraoNos(etapas) {
-  const lineHeight = 18;
-  const paddingVertical = 20;
   let maiorAltura = CONFIG.boxHeight;
 
   etapas.forEach((etapa) => {
-    const pergunta = isPergunta(etapa.atividade);
-    const largura = pergunta ? CONFIG.decisionSize : CONFIG.boxWidth;
-    const linhas = obterLinhasEtapa(etapa, largura);
-
-    const alturaBaseMinima = CONFIG.boxHeight;
-    const alturaNecessaria = Math.max(
-      alturaBaseMinima,
-      linhas.length * lineHeight + paddingVertical * 2
-    );
-
-    if (alturaNecessaria > maiorAltura) {
-      maiorAltura = alturaNecessaria;
+    const altura = calcularAlturaNecessariaEtapa(etapa);
+    if (altura > maiorAltura) {
+      maiorAltura = altura;
     }
   });
 
@@ -242,14 +259,6 @@ function limparTudo() {
   document.getElementById("infoProcesso").innerHTML = "";
   document.getElementById("metricas").innerHTML = "";
   ultimoNomeArquivo = "fluxograma_processo";
-}
-
-function criarElementoSVG(tag) {
-  return document.createElementNS("http://www.w3.org/2000/svg", tag);
-}
-
-function isPergunta(texto) {
-  return limpar(texto).endsWith("?");
 }
 
 function adicionarLoopSeNecessario(origemId, destinoId, etapaPorId, etapaAtual, etapasOrigemComRetornoRef) {
@@ -322,14 +331,13 @@ function desenharNo(svg, etapa, pos) {
   }
 
   const linhas = obterLinhasEtapa(etapa, pos.w);
-  const lineHeight = 18;
-  const totalAlturaTexto = linhas.length * lineHeight;
+  const totalAlturaTexto = linhas.length * CONFIG.textLineHeight;
   const inicioYTexto = pos.y + (pos.h - totalAlturaTexto) / 2 + 14;
 
   linhas.forEach((linha, i) => {
     const text = criarElementoSVG("text");
     text.setAttribute("x", pos.x + pos.w / 2);
-    text.setAttribute("y", inicioYTexto + i * lineHeight);
+    text.setAttribute("y", inicioYTexto + i * CONFIG.textLineHeight);
     text.setAttribute("text-anchor", "middle");
     text.setAttribute("font-family", CONFIG.fontFamily);
     text.setAttribute("font-size", i === linhas.length - 1 ? CONFIG.smallFontSize : CONFIG.fontSize);
@@ -982,8 +990,8 @@ function gerarFluxo() {
   });
 
   const alturaPadraoNos = calcularAlturaPadraoNos(etapas);
-  const rowSlotHeight = Math.max(alturaPadraoNos, CONFIG.boxHeight);
-  const colSlotWidth = Math.max(CONFIG.boxWidth, CONFIG.decisionSize);
+  const rowSlotHeight = alturaPadraoNos;
+  const colSlotWidth = Math.max(CONFIG.boxWidth, CONFIG.decisionWidth);
 
   const maxColuna = Math.max(...etapas.map(e => e.coluna), 1) + 1;
   const maxLinha = Math.max(...etapas.map(e => e.linha), 1) + 1;
@@ -1026,14 +1034,14 @@ function gerarFluxo() {
 
   etapas.forEach((e) => {
     const pergunta = isPergunta(e.atividade);
-    const w = pergunta ? CONFIG.decisionSize : CONFIG.boxWidth;
+    const w = pergunta ? CONFIG.decisionWidth : CONFIG.boxWidth;
     const h = alturaPadraoNos;
 
     const slotX = CONFIG.marginX + (e.coluna - 1) * (colSlotWidth + CONFIG.colGap);
     const slotY = CONFIG.marginY + (e.linha - 1) * (rowSlotHeight + CONFIG.rowGap);
 
     const x = slotX + (colSlotWidth - w) / 2;
-    const y = slotY + (rowSlotHeight - h) / 2;
+    const y = slotY;
 
     posicoes[e.id] = {
       id: e.id,
@@ -1281,4 +1289,3 @@ function baixarSVG() {
 function baixarFluxo() {
   baixarSVG();
 }
-
