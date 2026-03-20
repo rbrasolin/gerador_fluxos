@@ -470,40 +470,86 @@ function detectarLadoSaida(points) {
   return "right";
 }
 
-function ajustarUltimoTrechoParaLado(points, end, side) {
+function ajustarUltimoTrechoParaLado(points, end, side, destinoNode) {
   const base = points.slice(0, -1);
-  const prev = base[base.length - 1];
+  let prev = base[base.length - 1];
   if (!prev) return normalizarPontos([end]);
 
   let preEnd;
-  if (side === "top") preEnd = { x: end.x, y: end.y - CONFIG.routeGap };
-  else if (side === "bottom") preEnd = { x: end.x, y: end.y + CONFIG.routeGap };
-  else if (side === "left") preEnd = { x: end.x - CONFIG.routeGap, y: end.y };
-  else preEnd = { x: end.x + CONFIG.routeGap, y: end.y };
+
+  if (side === "top") {
+    preEnd = { x: end.x, y: destinoNode.y - CONFIG.routeGap };
+    const lateralX =
+      prev.x <= destinoNode.x + destinoNode.w / 2
+        ? destinoNode.x - CONFIG.routeGap
+        : destinoNode.x + destinoNode.w + CONFIG.routeGap;
+
+    const pontos = [...base];
+
+    if (Math.abs(prev.x - lateralX) > CONFIG.sameColTolerance) {
+      pontos.push({ x: lateralX, y: prev.y });
+    }
+    if (Math.abs(prev.y - preEnd.y) > CONFIG.sameRowTolerance || Math.abs(lateralX - preEnd.x) > CONFIG.sameColTolerance) {
+      pontos.push({ x: lateralX, y: preEnd.y });
+    }
+    pontos.push(preEnd, end);
+    return normalizarPontos(pontos);
+  }
+
+  if (side === "bottom") {
+    preEnd = { x: end.x, y: destinoNode.y + destinoNode.h + CONFIG.routeGap };
+    const lateralX =
+      prev.x <= destinoNode.x + destinoNode.w / 2
+        ? destinoNode.x - CONFIG.routeGap
+        : destinoNode.x + destinoNode.w + CONFIG.routeGap;
+
+    const pontos = [...base];
+
+    if (Math.abs(prev.x - lateralX) > CONFIG.sameColTolerance) {
+      pontos.push({ x: lateralX, y: prev.y });
+    }
+    if (Math.abs(prev.y - preEnd.y) > CONFIG.sameRowTolerance || Math.abs(lateralX - preEnd.x) > CONFIG.sameColTolerance) {
+      pontos.push({ x: lateralX, y: preEnd.y });
+    }
+    pontos.push(preEnd, end);
+    return normalizarPontos(pontos);
+  }
+
+  if (side === "left") {
+    preEnd = { x: destinoNode.x - CONFIG.routeGap, y: end.y };
+    const lateralY =
+      prev.y <= destinoNode.y + destinoNode.h / 2
+        ? destinoNode.y - CONFIG.routeGap
+        : destinoNode.y + destinoNode.h + CONFIG.routeGap;
+
+    const pontos = [...base];
+
+    if (Math.abs(prev.y - lateralY) > CONFIG.sameRowTolerance) {
+      pontos.push({ x: prev.x, y: lateralY });
+    }
+    if (Math.abs(prev.x - preEnd.x) > CONFIG.sameColTolerance || Math.abs(lateralY - preEnd.y) > CONFIG.sameRowTolerance) {
+      pontos.push({ x: preEnd.x, y: lateralY });
+    }
+    pontos.push(preEnd, end);
+    return normalizarPontos(pontos);
+  }
+
+  // right
+  preEnd = { x: destinoNode.x + destinoNode.w + CONFIG.routeGap, y: end.y };
+  const lateralY =
+    prev.y <= destinoNode.y + destinoNode.h / 2
+      ? destinoNode.y - CONFIG.routeGap
+      : destinoNode.y + destinoNode.h + CONFIG.routeGap;
 
   const pontos = [...base];
 
-  if (side === "top" || side === "bottom") {
-    if (Math.abs(prev.y - preEnd.y) > CONFIG.sameRowTolerance) {
-      if (Math.abs(prev.x - preEnd.x) > CONFIG.sameColTolerance) {
-        pontos.push({ x: preEnd.x, y: prev.y });
-      }
-      pontos.push(preEnd);
-    } else {
-      pontos.push(preEnd);
-    }
-  } else {
-    if (Math.abs(prev.x - preEnd.x) > CONFIG.sameColTolerance) {
-      if (Math.abs(prev.y - preEnd.y) > CONFIG.sameRowTolerance) {
-        pontos.push({ x: prev.x, y: preEnd.y });
-      }
-      pontos.push(preEnd);
-    } else {
-      pontos.push(preEnd);
-    }
+  if (Math.abs(prev.y - lateralY) > CONFIG.sameRowTolerance) {
+    pontos.push({ x: prev.x, y: lateralY });
   }
-
-  pontos.push(end);
+  if (Math.abs(prev.x - preEnd.x) > CONFIG.sameColTolerance || Math.abs(lateralY - preEnd.y) > CONFIG.sameRowTolerance) {
+    pontos.push({ x: preEnd.x, y: lateralY });
+  }
+  pontos.push(preEnd, end);
   return normalizarPontos(pontos);
 }
 
@@ -534,7 +580,15 @@ function ajustarPrimeiroTrechoParaLado(points, start, side) {
   return normalizarPontos(pontos);
 }
 
-function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEndSide = null, preferredStartSide = null) {
+function encontrarRotaSegura(
+  start,
+  end,
+  posicoes,
+  excludeIds = [],
+  preferredEndSide = null,
+  preferredStartSide = null,
+  destinoNode = null
+) {
   const candidatos = [];
 
   if (mesmaLinhaY(start, end) || mesmaColunaX(start, end)) {
@@ -582,7 +636,7 @@ function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEnd
     const melhor = validos[0];
     let ajustado = melhor.points;
     ajustado = ajustarPrimeiroTrechoParaLado(ajustado, start, preferredStartSide || melhor.startSide);
-    ajustado = ajustarUltimoTrechoParaLado(ajustado, end, preferredEndSide || melhor.endSide);
+    ajustado = ajustarUltimoTrechoParaLado(ajustado, end, preferredEndSide || melhor.endSide, destinoNode);
 
     return {
       points: ajustado,
@@ -597,7 +651,7 @@ function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEnd
   const endSide = preferredEndSide || detectarLadoEntrada(fallback);
 
   fallback = ajustarPrimeiroTrechoParaLado(fallback, start, startSide);
-  fallback = ajustarUltimoTrechoParaLado(fallback, end, endSide);
+  fallback = ajustarUltimoTrechoParaLado(fallback, end, endSide, destinoNode);
 
   return {
     points: fallback,
@@ -608,7 +662,7 @@ function encontrarRotaSegura(start, end, posicoes, excludeIds = [], preferredEnd
 }
 
 function buildOrthogonalToMerge(start, mergePoint, end, endSide, posicoes = {}, excludeIds = [], preferredStartSide = null) {
-  const ateMergeObj = encontrarRotaSegura(start, mergePoint, posicoes, excludeIds, null, preferredStartSide);
+  const ateMergeObj = encontrarRotaSegura(start, mergePoint, posicoes, excludeIds, null, preferredStartSide, null);
   return normalizarPontos([...ateMergeObj.points, end]);
 }
 
@@ -687,14 +741,14 @@ function escolherRota(origem, destino, contexto = {}) {
   if (origem.id === "__INICIO__") {
     const start = getAnchorPoint(origem, "right");
     const end = getAnchorPoint(destino, "left");
-    const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, "left", "right");
+    const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, "left", "right", destino);
     return montarRotaOrtogonal(rota.points, { x: (start.x + end.x) / 2, y: start.y - 10 }, rota.startSide, rota.endSide);
   }
 
   if (destino.id === "__FIM__") {
     const start = getAnchorPoint(origem, "right");
     const end = getAnchorPoint(destino, "left");
-    const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, "left", "right");
+    const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, "left", "right", destino);
     return montarRotaOrtogonal(rota.points, { x: (start.x + end.x) / 2, y: start.y - 10 }, rota.startSide, rota.endSide);
   }
 
@@ -704,7 +758,7 @@ function escolherRota(origem, destino, contexto = {}) {
   for (const par of pares) {
     const start = getAnchorPoint(origem, par.startSide);
     const end = getAnchorPoint(destino, par.endSide);
-    const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, par.endSide, par.startSide);
+    const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, par.endSide, par.startSide, destino);
 
     tentativas.push({
       ...rota,
