@@ -13,7 +13,7 @@ const CONFIG = {
   stroke: "#111111",
   lineWidth: 2.2,
   cornerRadius: 12,
-  decisionWidth: 170,
+  decisionWidth: 220,
   decisionTextWidthFactor: 0.48,
   routeGap: 28,
   entryExitGap: 40,
