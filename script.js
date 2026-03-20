@@ -472,84 +472,107 @@ function detectarLadoSaida(points) {
 
 function ajustarUltimoTrechoParaLado(points, end, side, destinoNode) {
   const base = points.slice(0, -1);
-  let prev = base[base.length - 1];
-  if (!prev) return normalizarPontos([end]);
+  const prev = base[base.length - 1];
+  if (!prev || !destinoNode) return normalizarPontos([...base, end]);
 
-  let preEnd;
+  // Mantém lógica antiga quando já está chegando corretamente
+  if (side === "top" && Math.abs(prev.x - end.x) <= CONFIG.sameColTolerance && prev.y <= destinoNode.y) {
+    return normalizarPontos([...base, end]);
+  }
+  if (side === "bottom" && Math.abs(prev.x - end.x) <= CONFIG.sameColTolerance && prev.y >= destinoNode.y + destinoNode.h) {
+    return normalizarPontos([...base, end]);
+  }
+  if (side === "left" && Math.abs(prev.y - end.y) <= CONFIG.sameRowTolerance && prev.x <= destinoNode.x) {
+    return normalizarPontos([...base, end]);
+  }
+  if (side === "right" && Math.abs(prev.y - end.y) <= CONFIG.sameRowTolerance && prev.x >= destinoNode.x + destinoNode.w) {
+    return normalizarPontos([...base, end]);
+  }
+
+  // Só desvia por fora quando a aproximação cruzaria a caixa
+  let pontos = [...base];
 
   if (side === "top") {
-    preEnd = { x: end.x, y: destinoNode.y - CONFIG.routeGap };
-    const lateralX =
-      prev.x <= destinoNode.x + destinoNode.w / 2
-        ? destinoNode.x - CONFIG.routeGap
-        : destinoNode.x + destinoNode.w + CONFIG.routeGap;
+    const preY = destinoNode.y - CONFIG.routeGap;
+    const lateralX = prev.x <= destinoNode.x + destinoNode.w / 2
+      ? destinoNode.x - CONFIG.routeGap
+      : destinoNode.x + destinoNode.w + CONFIG.routeGap;
 
-    const pontos = [...base];
+    if (prev.y > destinoNode.y) {
+      if (Math.abs(prev.x - lateralX) > CONFIG.sameColTolerance) {
+        pontos.push({ x: lateralX, y: prev.y });
+      }
+      pontos.push({ x: lateralX, y: preY });
+      pontos.push({ x: end.x, y: preY });
+      pontos.push(end);
+      return normalizarPontos(pontos);
+    }
 
-    if (Math.abs(prev.x - lateralX) > CONFIG.sameColTolerance) {
-      pontos.push({ x: lateralX, y: prev.y });
-    }
-    if (Math.abs(prev.y - preEnd.y) > CONFIG.sameRowTolerance || Math.abs(lateralX - preEnd.x) > CONFIG.sameColTolerance) {
-      pontos.push({ x: lateralX, y: preEnd.y });
-    }
-    pontos.push(preEnd, end);
+    pontos.push({ x: end.x, y: preY });
+    pontos.push(end);
     return normalizarPontos(pontos);
   }
 
   if (side === "bottom") {
-    preEnd = { x: end.x, y: destinoNode.y + destinoNode.h + CONFIG.routeGap };
-    const lateralX =
-      prev.x <= destinoNode.x + destinoNode.w / 2
-        ? destinoNode.x - CONFIG.routeGap
-        : destinoNode.x + destinoNode.w + CONFIG.routeGap;
+    const preY = destinoNode.y + destinoNode.h + CONFIG.routeGap;
+    const lateralX = prev.x <= destinoNode.x + destinoNode.w / 2
+      ? destinoNode.x - CONFIG.routeGap
+      : destinoNode.x + destinoNode.w + CONFIG.routeGap;
 
-    const pontos = [...base];
+    if (prev.y < destinoNode.y + destinoNode.h) {
+      if (Math.abs(prev.x - lateralX) > CONFIG.sameColTolerance) {
+        pontos.push({ x: lateralX, y: prev.y });
+      }
+      pontos.push({ x: lateralX, y: preY });
+      pontos.push({ x: end.x, y: preY });
+      pontos.push(end);
+      return normalizarPontos(pontos);
+    }
 
-    if (Math.abs(prev.x - lateralX) > CONFIG.sameColTolerance) {
-      pontos.push({ x: lateralX, y: prev.y });
-    }
-    if (Math.abs(prev.y - preEnd.y) > CONFIG.sameRowTolerance || Math.abs(lateralX - preEnd.x) > CONFIG.sameColTolerance) {
-      pontos.push({ x: lateralX, y: preEnd.y });
-    }
-    pontos.push(preEnd, end);
+    pontos.push({ x: end.x, y: preY });
+    pontos.push(end);
     return normalizarPontos(pontos);
   }
 
   if (side === "left") {
-    preEnd = { x: destinoNode.x - CONFIG.routeGap, y: end.y };
-    const lateralY =
-      prev.y <= destinoNode.y + destinoNode.h / 2
-        ? destinoNode.y - CONFIG.routeGap
-        : destinoNode.y + destinoNode.h + CONFIG.routeGap;
+    const preX = destinoNode.x - CONFIG.routeGap;
+    const lateralY = prev.y <= destinoNode.y + destinoNode.h / 2
+      ? destinoNode.y - CONFIG.routeGap
+      : destinoNode.y + destinoNode.h + CONFIG.routeGap;
 
-    const pontos = [...base];
+    if (prev.x > destinoNode.x) {
+      if (Math.abs(prev.y - lateralY) > CONFIG.sameRowTolerance) {
+        pontos.push({ x: prev.x, y: lateralY });
+      }
+      pontos.push({ x: preX, y: lateralY });
+      pontos.push({ x: preX, y: end.y });
+      pontos.push(end);
+      return normalizarPontos(pontos);
+    }
 
-    if (Math.abs(prev.y - lateralY) > CONFIG.sameRowTolerance) {
-      pontos.push({ x: prev.x, y: lateralY });
-    }
-    if (Math.abs(prev.x - preEnd.x) > CONFIG.sameColTolerance || Math.abs(lateralY - preEnd.y) > CONFIG.sameRowTolerance) {
-      pontos.push({ x: preEnd.x, y: lateralY });
-    }
-    pontos.push(preEnd, end);
+    pontos.push({ x: preX, y: end.y });
+    pontos.push(end);
     return normalizarPontos(pontos);
   }
 
   // right
-  preEnd = { x: destinoNode.x + destinoNode.w + CONFIG.routeGap, y: end.y };
-  const lateralY =
-    prev.y <= destinoNode.y + destinoNode.h / 2
-      ? destinoNode.y - CONFIG.routeGap
-      : destinoNode.y + destinoNode.h + CONFIG.routeGap;
+  const preX = destinoNode.x + destinoNode.w + CONFIG.routeGap;
+  const lateralY = prev.y <= destinoNode.y + destinoNode.h / 2
+    ? destinoNode.y - CONFIG.routeGap
+    : destinoNode.y + destinoNode.h + CONFIG.routeGap;
 
-  const pontos = [...base];
+  if (prev.x < destinoNode.x + destinoNode.w) {
+    if (Math.abs(prev.y - lateralY) > CONFIG.sameRowTolerance) {
+      pontos.push({ x: prev.x, y: lateralY });
+    }
+    pontos.push({ x: preX, y: lateralY });
+    pontos.push({ x: preX, y: end.y });
+    pontos.push(end);
+    return normalizarPontos(pontos);
+  }
 
-  if (Math.abs(prev.y - lateralY) > CONFIG.sameRowTolerance) {
-    pontos.push({ x: prev.x, y: lateralY });
-  }
-  if (Math.abs(prev.x - preEnd.x) > CONFIG.sameColTolerance || Math.abs(lateralY - preEnd.y) > CONFIG.sameRowTolerance) {
-    pontos.push({ x: preEnd.x, y: lateralY });
-  }
-  pontos.push(preEnd, end);
+  pontos.push({ x: preX, y: end.y });
+  pontos.push(end);
   return normalizarPontos(pontos);
 }
 
@@ -557,6 +580,20 @@ function ajustarPrimeiroTrechoParaLado(points, start, side) {
   const rest = points.slice(1);
   const next = rest[0];
   if (!next) return normalizarPontos([start]);
+
+  // Mantém lógica antiga quando já está saindo corretamente
+  if (side === "top" && Math.abs(next.x - start.x) <= CONFIG.sameColTolerance && next.y < start.y) {
+    return normalizarPontos([start, ...rest]);
+  }
+  if (side === "bottom" && Math.abs(next.x - start.x) <= CONFIG.sameColTolerance && next.y > start.y) {
+    return normalizarPontos([start, ...rest]);
+  }
+  if (side === "left" && Math.abs(next.y - start.y) <= CONFIG.sameRowTolerance && next.x < start.x) {
+    return normalizarPontos([start, ...rest]);
+  }
+  if (side === "right" && Math.abs(next.y - start.y) <= CONFIG.sameRowTolerance && next.x > start.x) {
+    return normalizarPontos([start, ...rest]);
+  }
 
   let escape;
   if (side === "top") escape = { x: start.x, y: start.y - CONFIG.routeGap };
