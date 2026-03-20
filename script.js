@@ -14,6 +14,7 @@ const CONFIG = {
   lineWidth: 2.2,
   cornerRadius: 12,
   decisionSize: 170,
+  decisionTextWidthFactor: 0.58,
   routeGap: 28,
   entryExitGap: 40,
   laneGap: 36,
@@ -98,34 +99,6 @@ function destinoEhValido(destinoId, idsValidos) {
   return !!destinoId && idsValidos.has(destinoId);
 }
 
-function quebrarTextoAutomatico(texto, maxPalavrasPorLinha = 3, maxCaracteresPorLinha = 18) {
-  const palavras = String(texto || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (!palavras.length) return [];
-
-  const linhas = [];
-  let linhaAtual = [];
-
-  for (const palavra of palavras) {
-    const testeLinha = [...linhaAtual, palavra].join(" ");
-    const excedeuPalavras = linhaAtual.length >= maxPalavrasPorLinha;
-    const excedeuCaracteres = testeLinha.length > maxCaracteresPorLinha;
-
-    if (linhaAtual.length > 0 && (excedeuPalavras || excedeuCaracteres)) {
-      linhas.push(linhaAtual.join(" "));
-      linhaAtual = [palavra];
-    } else {
-      linhaAtual.push(palavra);
-    }
-  }
-
-  if (linhaAtual.length) linhas.push(linhaAtual.join(" "));
-  return linhas;
-}
-
 function medirLarguraTexto(texto, fontSize = CONFIG.fontSize, fontWeight = "normal") {
   const svgMedicao = criarElementoSVG("svg");
   svgMedicao.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -195,10 +168,18 @@ function quebrarTextoPorLargura(texto, larguraMaxima, fontSize = CONFIG.fontSize
   return linhas;
 }
 
-function obterLinhasEtapa(etapa, larguraCaixa) {
+function obterLarguraUtilTexto(etapa, larguraCaixa) {
   const pergunta = isPergunta(etapa.atividade);
-  const paddingHorizontal = pergunta ? 28 : 16;
-  const larguraTexto = Math.max(40, larguraCaixa - paddingHorizontal * 2);
+
+  if (pergunta) {
+    return Math.max(50, larguraCaixa * CONFIG.decisionTextWidthFactor);
+  }
+
+  return Math.max(60, larguraCaixa - 32);
+}
+
+function obterLinhasEtapa(etapa, larguraCaixa) {
+  const larguraTexto = obterLarguraUtilTexto(etapa, larguraCaixa);
 
   const linhasAtividade = quebrarTextoPorLargura(
     etapa.atividade,
@@ -228,8 +209,10 @@ function calcularAlturaPadraoNos(etapas) {
     const pergunta = isPergunta(etapa.atividade);
     const largura = pergunta ? CONFIG.decisionSize : CONFIG.boxWidth;
     const linhas = obterLinhasEtapa(etapa, largura);
+
+    const alturaBaseMinima = CONFIG.boxHeight;
     const alturaNecessaria = Math.max(
-      CONFIG.boxHeight,
+      alturaBaseMinima,
       linhas.length * lineHeight + paddingVertical * 2
     );
 
@@ -339,7 +322,6 @@ function desenharNo(svg, etapa, pos) {
   }
 
   const linhas = obterLinhasEtapa(etapa, pos.w);
-
   const lineHeight = 18;
   const totalAlturaTexto = linhas.length * lineHeight;
   const inicioYTexto = pos.y + (pos.h - totalAlturaTexto) / 2 + 14;
@@ -416,85 +398,6 @@ function normalizarPontos(points) {
 
   simplificado.push(resultado[resultado.length - 1]);
   return simplificado;
-}
-
-function estaAlinhadoHorizontalmente(a, b) {
-  return Math.abs((a.y + a.h / 2) - (b.y + b.h / 2)) <= CONFIG.sameRowTolerance;
-}
-
-function estaAlinhadoVerticalmente(a, b) {
-  return Math.abs((a.x + a.w / 2) - (b.x + b.w / 2)) <= CONFIG.sameColTolerance;
-}
-
-function mesmaLinhaY(a, b) {
-  return Math.abs(a.y - b.y) <= CONFIG.sameRowTolerance;
-}
-
-function mesmaColunaX(a, b) {
-  return Math.abs(a.x - b.x) <= CONFIG.sameColTolerance;
-}
-
-function montarRotaReta(start, end, label, startSide = "", endSide = "") {
-  return {
-    points: normalizarPontos([start, end]),
-    label,
-    startSide,
-    endSide
-  };
-}
-
-function montarRotaOrtogonal(points, label, startSide = "", endSide = "") {
-  return {
-    points: normalizarPontos(points),
-    label,
-    startSide,
-    endSide
-  };
-}
-
-function getMergePoint(end, side, gap = CONFIG.sharedMergeGap) {
-  switch (side) {
-    case "left": return { x: end.x - gap, y: end.y };
-    case "right": return { x: end.x + gap, y: end.y };
-    case "top": return { x: end.x, y: end.y - gap };
-    case "bottom": return { x: end.x, y: end.y + gap };
-    default: return { x: end.x - gap, y: end.y };
-  }
-}
-
-function segmentoInterceptaNodo(p1, p2, node, padding = CONFIG.obstaclePadding) {
-  const minX = Math.min(p1.x, p2.x);
-  const maxX = Math.max(p1.x, p2.x);
-  const minY = Math.min(p1.y, p2.y);
-  const maxY = Math.max(p1.y, p2.y);
-
-  const nodeLeft = node.x - padding;
-  const nodeRight = node.x + node.w + padding;
-  const nodeTop = node.y - padding;
-  const nodeBottom = node.y + node.h + padding;
-
-  const horizontal = p1.y === p2.y;
-  const vertical = p1.x === p2.x;
-
-  if (horizontal) {
-    return (
-      p1.y >= nodeTop &&
-      p1.y <= nodeBottom &&
-      maxX >= nodeLeft &&
-      minX <= nodeRight
-    );
-  }
-
-  if (vertical) {
-    return (
-      p1.x >= nodeLeft &&
-      p1.x <= nodeRight &&
-      maxY >= nodeTop &&
-      minY <= nodeBottom
-    );
-  }
-
-  return false;
 }
 
 function segmentoInterceptaAreaExpandida(p1, p2, left, top, right, bottom) {
@@ -686,7 +589,7 @@ function ajustarPrimeiroTrechoParaLado(points, start, side) {
   return normalizarPontos(novo);
 }
 
-function gerarCandidatosRotas(start, end, preferredStartSide = null, preferredEndSide = null) {
+function gerarCandidatosRotas(start, end) {
   const candidates = [];
 
   const mids = [
@@ -718,7 +621,7 @@ function gerarCandidatosRotas(start, end, preferredStartSide = null, preferredEn
 }
 
 function encontrarRotaSegura(start, end, posicoes = {}, excludeIds = [], preferredEndSide = null, preferredStartSide = null, destinoNode = null) {
-  const candidates = gerarCandidatosRotas(start, end, preferredStartSide, preferredEndSide);
+  const candidates = gerarCandidatosRotas(start, end);
 
   const avaliadas = candidates.map(points => {
     let ajustado = [...points];
@@ -848,6 +751,25 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
   return [{ startSide: "right", endSide: "left" }];
 }
 
+function montarRotaOrtogonal(points, label, startSide = "", endSide = "") {
+  return {
+    points: normalizarPontos(points),
+    label,
+    startSide,
+    endSide
+  };
+}
+
+function getMergePoint(end, side, gap = CONFIG.sharedMergeGap) {
+  switch (side) {
+    case "left": return { x: end.x - gap, y: end.y };
+    case "right": return { x: end.x + gap, y: end.y };
+    case "top": return { x: end.x, y: end.y - gap };
+    case "bottom": return { x: end.x, y: end.y + gap };
+    default: return { x: end.x - gap, y: end.y };
+  }
+}
+
 function escolherRota(origem, destino, contexto = {}) {
   const rotulo = contexto.rotulo || "";
   const posicoes = contexto.posicoes || {};
@@ -883,9 +805,7 @@ function escolherRota(origem, destino, contexto = {}) {
 
   tentativas.sort((a, b) => {
     if (a.safe !== b.safe) return a.safe ? -1 : 1;
-    const turnsA = a.points.length;
-    const turnsB = b.points.length;
-    if (turnsA !== turnsB) return turnsA - turnsB;
+    if (a.points.length !== b.points.length) return a.points.length - b.points.length;
     return calcularComprimento(a.points) - calcularComprimento(b.points);
   });
 
@@ -1062,7 +982,7 @@ function gerarFluxo() {
   });
 
   const alturaPadraoNos = calcularAlturaPadraoNos(etapas);
-  const rowSlotHeight = Math.max(alturaPadraoNos, CONFIG.decisionSize);
+  const rowSlotHeight = Math.max(alturaPadraoNos, CONFIG.boxHeight);
   const colSlotWidth = Math.max(CONFIG.boxWidth, CONFIG.decisionSize);
 
   const maxColuna = Math.max(...etapas.map(e => e.coluna), 1) + 1;
@@ -1362,42 +1282,3 @@ function baixarFluxo() {
   baixarSVG();
 }
 
-function baixarPNG() {
-  const svg = obterSVGPronto();
-  if (!svg) return;
-
-  const larguraReal = Number(svg.getAttribute("width")) || 2000;
-  const alturaReal = Number(svg.getAttribute("height")) || 1200;
-
-  const serializer = new XMLSerializer();
-  const source = serializer.serializeToString(svg);
-  const svg64 = btoa(unescape(encodeURIComponent(source)));
-  const image64 = "data:image/svg+xml;base64," + svg64;
-
-  const img = new Image();
-
-  img.onload = function () {
-    const canvas = document.createElement("canvas");
-    canvas.width = larguraReal;
-    canvas.height = alturaReal;
-
-    const ctx = canvas.getContext("2d");
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.fillStyle = "white";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-    const link = document.createElement("a");
-    link.download = `${ultimoNomeArquivo}.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
-  };
-
-  img.onerror = function (erro) {
-    console.error("Erro ao gerar PNG:", erro);
-    alert("Não foi possível gerar o PNG.");
-  };
-
-  img.src = image64;
-}
