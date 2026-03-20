@@ -14,7 +14,7 @@ const CONFIG = {
   lineWidth: 2.2,
   cornerRadius: 12,
   decisionWidth: 170,
-  decisionTextWidthFactor: 0.52,
+  decisionTextWidthFactor: 0.48,
   routeGap: 28,
   entryExitGap: 40,
   laneGap: 36,
