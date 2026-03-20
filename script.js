@@ -475,7 +475,6 @@ function ajustarUltimoTrechoParaLado(points, end, side, destinoNode) {
   const prev = base[base.length - 1];
   if (!prev || !destinoNode) return normalizarPontos([...base, end]);
 
-  // Mantém lógica antiga quando já está chegando corretamente
   if (side === "top" && Math.abs(prev.x - end.x) <= CONFIG.sameColTolerance && prev.y <= destinoNode.y) {
     return normalizarPontos([...base, end]);
   }
@@ -489,7 +488,6 @@ function ajustarUltimoTrechoParaLado(points, end, side, destinoNode) {
     return normalizarPontos([...base, end]);
   }
 
-  // Só desvia por fora quando a aproximação cruzaria a caixa
   let pontos = [...base];
 
   if (side === "top") {
@@ -499,9 +497,7 @@ function ajustarUltimoTrechoParaLado(points, end, side, destinoNode) {
       : destinoNode.x + destinoNode.w + CONFIG.routeGap;
 
     if (prev.y > destinoNode.y) {
-      if (Math.abs(prev.x - lateralX) > CONFIG.sameColTolerance) {
-        pontos.push({ x: lateralX, y: prev.y });
-      }
+      if (Math.abs(prev.x - lateralX) > CONFIG.sameColTolerance) pontos.push({ x: lateralX, y: prev.y });
       pontos.push({ x: lateralX, y: preY });
       pontos.push({ x: end.x, y: preY });
       pontos.push(end);
@@ -520,9 +516,7 @@ function ajustarUltimoTrechoParaLado(points, end, side, destinoNode) {
       : destinoNode.x + destinoNode.w + CONFIG.routeGap;
 
     if (prev.y < destinoNode.y + destinoNode.h) {
-      if (Math.abs(prev.x - lateralX) > CONFIG.sameColTolerance) {
-        pontos.push({ x: lateralX, y: prev.y });
-      }
+      if (Math.abs(prev.x - lateralX) > CONFIG.sameColTolerance) pontos.push({ x: lateralX, y: prev.y });
       pontos.push({ x: lateralX, y: preY });
       pontos.push({ x: end.x, y: preY });
       pontos.push(end);
@@ -541,9 +535,7 @@ function ajustarUltimoTrechoParaLado(points, end, side, destinoNode) {
       : destinoNode.y + destinoNode.h + CONFIG.routeGap;
 
     if (prev.x > destinoNode.x) {
-      if (Math.abs(prev.y - lateralY) > CONFIG.sameRowTolerance) {
-        pontos.push({ x: prev.x, y: lateralY });
-      }
+      if (Math.abs(prev.y - lateralY) > CONFIG.sameRowTolerance) pontos.push({ x: prev.x, y: lateralY });
       pontos.push({ x: preX, y: lateralY });
       pontos.push({ x: preX, y: end.y });
       pontos.push(end);
@@ -555,16 +547,13 @@ function ajustarUltimoTrechoParaLado(points, end, side, destinoNode) {
     return normalizarPontos(pontos);
   }
 
-  // right
   const preX = destinoNode.x + destinoNode.w + CONFIG.routeGap;
   const lateralY = prev.y <= destinoNode.y + destinoNode.h / 2
     ? destinoNode.y - CONFIG.routeGap
     : destinoNode.y + destinoNode.h + CONFIG.routeGap;
 
   if (prev.x < destinoNode.x + destinoNode.w) {
-    if (Math.abs(prev.y - lateralY) > CONFIG.sameRowTolerance) {
-      pontos.push({ x: prev.x, y: lateralY });
-    }
+    if (Math.abs(prev.y - lateralY) > CONFIG.sameRowTolerance) pontos.push({ x: prev.x, y: lateralY });
     pontos.push({ x: preX, y: lateralY });
     pontos.push({ x: preX, y: end.y });
     pontos.push(end);
@@ -581,7 +570,6 @@ function ajustarPrimeiroTrechoParaLado(points, start, side) {
   const next = rest[0];
   if (!next) return normalizarPontos([start]);
 
-  // Mantém lógica antiga quando já está saindo corretamente
   if (side === "top" && Math.abs(next.x - start.x) <= CONFIG.sameColTolerance && next.y < start.y) {
     return normalizarPontos([start, ...rest]);
   }
@@ -709,6 +697,9 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
   }
 
   if (origem.isDecision && rotulo === "Não") {
+    if (destino.gridRow <= origem.gridRow) {
+      return [{ startSide: "bottom", endSide: "bottom" }];
+    }
     return [{ startSide: "bottom", endSide: "top" }];
   }
 
