@@ -126,6 +126,121 @@ function quebrarTextoAutomatico(texto, maxPalavrasPorLinha = 3, maxCaracteresPor
   return linhas;
 }
 
+function medirLarguraTexto(texto, fontSize = CONFIG.fontSize, fontWeight = "normal") {
+  const svgMedicao = criarElementoSVG("svg");
+  svgMedicao.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  svgMedicao.setAttribute("width", "0");
+  svgMedicao.setAttribute("height", "0");
+  svgMedicao.setAttribute("style", "position:absolute;left:-9999px;top:-9999px;visibility:hidden;overflow:hidden;");
+
+  const text = criarElementoSVG("text");
+  text.setAttribute("font-family", CONFIG.fontFamily);
+  text.setAttribute("font-size", String(fontSize));
+  text.setAttribute("font-weight", fontWeight);
+  text.textContent = texto || "";
+  svgMedicao.appendChild(text);
+
+  document.body.appendChild(svgMedicao);
+  const largura = text.getComputedTextLength();
+  document.body.removeChild(svgMedicao);
+
+  return largura;
+}
+
+function quebrarTextoPorLargura(texto, larguraMaxima, fontSize = CONFIG.fontSize, fontWeight = "normal") {
+  const textoLimpo = String(texto || "").trim();
+  if (!textoLimpo) return [];
+
+  const palavras = textoLimpo.split(/\s+/).filter(Boolean);
+  if (!palavras.length) return [];
+
+  const linhas = [];
+  let linhaAtual = "";
+
+  for (const palavra of palavras) {
+    const tentativa = linhaAtual ? `${linhaAtual} ${palavra}` : palavra;
+    if (medirLarguraTexto(tentativa, fontSize, fontWeight) <= larguraMaxima) {
+      linhaAtual = tentativa;
+      continue;
+    }
+
+    if (linhaAtual) {
+      linhas.push(linhaAtual);
+      linhaAtual = "";
+    }
+
+    if (medirLarguraTexto(palavra, fontSize, fontWeight) <= larguraMaxima) {
+      linhaAtual = palavra;
+      continue;
+    }
+
+    let parteAtual = "";
+    for (const caractere of palavra) {
+      const tentativaParte = parteAtual + caractere;
+      if (medirLarguraTexto(tentativaParte, fontSize, fontWeight) <= larguraMaxima) {
+        parteAtual = tentativaParte;
+      } else {
+        if (parteAtual) linhas.push(parteAtual);
+        parteAtual = caractere;
+      }
+    }
+
+    if (parteAtual) {
+      linhaAtual = parteAtual;
+    }
+  }
+
+  if (linhaAtual) linhas.push(linhaAtual);
+  return linhas;
+}
+
+function obterLinhasEtapa(etapa, larguraCaixa, alturaCaixa) {
+  const pergunta = isPergunta(etapa.atividade);
+  const paddingHorizontal = pergunta ? 28 : 16;
+  const larguraTexto = Math.max(40, larguraCaixa - paddingHorizontal * 2);
+
+  const linhasAtividade = quebrarTextoPorLargura(
+    etapa.atividade,
+    larguraTexto,
+    CONFIG.fontSize
+  );
+
+  const linhasSistema = quebrarTextoPorLargura(
+    etapa.sistema || "Sem sistema informado",
+    larguraTexto,
+    CONFIG.fontSize
+  );
+
+  return [
+    ...linhasAtividade,
+    ...linhasSistema,
+    formatarTempo(etapa.tempo)
+  ];
+}
+
+function calcularAlturaPadraoNos(etapas) {
+  const lineHeight = 18;
+  const paddingVertical = 20;
+  let maiorAltura = CONFIG.boxHeight;
+
+  etapas.forEach((etapa) => {
+    const pergunta = isPergunta(etapa.atividade);
+    const largura = pergunta ? CONFIG.decisionSize : CONFIG.boxWidth;
+    const alturaBase = pergunta ? CONFIG.decisionSize : CONFIG.boxHeight;
+    const linhas = obterLinhasEtapa(etapa, largura, alturaBase);
+    const alturaNecessaria = Math.max(
+      alturaBase,
+      linhas.length * lineHeight + paddingVertical * 2
+    );
+
+    if (alturaNecessaria > maiorAltura) {
+      maiorAltura = alturaNecessaria;
+    }
+  });
+
+  return maiorAltura;
+}
+
 function gerarNomeArquivo() {
   const processo = limpar(document.getElementById("processo").value) || "fluxograma";
   return processo
@@ -223,11 +338,7 @@ function desenharNo(svg, etapa, pos) {
     g.appendChild(rect);
   }
 
-  const linhas = [
-    ...quebrarTextoAutomatico(etapa.atividade, 3, pergunta ? 14 : 18),
-    ...quebrarTextoAutomatico(etapa.sistema || "Sem sistema informado", 3, 20),
-    formatarTempo(etapa.tempo)
-  ];
+  const linhas = obterLinhasEtapa(etapa, pos.w, pos.h);
 
   const lineHeight = 18;
   const totalAlturaTexto = linhas.length * lineHeight;
@@ -351,38 +462,52 @@ function getMergePoint(end, side, gap = CONFIG.sharedMergeGap) {
   }
 }
 
-function segmentIntersectsRect(p1, p2, rect, padding = CONFIG.obstaclePadding) {
-  const rx1 = rect.x - padding;
-  const ry1 = rect.y - padding;
-  const rx2 = rect.x + rect.w + padding;
-  const ry2 = rect.y + rect.h + padding;
+function segmentoInterceptaNodo(p1, p2, node, padding = CONFIG.obstaclePadding) {
+  const minX = Math.min(p1.x, p2.x);
+  const maxX = Math.max(p1.x, p2.x);
+  const minY = Math.min(p1.y, p2.y);
+  const maxY = Math.max(p1.y, p2.y);
 
-  if (Math.abs(p1.y - p2.y) <= CONFIG.sameRowTolerance) {
-    const y = p1.y;
-    const minX = Math.min(p1.x, p2.x);
-    const maxX = Math.max(p1.x, p2.x);
-    if (y > ry1 && y < ry2 && maxX > rx1 && minX < rx2) return true;
+  const nodeLeft = node.x - padding;
+  const nodeRight = node.x + node.w + padding;
+  const nodeTop = node.y - padding;
+  const nodeBottom = node.y + node.h + padding;
+
+  const horizontal = p1.y === p2.y;
+  const vertical = p1.x === p2.x;
+
+  if (horizontal) {
+    return (
+      p1.y >= nodeTop &&
+      p1.y <= nodeBottom &&
+      maxX >= nodeLeft &&
+      minX <= nodeRight
+    );
   }
 
-  if (Math.abs(p1.x - p2.x) <= CONFIG.sameColTolerance) {
-    const x = p1.x;
-    const minY = Math.min(p1.y, p2.y);
-    const maxY = Math.max(p1.y, p2.y);
-    if (x > rx1 && x < rx2 && maxY > ry1 && minY < ry2) return true;
+  if (vertical) {
+    return (
+      p1.x >= nodeLeft &&
+      p1.x <= nodeRight &&
+      maxY >= nodeTop &&
+      minY <= nodeBottom
+    );
   }
 
   return false;
 }
 
-function pathCruzaCaixas(points, posicoes, excludeIds = []) {
-  const exclude = new Set(excludeIds);
-  const caixas = Object.values(posicoes).filter(node => node && node.id && !exclude.has(node.id));
+function rotaCruzaObstaculos(points, posicoes = {}, excludeIds = []) {
+  const nodes = Object.values(posicoes).filter(node => !excludeIds.includes(node.id));
 
   for (let i = 0; i < points.length - 1; i++) {
-    for (const caixa of caixas) {
-      if (segmentIntersectsRect(points[i], points[i + 1], caixa)) return true;
+    for (const node of nodes) {
+      if (segmentoInterceptaNodo(points[i], points[i + 1], node)) {
+        return true;
+      }
     }
   }
+
   return false;
 }
 
@@ -394,315 +519,157 @@ function calcularComprimento(points) {
   return total;
 }
 
-function construirVHV(start, end, laneY) {
-  return normalizarPontos([
-    start,
-    { x: start.x, y: laneY },
-    { x: end.x, y: laneY },
-    end
-  ]);
-}
-
-function construirHVH(start, end, laneX) {
-  return normalizarPontos([
-    start,
-    { x: laneX, y: start.y },
-    { x: laneX, y: end.y },
-    end
-  ]);
-}
-
-function gerarLanesY(posicoes, excludeIds = []) {
-  const exclude = new Set(excludeIds);
-  const valores = [];
-
-  Object.values(posicoes).forEach(node => {
-    if (!node || !node.id || exclude.has(node.id)) return;
-    valores.push(node.y - CONFIG.laneGap);
-    valores.push(node.y + node.h + CONFIG.laneGap);
-  });
-
-  return [...new Set(valores.map(v => Number(v.toFixed(1))))];
-}
-
-function gerarLanesX(posicoes, excludeIds = []) {
-  const exclude = new Set(excludeIds);
-  const valores = [];
-
-  Object.values(posicoes).forEach(node => {
-    if (!node || !node.id || exclude.has(node.id)) return;
-    valores.push(node.x - CONFIG.laneGap);
-    valores.push(node.x + node.w + CONFIG.laneGap);
-  });
-
-  return [...new Set(valores.map(v => Number(v.toFixed(1))))];
-}
-
-function detectarLadoEntrada(points) {
-  if (!points || points.length < 2) return "left";
-  const end = points[points.length - 1];
-  const prev = points[points.length - 2];
-
-  if (Math.abs(prev.x - end.x) <= CONFIG.sameColTolerance) {
-    return prev.y < end.y ? "top" : "bottom";
-  }
-
-  if (Math.abs(prev.y - end.y) <= CONFIG.sameRowTolerance) {
-    return prev.x < end.x ? "left" : "right";
-  }
-
-  return "left";
-}
-
-function detectarLadoSaida(points) {
-  if (!points || points.length < 2) return "right";
-  const start = points[0];
-  const next = points[1];
-
-  if (Math.abs(start.x - next.x) <= CONFIG.sameColTolerance) {
-    return next.y > start.y ? "bottom" : "top";
-  }
-
-  if (Math.abs(start.y - next.y) <= CONFIG.sameRowTolerance) {
-    return next.x > start.x ? "right" : "left";
-  }
-
-  return "right";
-}
-
-function ajustarUltimoTrechoParaLado(points, end, side, destinoNode) {
-  const base = points.slice(0, -1);
-  const prev = base[base.length - 1];
-  if (!prev || !destinoNode) return normalizarPontos([...base, end]);
-
-  if (side === "top" && Math.abs(prev.x - end.x) <= CONFIG.sameColTolerance && prev.y <= destinoNode.y) {
-    return normalizarPontos([...base, end]);
-  }
-  if (side === "bottom" && Math.abs(prev.x - end.x) <= CONFIG.sameColTolerance && prev.y >= destinoNode.y + destinoNode.h) {
-    return normalizarPontos([...base, end]);
-  }
-  if (side === "left" && Math.abs(prev.y - end.y) <= CONFIG.sameRowTolerance && prev.x <= destinoNode.x) {
-    return normalizarPontos([...base, end]);
-  }
-  if (side === "right" && Math.abs(prev.y - end.y) <= CONFIG.sameRowTolerance && prev.x >= destinoNode.x + destinoNode.w) {
-    return normalizarPontos([...base, end]);
-  }
-
-  let pontos = [...base];
-
-  if (side === "top") {
-    const preY = destinoNode.y - CONFIG.routeGap;
-    const lateralX = prev.x <= destinoNode.x + destinoNode.w / 2
-      ? destinoNode.x - CONFIG.routeGap
-      : destinoNode.x + destinoNode.w + CONFIG.routeGap;
-
-    if (prev.y > destinoNode.y) {
-      if (Math.abs(prev.x - lateralX) > CONFIG.sameColTolerance) pontos.push({ x: lateralX, y: prev.y });
-      pontos.push({ x: lateralX, y: preY });
-      pontos.push({ x: end.x, y: preY });
-      pontos.push(end);
-      return normalizarPontos(pontos);
-    }
-
-    pontos.push({ x: end.x, y: preY });
-    pontos.push(end);
-    return normalizarPontos(pontos);
-  }
-
-  if (side === "bottom") {
-    const preY = destinoNode.y + destinoNode.h + CONFIG.routeGap;
-    const lateralX = prev.x <= destinoNode.x + destinoNode.w / 2
-      ? destinoNode.x - CONFIG.routeGap
-      : destinoNode.x + destinoNode.w + CONFIG.routeGap;
-
-    if (prev.y < destinoNode.y + destinoNode.h) {
-      if (Math.abs(prev.x - lateralX) > CONFIG.sameColTolerance) pontos.push({ x: lateralX, y: prev.y });
-      pontos.push({ x: lateralX, y: preY });
-      pontos.push({ x: end.x, y: preY });
-      pontos.push(end);
-      return normalizarPontos(pontos);
-    }
-
-    pontos.push({ x: end.x, y: preY });
-    pontos.push(end);
-    return normalizarPontos(pontos);
-  }
-
-  if (side === "left") {
-    const preX = destinoNode.x - CONFIG.routeGap;
-    const lateralY = prev.y <= destinoNode.y + destinoNode.h / 2
-      ? destinoNode.y - CONFIG.routeGap
-      : destinoNode.y + destinoNode.h + CONFIG.routeGap;
-
-    if (prev.x > destinoNode.x) {
-      if (Math.abs(prev.y - lateralY) > CONFIG.sameRowTolerance) pontos.push({ x: prev.x, y: lateralY });
-      pontos.push({ x: preX, y: lateralY });
-      pontos.push({ x: preX, y: end.y });
-      pontos.push(end);
-      return normalizarPontos(pontos);
-    }
-
-    pontos.push({ x: preX, y: end.y });
-    pontos.push(end);
-    return normalizarPontos(pontos);
-  }
-
-  const preX = destinoNode.x + destinoNode.w + CONFIG.routeGap;
-  const lateralY = prev.y <= destinoNode.y + destinoNode.h / 2
-    ? destinoNode.y - CONFIG.routeGap
-    : destinoNode.y + destinoNode.h + CONFIG.routeGap;
-
-  if (prev.x < destinoNode.x + destinoNode.w) {
-    if (Math.abs(prev.y - lateralY) > CONFIG.sameRowTolerance) pontos.push({ x: prev.x, y: lateralY });
-    pontos.push({ x: preX, y: lateralY });
-    pontos.push({ x: preX, y: end.y });
-    pontos.push(end);
-    return normalizarPontos(pontos);
-  }
-
-  pontos.push({ x: preX, y: end.y });
-  pontos.push(end);
-  return normalizarPontos(pontos);
-}
-
-function ajustarPrimeiroTrechoParaLado(points, start, side) {
-  const rest = points.slice(1);
-  const next = rest[0];
-  if (!next) return normalizarPontos([start]);
-
-  if (side === "top" && Math.abs(next.x - start.x) <= CONFIG.sameColTolerance && next.y < start.y) {
-    return normalizarPontos([start, ...rest]);
-  }
-  if (side === "bottom" && Math.abs(next.x - start.x) <= CONFIG.sameColTolerance && next.y > start.y) {
-    return normalizarPontos([start, ...rest]);
-  }
-  if (side === "left" && Math.abs(next.y - start.y) <= CONFIG.sameRowTolerance && next.x < start.x) {
-    return normalizarPontos([start, ...rest]);
-  }
-  if (side === "right" && Math.abs(next.y - start.y) <= CONFIG.sameRowTolerance && next.x > start.x) {
-    return normalizarPontos([start, ...rest]);
-  }
-
-  let escape;
-  if (side === "top") escape = { x: start.x, y: start.y - CONFIG.routeGap };
-  else if (side === "bottom") escape = { x: start.x, y: start.y + CONFIG.routeGap };
-  else if (side === "left") escape = { x: start.x - CONFIG.routeGap, y: start.y };
-  else escape = { x: start.x + CONFIG.routeGap, y: start.y };
-
-  const pontos = [start, escape];
-
-  if (side === "top" || side === "bottom") {
-    if (Math.abs(next.x - escape.x) > CONFIG.sameColTolerance) {
-      pontos.push({ x: next.x, y: escape.y });
-    }
-  } else {
-    if (Math.abs(next.y - escape.y) > CONFIG.sameRowTolerance) {
-      pontos.push({ x: escape.x, y: next.y });
-    }
-  }
-
-  pontos.push(...rest);
-  return normalizarPontos(pontos);
-}
-
-function encontrarRotaSegura(
-  start,
-  end,
-  posicoes,
-  excludeIds = [],
-  preferredEndSide = null,
-  preferredStartSide = null,
-  destinoNode = null
-) {
-  const candidatos = [];
-
-  if (mesmaLinhaY(start, end) || mesmaColunaX(start, end)) {
-    candidatos.push(normalizarPontos([start, end]));
-  }
-
-  candidatos.push(normalizarPontos([start, { x: end.x, y: start.y }, end]));
-  candidatos.push(normalizarPontos([start, { x: start.x, y: end.y }, end]));
-
-  const lanesY = [start.y, end.y, ...gerarLanesY(posicoes, excludeIds)];
-  const lanesX = [start.x, end.x, ...gerarLanesX(posicoes, excludeIds)];
-
-  lanesY.forEach(laneY => candidatos.push(construirVHV(start, end, laneY)));
-  lanesX.forEach(laneX => candidatos.push(construirHVH(start, end, laneX)));
-
-  const candidatosComLados = candidatos
-    .map(points => normalizarPontos(points))
-    .map(points => ({
-      points,
-      startSide: detectarLadoSaida(points),
-      endSide: detectarLadoEntrada(points)
-    }))
-    .filter(item => !pathCruzaCaixas(item.points, posicoes, excludeIds));
-
-  let validos = candidatosComLados;
-
-  if (preferredStartSide) {
-    const preferidosSaida = validos.filter(item => item.startSide === preferredStartSide);
-    if (preferidosSaida.length) validos = preferidosSaida;
-  }
-
-  if (preferredEndSide) {
-    const preferidosEntrada = validos.filter(item => item.endSide === preferredEndSide);
-    if (preferidosEntrada.length) validos = preferidosEntrada;
-  }
-
-  if (validos.length) {
-    validos.sort((a, b) => {
-      const turnsA = a.points.length;
-      const turnsB = b.points.length;
-      if (turnsA !== turnsB) return turnsA - turnsB;
-      return calcularComprimento(a.points) - calcularComprimento(b.points);
-    });
-
-    const melhor = validos[0];
-    let ajustado = melhor.points;
-    ajustado = ajustarPrimeiroTrechoParaLado(ajustado, start, preferredStartSide || melhor.startSide);
-    ajustado = ajustarUltimoTrechoParaLado(ajustado, end, preferredEndSide || melhor.endSide, destinoNode);
-
+function encontrarRotaSegura(start, end, posicoes = {}, excludeIds = [], endSide = "left", startSide = "right", destino = null) {
+  const direct = [start, end];
+  if (!rotaCruzaObstaculos(direct, posicoes, excludeIds)) {
     return {
-      points: ajustado,
-      startSide: preferredStartSide || melhor.startSide,
-      endSide: preferredEndSide || melhor.endSide,
-      safe: !pathCruzaCaixas(ajustado, posicoes, excludeIds)
+      points: normalizarPontos(direct),
+      safe: true,
+      startSide,
+      endSide
     };
   }
 
-  let fallback = normalizarPontos([start, { x: end.x, y: start.y }, end]);
-  const startSide = preferredStartSide || detectarLadoSaida(fallback);
-  const endSide = preferredEndSide || detectarLadoEntrada(fallback);
+  const routeGap = CONFIG.routeGap;
+  const laneGap = CONFIG.laneGap;
+  const candidates = [];
 
-  fallback = ajustarPrimeiroTrechoParaLado(fallback, start, startSide);
-  fallback = ajustarUltimoTrechoParaLado(fallback, end, endSide, destinoNode);
+  const horizontalFirst = [
+    start,
+    { x: start.x + routeGap, y: start.y },
+    { x: start.x + routeGap, y: end.y },
+    end
+  ];
+  candidates.push(horizontalFirst);
+
+  const verticalFirstUp = [
+    start,
+    { x: start.x, y: start.y - routeGap - laneGap },
+    { x: end.x, y: start.y - routeGap - laneGap },
+    end
+  ];
+  candidates.push(verticalFirstUp);
+
+  const verticalFirstDown = [
+    start,
+    { x: start.x, y: start.y + routeGap + laneGap },
+    { x: end.x, y: start.y + routeGap + laneGap },
+    end
+  ];
+  candidates.push(verticalFirstDown);
+
+  if (destino) {
+    if (endSide === "left") {
+      const viaLeft = [
+        start,
+        { x: start.x + routeGap, y: start.y },
+        { x: destino.x - routeGap, y: start.y },
+        { x: destino.x - routeGap, y: end.y },
+        end
+      ];
+      candidates.push(viaLeft);
+    }
+
+    if (endSide === "right") {
+      const viaRight = [
+        start,
+        { x: start.x - routeGap, y: start.y },
+        { x: destino.x + destino.w + routeGap, y: start.y },
+        { x: destino.x + destino.w + routeGap, y: end.y },
+        end
+      ];
+      candidates.push(viaRight);
+    }
+
+    if (endSide === "top") {
+      const viaTop = [
+        start,
+        { x: start.x, y: start.y - routeGap },
+        { x: end.x, y: start.y - routeGap },
+        end
+      ];
+      candidates.push(viaTop);
+    }
+
+    if (endSide === "bottom") {
+      const viaBottom = [
+        start,
+        { x: start.x, y: start.y + routeGap },
+        { x: end.x, y: start.y + routeGap },
+        end
+      ];
+      candidates.push(viaBottom);
+    }
+  }
+
+  const analisadas = candidates.map(points => ({
+    points: normalizarPontos(points),
+    safe: !rotaCruzaObstaculos(points, posicoes, excludeIds)
+  }));
+
+  analisadas.sort((a, b) => {
+    if (a.safe !== b.safe) return a.safe ? -1 : 1;
+    if (a.points.length !== b.points.length) return a.points.length - b.points.length;
+    return calcularComprimento(a.points) - calcularComprimento(b.points);
+  });
+
+  const melhor = analisadas[0];
 
   return {
-    points: fallback,
+    points: melhor.points,
+    safe: melhor.safe,
     startSide,
-    endSide,
-    safe: !pathCruzaCaixas(fallback, posicoes, excludeIds)
+    endSide
   };
 }
 
 function buildOrthogonalToMerge(start, mergePoint, end, endSide, posicoes = {}, excludeIds = [], preferredStartSide = null) {
-  const ateMergeObj = encontrarRotaSegura(start, mergePoint, posicoes, excludeIds, null, preferredStartSide, null);
-  return normalizarPontos([...ateMergeObj.points, end]);
+  const routeGap = CONFIG.routeGap;
+  let startPivot = null;
+
+  if (preferredStartSide === "right") {
+    startPivot = { x: start.x + routeGap, y: start.y };
+  } else if (preferredStartSide === "left") {
+    startPivot = { x: start.x - routeGap, y: start.y };
+  } else if (preferredStartSide === "top") {
+    startPivot = { x: start.x, y: start.y - routeGap };
+  } else if (preferredStartSide === "bottom") {
+    startPivot = { x: start.x, y: start.y + routeGap };
+  } else {
+    startPivot = { x: start.x + routeGap, y: start.y };
+  }
+
+  const points = [start, startPivot];
+
+  if (startPivot.x !== mergePoint.x && startPivot.y !== mergePoint.y) {
+    points.push({ x: startPivot.x, y: mergePoint.y });
+  }
+
+  points.push(mergePoint);
+
+  switch (endSide) {
+    case "left":
+    case "right":
+      if (mergePoint.y !== end.y) points.push({ x: mergePoint.x, y: end.y });
+      break;
+    case "top":
+    case "bottom":
+      if (mergePoint.x !== end.x) points.push({ x: end.x, y: mergePoint.y });
+      break;
+  }
+
+  points.push(end);
+
+  const normalized = normalizarPontos(points);
+
+  if (!rotaCruzaObstaculos(normalized, posicoes, excludeIds)) {
+    return normalized;
+  }
+
+  return normalized;
 }
 
 function escolherParesCandidatos(origem, destino, rotulo = "") {
-  if (origem.isDecision && rotulo === "Sim") {
-    return [{ startSide: "right", endSide: "left" }];
-  }
-
-  if (origem.isDecision && rotulo === "Não") {
-    if (destino.gridRow <= origem.gridRow) {
-      return [{ startSide: "bottom", endSide: "bottom" }];
-    }
-    return [{ startSide: "bottom", endSide: "top" }];
-  }
-
   const dx = destino.gridCol - origem.gridCol;
   const dy = destino.gridRow - origem.gridRow;
 
@@ -974,7 +941,8 @@ function gerarFluxo() {
     etapaPorId[e.id] = e;
   });
 
-  const rowSlotHeight = Math.max(CONFIG.boxHeight, CONFIG.decisionSize);
+  const alturaPadraoNos = calcularAlturaPadraoNos(etapas);
+  const rowSlotHeight = Math.max(alturaPadraoNos, CONFIG.decisionSize);
   const colSlotWidth = Math.max(CONFIG.boxWidth, CONFIG.decisionSize);
 
   const maxColuna = Math.max(...etapas.map(e => e.coluna), 1) + 1;
@@ -1019,7 +987,7 @@ function gerarFluxo() {
   etapas.forEach((e) => {
     const pergunta = isPergunta(e.atividade);
     const w = pergunta ? CONFIG.decisionSize : CONFIG.boxWidth;
-    const h = pergunta ? CONFIG.decisionSize : CONFIG.boxHeight;
+    const h = alturaPadraoNos;
 
     const slotX = CONFIG.marginX + (e.coluna - 1) * (colSlotWidth + CONFIG.colGap);
     const slotY = CONFIG.marginY + (e.linha - 1) * (rowSlotHeight + CONFIG.rowGap);
