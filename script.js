@@ -1013,6 +1013,175 @@ function gerarTabelaPareto(atividadesTempo, tempoTotal) {
   );
 }
 
+function renderInformacoesProcessoExecutivas(info) {
+  return `
+    <div class="exec-card">
+      <div class="exec-card-title">Informações do Processo</div>
+      <div class="exec-info-grid">
+        <div class="exec-info-item">
+          <div class="exec-info-label">Processo</div>
+          <div class="exec-info-value">${escaparHTML(info.processo || "Não informado")}</div>
+        </div>
+        <div class="exec-info-item">
+          <div class="exec-info-label">Analista</div>
+          <div class="exec-info-value">${escaparHTML(info.analista || "Não informado")}</div>
+        </div>
+        <div class="exec-info-item">
+          <div class="exec-info-label">Negócio</div>
+          <div class="exec-info-value">${escaparHTML(info.negocio || "Não informado")}</div>
+        </div>
+        <div class="exec-info-item">
+          <div class="exec-info-label">Área</div>
+          <div class="exec-info-value">${escaparHTML(info.area || "Não informado")}</div>
+        </div>
+        <div class="exec-info-item">
+          <div class="exec-info-label">Coordenador</div>
+          <div class="exec-info-value">${escaparHTML(info.coordenador || "Não informado")}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderTabelaAnaliseHTML({ titulo, columns, rows }) {
+  const thead = `
+    <thead>
+      <tr>
+        ${columns.map(col => `
+          <th class="${col.align === "center" ? "th-center" : ""}">
+            ${escaparHTML(col.header)}
+          </th>
+        `).join("")}
+      </tr>
+    </thead>
+  `;
+
+  const tbody = `
+    <tbody>
+      ${rows.map(row => `
+        <tr>
+          ${columns.map(col => `
+            <td class="${col.align === "center" ? "td-center" : ""}">
+              ${escaparHTML(row[col.key] ?? "")}
+            </td>
+          `).join("")}
+        </tr>
+      `).join("")}
+    </tbody>
+  `;
+
+  return `
+    <div class="exec-table-block">
+      <div class="exec-table-title">${escaparHTML(titulo)}</div>
+      <div class="exec-table-wrap">
+        <table class="exec-table">
+          ${thead}
+          ${tbody}
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderResumoAnaliseExecutivo(dados) {
+  return `
+    <div class="exec-summary-grid">
+      <div class="exec-summary-item">
+        <div class="exec-summary-label">Tempo total do processo</div>
+        <div class="exec-summary-value">${formatarTempo(dados.tempoTotal)}</div>
+      </div>
+      <div class="exec-summary-item">
+        <div class="exec-summary-label">Loops detectados</div>
+        <div class="exec-summary-value">${dados.loops}</div>
+      </div>
+      <div class="exec-summary-item">
+        <div class="exec-summary-label">Possibilidade potencial de retrabalho</div>
+        <div class="exec-summary-value">${formatarTempo(dados.tempoPotencialRetrabalho)} | ${formatarPercentual(dados.impactoPotencialRetrabalho)}%</div>
+      </div>
+      <div class="exec-summary-item">
+        <div class="exec-summary-label">Taxa de decisão</div>
+        <div class="exec-summary-value">${dados.decisoes} etapa(s) | ${formatarPercentual(dados.taxaDecisao)}%</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderizarAnaliseExecutiva(dados) {
+  const top3Rows = dados.top3Gargalos.map(item => ({
+    atividade: item.atividade,
+    tempoFmt: formatarTempo(item.tempo),
+    percentualFmt: `${formatarPercentual(item.percentual)}%`
+  }));
+
+  const tipoRows = dados.tempoPorTipo.map(item => ({
+    tipo: item.tipo,
+    tempoFmt: formatarTempo(item.tempo),
+    percentualFmt: `${formatarPercentual(item.percentual)}%`
+  }));
+
+  const sistemaRows = dados.tempoPorSistema.map(item => ({
+    sistema: item.sistema,
+    tempoFmt: formatarTempo(item.tempo),
+    percentualFmt: `${formatarPercentual(item.percentual)}%`
+  }));
+
+  const paretoRows = dados.pareto.map(item => ({
+    atividade: item.atividade,
+    tempoFmt: formatarTempo(item.tempo),
+    percentualFmt: `${formatarPercentual(item.percentual)}%`,
+    paretoFmt: `${formatarPercentual(item.pareto)}%`
+  }));
+
+  return `
+    <div class="exec-card">
+      <div class="exec-card-title">Análise do Processo</div>
+
+      ${renderResumoAnaliseExecutivo(dados)}
+
+      ${renderTabelaAnaliseHTML({
+        titulo: "Top 3 Gargalos",
+        columns: [
+          { header: "Atividade", key: "atividade", align: "left" },
+          { header: "Tempo (horas)", key: "tempoFmt", align: "center" },
+          { header: "%", key: "percentualFmt", align: "center" }
+        ],
+        rows: top3Rows
+      })}
+
+      ${renderTabelaAnaliseHTML({
+        titulo: "Tempo por Tipo",
+        columns: [
+          { header: "Tipo", key: "tipo", align: "left" },
+          { header: "Tempo (horas)", key: "tempoFmt", align: "center" },
+          { header: "%", key: "percentualFmt", align: "center" }
+        ],
+        rows: tipoRows
+      })}
+
+      ${renderTabelaAnaliseHTML({
+        titulo: "Tempo por Sistema",
+        columns: [
+          { header: "Sistema", key: "sistema", align: "left" },
+          { header: "Tempo (horas)", key: "tempoFmt", align: "center" },
+          { header: "%", key: "percentualFmt", align: "center" }
+        ],
+        rows: sistemaRows
+      })}
+
+      ${renderTabelaAnaliseHTML({
+        titulo: "Pareto de Tempo",
+        columns: [
+          { header: "Atividade", key: "atividade", align: "left" },
+          { header: "Tempo (horas)", key: "tempoFmt", align: "center" },
+          { header: "%", key: "percentualFmt", align: "center" },
+          { header: "Pareto", key: "paretoFmt", align: "center" }
+        ],
+        rows: paretoRows
+      })}
+    </div>
+  `;
+}
+
 function gerarFluxo() {
   const texto = document.getElementById("entrada").value;
 
@@ -1268,13 +1437,6 @@ function gerarFluxo() {
 
   ultimoNomeArquivo = gerarNomeArquivo();
 
-  document.getElementById("infoProcesso").innerHTML =
-    "<b>Processo:</b> " + (escaparHTML(processo) || "Não informado") + "<br>" +
-    "<b>Analista:</b> " + (escaparHTML(analista) || "Não informado") + "<br>" +
-    "<b>Negócio:</b> " + (escaparHTML(negocio) || "Não informado") + "<br>" +
-    "<b>Área:</b> " + (escaparHTML(area) || "Não informado") + "<br>" +
-    "<b>Coordenador:</b> " + (escaparHTML(coordenador) || "Não informado");
-
   let tempoTotal = 0;
   const atividadesTempo = [];
   const tiposTempo = {};
@@ -1293,18 +1455,6 @@ function gerarFluxo() {
 
   atividadesTempo.sort((a, b) => b.tempo - a.tempo);
 
-  const top3HTML = atividadesTempo
-    .slice(0, 3)
-    .map(a => {
-      const pct = tempoTotal ? formatarPercentual((a.tempo / tempoTotal) * 100) : "0,0";
-      return '<div class="analytics-item">' +
-        escaparHTML(a.atividade) +
-        ' — <span class="icon-time">⏱</span>' + formatarTempo(a.tempo) +
-        ' <span class="icon-pct">%</span>' + pct + '%' +
-      '</div>';
-    })
-    .join("");
-
   const tiposOrdenados = Object.entries(tiposTempo)
     .map(([nome, tempo]) => ({ nome, tempo }))
     .sort((a, b) => b.tempo - a.tempo);
@@ -1313,10 +1463,6 @@ function gerarFluxo() {
     .map(([nome, tempo]) => ({ nome, tempo }))
     .sort((a, b) => b.tempo - a.tempo);
 
-  const tiposHTML = gerarHTMLResumoTempo(tiposOrdenados, tempoTotal);
-  const sistemasHTML = gerarHTMLResumoTempo(sistemasOrdenados, tempoTotal);
-  const paretoHTML = gerarTabelaPareto(atividadesTempo, tempoTotal);
-
   let tempoPotencialRetrabalho = 0;
   etapas.forEach((etapa) => {
     if (etapasOrigemComRetorno.has(etapa.id)) {
@@ -1324,46 +1470,65 @@ function gerarFluxo() {
     }
   });
 
-  const impactoPotencialRetrabalho = tempoTotal
-    ? formatarPercentual((tempoPotencialRetrabalho / tempoTotal) * 100)
-    : "0,0";
+  const impactoPotencialRetrabalhoNum = tempoTotal
+    ? (tempoPotencialRetrabalho / tempoTotal) * 100
+    : 0;
 
-  const taxaDecisao = etapas.length
-    ? formatarPercentual((decisoes / etapas.length) * 100)
-    : "0,0";
+  const taxaDecisaoNum = etapas.length
+    ? (decisoes / etapas.length) * 100
+    : 0;
+
+  const infoProcessoData = {
+    processo,
+    analista,
+    negocio,
+    area,
+    coordenador
+  };
+
+  document.getElementById("infoProcesso").innerHTML =
+    renderInformacoesProcessoExecutivas(infoProcessoData);
+
+  const dadosAnalise = {
+    tempoTotal,
+    loops,
+    conexoesExtrasCount,
+    tempoPotencialRetrabalho,
+    impactoPotencialRetrabalho: impactoPotencialRetrabalhoNum,
+    decisoes,
+    taxaDecisao: taxaDecisaoNum,
+    top3Gargalos: atividadesTempo.slice(0, 3).map(item => ({
+      atividade: item.atividade,
+      tempo: item.tempo,
+      percentual: tempoTotal ? (item.tempo / tempoTotal) * 100 : 0
+    })),
+    tempoPorTipo: tiposOrdenados.map(item => ({
+      tipo: item.nome,
+      tempo: item.tempo,
+      percentual: tempoTotal ? (item.tempo / tempoTotal) * 100 : 0
+    })),
+    tempoPorSistema: sistemasOrdenados.map(item => ({
+      sistema: item.nome,
+      tempo: item.tempo,
+      percentual: tempoTotal ? (item.tempo / tempoTotal) * 100 : 0
+    })),
+    pareto: (() => {
+      let acumulado = 0;
+      return atividadesTempo.map(item => {
+        const percentual = tempoTotal ? (item.tempo / tempoTotal) * 100 : 0;
+        acumulado += percentual;
+        return {
+          atividade: item.atividade,
+          tempo: item.tempo,
+          percentual,
+          pareto: acumulado
+        };
+      });
+    })()
+  };
 
   document.getElementById("metricas").innerHTML =
-    '<div class="analytics-grid">' +
-      '<div class="analytics-col">' +
-        '<div class="analytics-section">' +
-          '<div class="metric-highlight"><b>Tempo total do processo:</b> <span class="icon-time">⏱</span>' + formatarTempo(tempoTotal) + '</div>' +
-          '<div class="analytics-title">Top 3 gargalos</div>' +
-          top3HTML +
-          '<br>' +
-          '<div class="analytics-item"><b>Loops detectados:</b> ' + loops + '</div>' +
-          '<div class="analytics-item"><b>Conexões extras:</b> ' + conexoesExtrasCount + '</div>' +
-          '<div class="analytics-item"><b>Impacto potencial de retrabalho:</b> <span class="icon-time">⏱</span>' + formatarTempo(tempoPotencialRetrabalho) + ' <span class="icon-pct">%</span>' + impactoPotencialRetrabalho + '%</div>' +
-          '<div class="analytics-item"><b>Taxa de decisão:</b> ' + decisoes + ' etapa(s) <span class="icon-pct">%</span>' + taxaDecisao + '%</div>' +
-        '</div>' +
-
-        '<div class="analytics-section">' +
-          '<div class="analytics-title">Tempo por tipo</div>' +
-          tiposHTML +
-        '</div>' +
-
-        '<div class="analytics-section">' +
-          '<div class="analytics-title">Tempo por sistema</div>' +
-          sistemasHTML +
-        '</div>' +
-      '</div>' +
-
-      '<div class="analytics-col">' +
-        '<div class="analytics-section">' +
-          '<div class="analytics-title">Pareto de tempo</div>' +
-          paretoHTML +
-        '</div>' +
-      '</div>' +
-    '</div>';
+    renderizarAnaliseExecutiva(dadosAnalise);
 }
 
 /* =========================
@@ -1553,6 +1718,15 @@ function extrairLinhasInfoProcesso() {
   const el = document.getElementById("infoProcesso");
   if (!el) return [];
 
+  const labels = el.querySelectorAll(".exec-info-item");
+  if (labels.length) {
+    return Array.from(labels).map(item => {
+      const label = item.querySelector(".exec-info-label")?.innerText?.trim() || "";
+      const value = item.querySelector(".exec-info-value")?.innerText?.trim() || "";
+      return `${label}: ${value}`;
+    });
+  }
+
   return el.innerText
     .split("\n")
     .map(l => l.trim())
@@ -1598,12 +1772,12 @@ function desenharTabelaPDF(doc, config) {
   } = config;
 
   const borderWidth = 0.6;
-  const cellPaddingX = 4;
+  const cellPaddingX = 6;
   const lineHeight = 11;
-  const minRowHeight = 18;
-  const gapAntesTitulo = 12;
-  const gapTituloCabecalho = 4;
-  const gapDepoisTabela = 18;
+  const minRowHeight = 20;
+  const gapAntesTitulo = 16;
+  const gapTituloCabecalho = 6;
+  const gapDepoisTabela = 22;
 
   let y = yInicial + gapAntesTitulo;
 
@@ -1621,7 +1795,7 @@ function desenharTabelaPDF(doc, config) {
       if (linhas.length > maxLines) maxLines = linhas.length;
     });
 
-    return Math.max(minRowHeight, maxLines * lineHeight + 10);
+    return Math.max(minRowHeight, maxLines * lineHeight + 12);
   };
 
   const getCellBlock = (valor, width, align) => {
@@ -1663,7 +1837,7 @@ function desenharTabelaPDF(doc, config) {
 
   const drawTitleAndHeader = (yStart) => {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
+    doc.setFontSize(12);
     doc.text(titulo, x, yStart);
 
     let yLocal = yStart + gapTituloCabecalho;
@@ -1671,7 +1845,7 @@ function desenharTabelaPDF(doc, config) {
     return yLocal;
   };
 
-  y = garantirEspacoPagina(doc, y, 16 + gapTituloCabecalho + getHeaderHeight(), margem, pageHeight);
+  y = garantirEspacoPagina(doc, y, 18 + gapTituloCabecalho + getHeaderHeight(), margem, pageHeight);
   y = drawTitleAndHeader(y);
 
   rows.forEach((row) => {
@@ -1691,7 +1865,7 @@ function desenharTabelaPDF(doc, config) {
       return linhas;
     });
 
-    const rowHeight = Math.max(minRowHeight, maxLines * lineHeight + 10);
+    const rowHeight = Math.max(minRowHeight, maxLines * lineHeight + 12);
 
     y = garantirEspacoPagina(
       doc,
@@ -1701,7 +1875,7 @@ function desenharTabelaPDF(doc, config) {
       pageHeight,
       (novoY) => {
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(11);
+        doc.setFontSize(12);
         doc.setLineWidth(borderWidth);
         return drawTitleAndHeader(novoY);
       }
