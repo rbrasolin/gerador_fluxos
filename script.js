@@ -1375,6 +1375,217 @@ function obterSVGPronto() {
   return svgOriginal.cloneNode(true);
 }
 
+function extrairLinhasInfoProcesso() {
+  const el = document.getElementById("infoProcesso");
+  if (!el) return [];
+
+  return el.innerText
+    .split("\n")
+    .map(l => l.trim())
+    .filter(Boolean);
+}
+
+function extrairAnaliseProcesso() {
+  const container = document.getElementById("metricas");
+  if (!container) return [];
+
+  const secoes = [];
+  const sectionEls = container.querySelectorAll(".analytics-section");
+
+  sectionEls.forEach((section) => {
+    const tituloEl = section.querySelector(".analytics-title");
+    const titulo = tituloEl ? tituloEl.innerText.trim() : "Seção";
+
+    const linhas = [];
+
+    const destaque = section.querySelector(".metric-highlight");
+    if (destaque) {
+      const texto = destaque.innerText.trim();
+      if (texto) linhas.push(texto);
+    }
+
+    const itens = section.querySelectorAll(".analytics-item");
+    itens.forEach((item) => {
+      const texto = item.innerText.trim();
+      if (texto) linhas.push(texto);
+    });
+
+    const tabela = section.querySelector("table");
+    let tabelaEstruturada = null;
+
+    if (tabela) {
+      const headers = Array.from(tabela.querySelectorAll("thead th")).map(th => th.innerText.trim());
+      const rows = Array.from(tabela.querySelectorAll("tbody tr")).map(tr =>
+        Array.from(tr.querySelectorAll("td")).map(td => td.innerText.trim())
+      );
+
+      tabelaEstruturada = {
+        headers,
+        rows
+      };
+    }
+
+    secoes.push({
+      titulo,
+      linhas,
+      tabela: tabelaEstruturada
+    });
+  });
+
+  return secoes;
+}
+
+function adicionarTextoQuebrado(doc, texto, x, y, maxWidth, lineHeight = 14) {
+  const linhas = doc.splitTextToSize(String(texto || ""), maxWidth);
+  doc.text(linhas, x, y);
+  return y + linhas.length * lineHeight;
+}
+
+function garantirEspacoPagina(doc, yAtual, alturaNecessaria, margem, pageHeight) {
+  if (yAtual + alturaNecessaria > pageHeight - margem) {
+    doc.addPage();
+    return margem;
+  }
+  return yAtual;
+}
+
+function desenharTabelaPDF(doc, tabela, x, y, larguraTotal, pageHeight, margem) {
+  if (!tabela || !tabela.headers || !tabela.rows) return y;
+
+  const colCount = tabela.headers.length || 1;
+  const colWidth = larguraTotal / colCount;
+  const rowHeight = 18;
+
+  y = garantirEspacoPagina(doc, y, rowHeight * 3, margem, pageHeight);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+
+  tabela.headers.forEach((header, i) => {
+    const cellX = x + i * colWidth;
+    doc.rect(cellX, y, colWidth, rowHeight);
+    const linhas = doc.splitTextToSize(header, colWidth - 6);
+    doc.text(linhas, cellX + 3, y + 12);
+  });
+
+  y += rowHeight;
+
+  doc.setFont("helvetica", "normal");
+
+  tabela.rows.forEach((row) => {
+    y = garantirEspacoPagina(doc, y, rowHeight * 2, margem, pageHeight);
+
+    row.forEach((cell, i) => {
+      const cellX = x + i * colWidth;
+      doc.rect(cellX, y, colWidth, rowHeight);
+      const linhas = doc.splitTextToSize(String(cell || ""), colWidth - 6);
+      doc.text(linhas, cellX + 3, y + 12);
+    });
+
+    y += rowHeight;
+  });
+
+  return y;
+}
+
+async function baixarAnalisePDF() {
+  const svg = obterSVGPronto();
+  if (!svg) return;
+
+  const infoLinhas = extrairLinhasInfoProcesso();
+  const analise = extrairAnaliseProcesso();
+
+  const { jsPDF } = window.jspdf;
+
+  const doc = new jsPDF({
+    orientation: "p",
+    unit: "pt",
+    format: "a4"
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margem = 40;
+  const larguraUtil = pageWidth - margem * 2;
+
+  let y = margem;
+
+  const processoNome = obterValorCampo("processo") || "Fluxograma do Processo";
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  y = adicionarTextoQuebrado(doc, processoNome, margem, y, larguraUtil, 18);
+  y += 8;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  y = garantirEspacoPagina(doc, y, 24, margem, pageHeight);
+  doc.text("Informações do Processo", margem, y);
+  y += 16;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+
+  infoLinhas.forEach((linha) => {
+    y = garantirEspacoPagina(doc, y, 18, margem, pageHeight);
+    y = adicionarTextoQuebrado(doc, linha, margem, y, larguraUtil, 13);
+  });
+
+  y += 14;
+
+  const svgWidth = Number(svg.getAttribute("width")) || 1200;
+  const svgHeight = Number(svg.getAttribute("height")) || 800;
+
+  const escala = Math.min(larguraUtil / svgWidth, 1);
+  const larguraSvgPdf = svgWidth * escala;
+  const alturaSvgPdf = svgHeight * escala;
+
+  y = garantirEspacoPagina(doc, y, alturaSvgPdf + 20, margem, pageHeight);
+
+  await doc.svg(svg, {
+    x: margem + (larguraUtil - larguraSvgPdf) / 2,
+    y: y,
+    width: larguraSvgPdf,
+    height: alturaSvgPdf
+  });
+
+  y += alturaSvgPdf + 24;
+
+  y = garantirEspacoPagina(doc, y, 28, margem, pageHeight);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text("Análise do Processo", margem, y);
+  y += 18;
+
+  analise.forEach((secao) => {
+    y = garantirEspacoPagina(doc, y, 30, margem, pageHeight);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    y = adicionarTextoQuebrado(doc, secao.titulo, margem, y, larguraUtil, 14);
+    y += 4;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+
+    if (secao.linhas && secao.linhas.length) {
+      secao.linhas.forEach((linha) => {
+        y = garantirEspacoPagina(doc, y, 16, margem, pageHeight);
+        y = adicionarTextoQuebrado(doc, "• " + linha, margem + 8, y, larguraUtil - 8, 13);
+      });
+      y += 8;
+    }
+
+    if (secao.tabela) {
+      y = desenharTabelaPDF(doc, secao.tabela, margem, y, larguraUtil, pageHeight, margem);
+      y += 12;
+    }
+  });
+
+  doc.save(`${ultimoNomeArquivo}_analise.pdf`);
+}
+
 function baixarSVG() {
   const svg = obterSVGPronto();
   if (!svg) return;
