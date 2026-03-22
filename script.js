@@ -1599,13 +1599,13 @@ function desenharTabelaPDF(doc, config) {
 
   const borderWidth = 0.6;
   const cellPaddingX = 4;
-  const cellPaddingTop = 7;
   const lineHeight = 11;
   const minRowHeight = 18;
-  const gapDepoisTabela = 10;
-  const gapEntreTituloECabecalho = 0;
+  const gapAntesTitulo = 12;
+  const gapTituloCabecalho = 4;
+  const gapDepoisTabela = 18;
 
-  let y = yInicial;
+  let y = yInicial + gapAntesTitulo;
 
   const weights = columns.map(col => col.weight || 1);
   const totalWeight = weights.reduce((a, b) => a + b, 0);
@@ -1621,7 +1621,14 @@ function desenharTabelaPDF(doc, config) {
       if (linhas.length > maxLines) maxLines = linhas.length;
     });
 
-    return Math.max(minRowHeight, maxLines * lineHeight + 8);
+    return Math.max(minRowHeight, maxLines * lineHeight + 10);
+  };
+
+  const getCellBlock = (valor, width, align) => {
+    if (align === "left") {
+      return doc.splitTextToSize(valor, width - cellPaddingX * 2);
+    }
+    return [valor];
   };
 
   const drawTableHeader = (yHeader) => {
@@ -1640,10 +1647,10 @@ function desenharTabelaPDF(doc, config) {
       doc.rect(currentX, yHeader, width, headerHeight);
 
       const totalTextHeight = linhas.length * lineHeight;
-      const textStartY = yHeader + ((headerHeight - totalTextHeight) / 2) + 8;
+      const startY = yHeader + (headerHeight - totalTextHeight) / 2 + 8;
 
       linhas.forEach((linha, idx) => {
-        doc.text(linha, currentX + width / 2, textStartY + idx * lineHeight, {
+        doc.text(linha, currentX + width / 2, startY + idx * lineHeight, {
           align: "center"
         });
       });
@@ -1654,12 +1661,18 @@ function desenharTabelaPDF(doc, config) {
     return yHeader + headerHeight;
   };
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  y = garantirEspacoPagina(doc, y, 16 + getHeaderHeight(), margem, pageHeight);
-  doc.text(titulo, x, y);
-  y += gapEntreTituloECabecalho;
-  y = drawTableHeader(y);
+  const drawTitleAndHeader = (yStart) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(titulo, x, yStart);
+
+    let yLocal = yStart + gapTituloCabecalho;
+    yLocal = drawTableHeader(yLocal);
+    return yLocal;
+  };
+
+  y = garantirEspacoPagina(doc, y, 16 + gapTituloCabecalho + getHeaderHeight(), margem, pageHeight);
+  y = drawTitleAndHeader(y);
 
   rows.forEach((row) => {
     doc.setFont("helvetica", "normal");
@@ -1672,19 +1685,13 @@ function desenharTabelaPDF(doc, config) {
       const raw = row[col.key] !== undefined && row[col.key] !== null ? String(row[col.key]) : "";
       const valor = limparTextoPDF(raw);
       const align = col.align || "left";
-
-      let linhas;
-      if (align === "left") {
-        linhas = doc.splitTextToSize(valor, colWidths[i] - cellPaddingX * 2);
-      } else {
-        linhas = [valor];
-      }
+      const linhas = getCellBlock(valor, colWidths[i], align);
 
       if (linhas.length > maxLines) maxLines = linhas.length;
       return linhas;
     });
 
-    const rowHeight = Math.max(minRowHeight, maxLines * lineHeight + 8);
+    const rowHeight = Math.max(minRowHeight, maxLines * lineHeight + 10);
 
     y = garantirEspacoPagina(
       doc,
@@ -1694,9 +1701,9 @@ function desenharTabelaPDF(doc, config) {
       pageHeight,
       (novoY) => {
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
+        doc.setFontSize(11);
         doc.setLineWidth(borderWidth);
-        return drawTableHeader(novoY);
+        return drawTitleAndHeader(novoY);
       }
     );
 
@@ -1713,20 +1720,25 @@ function desenharTabelaPDF(doc, config) {
 
       doc.rect(currentX, y, width, rowHeight);
 
+      const totalTextHeight = linhas.length * lineHeight;
+      const startY = y + (rowHeight - totalTextHeight) / 2 + 8;
+
       if (align === "center") {
         linhas.forEach((linha, idx) => {
-          doc.text(linha, currentX + width / 2, y + cellPaddingTop + idx * lineHeight, {
+          doc.text(linha, currentX + width / 2, startY + idx * lineHeight, {
             align: "center"
           });
         });
       } else if (align === "right") {
         linhas.forEach((linha, idx) => {
-          doc.text(linha, currentX + width - cellPaddingX, y + cellPaddingTop + idx * lineHeight, {
+          doc.text(linha, currentX + width - cellPaddingX, startY + idx * lineHeight, {
             align: "right"
           });
         });
       } else {
-        doc.text(linhas, currentX + cellPaddingX, y + cellPaddingTop);
+        linhas.forEach((linha, idx) => {
+          doc.text(linha, currentX + cellPaddingX, startY + idx * lineHeight);
+        });
       }
 
       currentX += width;
@@ -1832,7 +1844,7 @@ async function baixarAnalisePDF() {
     margem,
     y
   );
-  y += 10;
+  y += 6;
 
   y = desenharTabelaPDF(doc, {
     titulo: "Top 3 Gargalos",
