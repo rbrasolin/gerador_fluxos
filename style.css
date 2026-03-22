@@ -7,6 +7,12 @@ body {
   box-sizing: border-box;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
 .page {
   max-width: 1320px;
   margin: 0 auto;
@@ -16,22 +22,22 @@ body {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 
-h1, h3 {
+h1,
+h3 {
   margin-top: 0;
 }
 
 .top-form {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
-  flex-wrap: wrap;
   margin-bottom: 12px;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  min-width: 260px;
-  flex: 1;
+  min-width: 0;
 }
 
 .field label {
@@ -43,15 +49,21 @@ h1, h3 {
 .field input {
   height: 38px;
   padding: 8px 10px;
-  box-sizing: border-box;
   border: 1px solid #bfbfbf;
   font-size: 14px;
+  background: #fff;
+}
+
+.field input:focus,
+textarea:focus {
+  outline: none;
+  border-color: #111;
+  box-shadow: 0 0 0 2px rgba(17, 17, 17, 0.08);
 }
 
 textarea {
   width: 100%;
   height: 240px;
-  box-sizing: border-box;
   padding: 12px;
   font-family: Consolas, monospace;
   font-size: 14px;
@@ -168,6 +180,7 @@ hr {
 .analytics-item {
   margin-bottom: 8px;
   line-height: 1.6;
+  word-break: break-word;
 }
 
 .metric-highlight {
@@ -186,6 +199,16 @@ hr {
   font-weight: 700;
 }
 
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  word-break: break-word;
+}
+
 @media (max-width: 900px) {
   .analytics-grid {
     grid-template-columns: 1fr;
@@ -201,5 +224,9 @@ hr {
 
   body {
     padding: 12px;
+  }
+
+  .top-form {
+    grid-template-columns: 1fr;
   }
 }
