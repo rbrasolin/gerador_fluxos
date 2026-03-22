@@ -1366,6 +1366,10 @@ function gerarFluxo() {
     '</div>';
 }
 
+/* =========================
+   EXPORTAÇÃO SVG E PDF
+========================= */
+
 function obterSVGPronto() {
   const svgOriginal = document.querySelector("#diagram svg");
   if (!svgOriginal) {
@@ -1555,18 +1559,19 @@ function extrairLinhasInfoProcesso() {
     .filter(Boolean);
 }
 
-function adicionarTextoQuebrado(doc, texto, x, y, maxWidth, lineHeight = 14) {
+function adicionarTextoQuebrado(doc, texto, x, y, maxWidth, lineHeight = 14, options = {}) {
   const linhas = doc.splitTextToSize(String(texto || ""), maxWidth);
-  doc.text(linhas, x, y);
+  if (linhas.length === 0) return y;
+  doc.text(linhas, x, y, options);
   return y + linhas.length * lineHeight;
 }
 
-function garantirEspacoPagina(doc, yAtual, alturaNecessaria, margem, pageHeight, drawHeader = null) {
+function garantirEspacoPagina(doc, yAtual, alturaNecessaria, margem, pageHeight, onNewPage = null) {
   if (yAtual + alturaNecessaria > pageHeight - margem) {
     doc.addPage();
     let novoY = margem;
-    if (typeof drawHeader === "function") {
-      novoY = drawHeader(novoY);
+    if (typeof onNewPage === "function") {
+      novoY = onNewPage(novoY);
     }
     return novoY;
   }
@@ -1592,56 +1597,69 @@ function desenharTabelaPDF(doc, config) {
     pageHeight
   } = config;
 
-  const baseRowHeight = 18;
-  const cellPadding = 4;
-  const afterTableGap = 10;
   const borderWidth = 0.6;
+  const cellPaddingX = 4;
+  const cellPaddingTop = 7;
+  const lineHeight = 11;
+  const minRowHeight = 18;
+  const gapDepoisTabela = 10;
+  const gapEntreTituloECabecalho = 0;
 
   let y = yInicial;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  y = garantirEspacoPagina(doc, y, 22, margem, pageHeight);
-  y = adicionarTextoQuebrado(doc, titulo, x, y, larguraTotal, 14);
 
   const weights = columns.map(col => col.weight || 1);
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   const colWidths = weights.map(w => (larguraTotal * w) / totalWeight);
 
-  const drawHeader = (yHeaderStart) => {
-    doc.setLineWidth(borderWidth);
+  const getHeaderHeight = () => {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
 
-    let maxHeaderLines = 1;
-    const headerLinesCache = columns.map((col, i) => {
-      const linhas = doc.splitTextToSize(col.header, colWidths[i] - cellPadding * 2);
-      if (linhas.length > maxHeaderLines) maxHeaderLines = linhas.length;
-      return linhas;
-    });
-
-    const headerHeight = Math.max(baseRowHeight, maxHeaderLines * 11 + 8);
-
-    let currentX = x;
+    let maxLines = 1;
     columns.forEach((col, i) => {
-      doc.rect(currentX, yHeaderStart, colWidths[i], headerHeight);
-
-      const linhas = headerLinesCache[i];
-      const lineSpacing = 11;
-      const totalTextHeight = linhas.length * lineSpacing;
-      let textY = yHeaderStart + (headerHeight - totalTextHeight) / 2 + 8;
-
-      linhas.forEach((linha, idx) => {
-        doc.text(linha, currentX + colWidths[i] / 2, textY + idx * lineSpacing, { align: "center" });
-      });
-
-      currentX += colWidths[i];
+      const linhas = doc.splitTextToSize(col.header, colWidths[i] - cellPaddingX * 2);
+      if (linhas.length > maxLines) maxLines = linhas.length;
     });
 
-    return yHeaderStart + headerHeight;
+    return Math.max(minRowHeight, maxLines * lineHeight + 8);
   };
 
-  y = drawHeader(y);
+  const drawTableHeader = (yHeader) => {
+    const headerHeight = getHeaderHeight();
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setLineWidth(borderWidth);
+
+    let currentX = x;
+
+    columns.forEach((col, i) => {
+      const width = colWidths[i];
+      const linhas = doc.splitTextToSize(col.header, width - cellPaddingX * 2);
+
+      doc.rect(currentX, yHeader, width, headerHeight);
+
+      const totalTextHeight = linhas.length * lineHeight;
+      const textStartY = yHeader + ((headerHeight - totalTextHeight) / 2) + 8;
+
+      linhas.forEach((linha, idx) => {
+        doc.text(linha, currentX + width / 2, textStartY + idx * lineHeight, {
+          align: "center"
+        });
+      });
+
+      currentX += width;
+    });
+
+    return yHeader + headerHeight;
+  };
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  y = garantirEspacoPagina(doc, y, 16 + getHeaderHeight(), margem, pageHeight);
+  doc.text(titulo, x, y);
+  y += gapEntreTituloECabecalho;
+  y = drawTableHeader(y);
 
   rows.forEach((row) => {
     doc.setFont("helvetica", "normal");
@@ -1651,34 +1669,34 @@ function desenharTabelaPDF(doc, config) {
     let maxLines = 1;
 
     const rowLineCache = columns.map((col, i) => {
-      const valorBruto = row[col.key] !== undefined && row[col.key] !== null ? String(row[col.key]) : "";
-      const valor = limparTextoPDF(valorBruto);
-      const alinhamento = col.align || "left";
+      const raw = row[col.key] !== undefined && row[col.key] !== null ? String(row[col.key]) : "";
+      const valor = limparTextoPDF(raw);
+      const align = col.align || "left";
 
       let linhas;
-      if (alinhamento === "center" || alinhamento === "right") {
-        linhas = [valor];
+      if (align === "left") {
+        linhas = doc.splitTextToSize(valor, colWidths[i] - cellPaddingX * 2);
       } else {
-        linhas = doc.splitTextToSize(valor, colWidths[i] - cellPadding * 2);
+        linhas = [valor];
       }
 
       if (linhas.length > maxLines) maxLines = linhas.length;
       return linhas;
     });
 
-    const rowHeight = Math.max(baseRowHeight, maxLines * 11 + 8);
+    const rowHeight = Math.max(minRowHeight, maxLines * lineHeight + 8);
 
     y = garantirEspacoPagina(
       doc,
       y,
-      rowHeight + 2,
+      rowHeight,
       margem,
       pageHeight,
       (novoY) => {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(10);
         doc.setLineWidth(borderWidth);
-        return drawHeader(novoY);
+        return drawTableHeader(novoY);
       }
     );
 
@@ -1689,31 +1707,35 @@ function desenharTabelaPDF(doc, config) {
     let currentX = x;
 
     columns.forEach((col, i) => {
-      const alinhamento = col.align || "left";
+      const width = colWidths[i];
+      const align = col.align || "left";
       const linhas = rowLineCache[i];
-      doc.rect(currentX, y, colWidths[i], rowHeight);
 
-      if (alinhamento === "center") {
+      doc.rect(currentX, y, width, rowHeight);
+
+      if (align === "center") {
         linhas.forEach((linha, idx) => {
-          const textY = y + 11 + idx * 11;
-          doc.text(linha, currentX + colWidths[i] / 2, textY, { align: "center" });
+          doc.text(linha, currentX + width / 2, y + cellPaddingTop + idx * lineHeight, {
+            align: "center"
+          });
         });
-      } else if (alinhamento === "right") {
+      } else if (align === "right") {
         linhas.forEach((linha, idx) => {
-          const textY = y + 11 + idx * 11;
-          doc.text(linha, currentX + colWidths[i] - cellPadding, textY, { align: "right" });
+          doc.text(linha, currentX + width - cellPaddingX, y + cellPaddingTop + idx * lineHeight, {
+            align: "right"
+          });
         });
       } else {
-        doc.text(linhas, currentX + cellPadding, y + 11);
+        doc.text(linhas, currentX + cellPaddingX, y + cellPaddingTop);
       }
 
-      currentX += colWidths[i];
+      currentX += width;
     });
 
     y += rowHeight;
   });
 
-  return y + afterTableGap;
+  return y + gapDepoisTabela;
 }
 
 async function baixarAnalisePDF() {
@@ -1772,7 +1794,7 @@ async function baixarAnalisePDF() {
 
   await doc.svg(svg, {
     x: margem + (larguraUtil - larguraSvgPdf) / 2,
-    y: y,
+    y,
     width: larguraSvgPdf,
     height: alturaSvgPdf
   });
