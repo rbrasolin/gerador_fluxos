@@ -1366,10 +1366,6 @@ function gerarFluxo() {
     '</div>';
 }
 
-/* =========================
-   EXPORTAÇÃO SVG E PDF
-========================= */
-
 function obterSVGPronto() {
   const svgOriginal = document.querySelector("#diagram svg");
   if (!svgOriginal) {
@@ -1580,7 +1576,6 @@ function garantirEspacoPagina(doc, yAtual, alturaNecessaria, margem, pageHeight,
 function limparTextoPDF(txt) {
   return String(txt || "")
     .replace(/⏱/g, "")
-    .replace(/%/g, "%")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -1599,22 +1594,22 @@ function desenharTabelaPDF(doc, config) {
 
   const baseRowHeight = 18;
   const cellPadding = 4;
-  const tituloGap = 8;
-  const afterTableGap = 14;
+  const afterTableGap = 10;
+  const borderWidth = 0.6;
 
   let y = yInicial;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  y = garantirEspacoPagina(doc, y, 30, margem, pageHeight);
+  y = garantirEspacoPagina(doc, y, 22, margem, pageHeight);
   y = adicionarTextoQuebrado(doc, titulo, x, y, larguraTotal, 14);
-  y += tituloGap;
 
   const weights = columns.map(col => col.weight || 1);
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   const colWidths = weights.map(w => (larguraTotal * w) / totalWeight);
 
   const drawHeader = (yHeaderStart) => {
+    doc.setLineWidth(borderWidth);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
 
@@ -1630,20 +1625,29 @@ function desenharTabelaPDF(doc, config) {
     let currentX = x;
     columns.forEach((col, i) => {
       doc.rect(currentX, yHeaderStart, colWidths[i], headerHeight);
-      doc.text(headerLinesCache[i], currentX + cellPadding, yHeaderStart + 11);
+
+      const linhas = headerLinesCache[i];
+      const lineSpacing = 11;
+      const totalTextHeight = linhas.length * lineSpacing;
+      let textY = yHeaderStart + (headerHeight - totalTextHeight) / 2 + 8;
+
+      linhas.forEach((linha, idx) => {
+        doc.text(linha, currentX + colWidths[i] / 2, textY + idx * lineSpacing, { align: "center" });
+      });
+
       currentX += colWidths[i];
     });
 
     return yHeaderStart + headerHeight;
   };
 
-  y = garantirEspacoPagina(doc, y, 40, margem, pageHeight);
   y = drawHeader(y);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-
   rows.forEach((row) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setLineWidth(borderWidth);
+
     let maxLines = 1;
 
     const rowLineCache = columns.map((col, i) => {
@@ -1670,8 +1674,17 @@ function desenharTabelaPDF(doc, config) {
       rowHeight + 2,
       margem,
       pageHeight,
-      (novoY) => drawHeader(novoY)
+      (novoY) => {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setLineWidth(borderWidth);
+        return drawHeader(novoY);
+      }
     );
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setLineWidth(borderWidth);
 
     let currentX = x;
 
@@ -1797,7 +1810,7 @@ async function baixarAnalisePDF() {
     margem,
     y
   );
-  y += 22;
+  y += 10;
 
   y = desenharTabelaPDF(doc, {
     titulo: "Top 3 Gargalos",
