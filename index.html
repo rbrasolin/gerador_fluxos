@@ -2,57 +2,81 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Gerador de Fluxograma</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/svg2pdf.js@2.5.0/dist/svg2pdf.umd.min.js"></script>
+
   <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
 
-  <div class="container">
+  <div class="page">
+    <h1>Gerador de Fluxograma de Processos</h1>
 
-    <h1>Gerador de Fluxo</h1>
-
-    <!-- CABEÇALHO -->
-    <div class="header-form">
-
-      <div class="form-group">
-        <label>Desenho</label>
-        <input type="text" id="desenho" placeholder="Ex: As Is / To Be">
+    <div class="top-form">
+      <div class="field">
+        <label for="desenho">Desenho</label>
+        <input id="desenho" type="text" placeholder="Ex.: As Is / To Be" />
       </div>
 
-      <div class="form-group">
-        <label>Nome do Processo</label>
-        <input type="text" id="nomeProcesso">
+      <div class="field">
+        <label for="processo">Nome do Processo</label>
+        <input id="processo" type="text" placeholder="Ex.: Fechamento OPEX" />
       </div>
 
-      <div class="form-group">
-        <label>Analista</label>
-        <input type="text" id="analista">
+      <div class="field">
+        <label for="analista">Analista</label>
+        <input id="analista" type="text" placeholder="Ex.: Ricardo" />
       </div>
 
-      <div class="form-group">
-        <label>Negócio</label>
-        <input type="text" id="negocio">
+      <div class="field">
+        <label for="negocio">Negócio</label>
+        <input id="negocio" type="text" placeholder="Ex.: Etanol / Açúcar / Corporativo" />
       </div>
 
-      <div class="form-group">
-        <label>Gestor</label>
-        <input type="text" id="gestor" placeholder="Ex.: Nome do gestor imediato">
+      <div class="field">
+        <label for="area">Área</label>
+        <input id="area" type="text" placeholder="Ex.: Controladoria" />
       </div>
 
+      <div class="field">
+        <label for="gestor">Gestor</label>
+        <input id="gestor" type="text" placeholder="Ex.: Nome do gestor imediato" />
+      </div>
     </div>
 
-    <input type="file" id="fileInput" />
+    <h3>Cole a tabela do Excel</h3>
+    <textarea id="entrada" placeholder="Cole aqui a tabela copiada do Excel"></textarea>
 
-    <div class="buttons">
-      <button onclick="gerarFluxo()">Gerar Fluxo</button>
-      <button onclick="baixarImagem()">Baixar Fluxo</button>
+    <div class="actions">
+      <button type="button" onclick="gerarFluxo()">GERAR FLUXO</button>
+      <button type="button" class="secondary" onclick="limparTudo()">LIMPAR</button>
     </div>
 
+    <hr>
+
+    <div class="section-header">
+      <h3>Fluxo</h3>
+      <div class="actions inline-actions">
+        <button type="button" onclick="baixarSVG()">Baixar Fluxo</button>
+        <button type="button" onclick="baixarAnalisePDF()">Baixar Análise</button>
+      </div>
+    </div>
+
+    <div id="diagramWrap">
+      <div id="diagram"></div>
+    </div>
+
+    <hr>
+
+    <h3>Informações do Processo</h3>
     <div id="infoProcesso"></div>
 
-    <div id="canvas"></div>
-
+    <h3>Análise do Processo</h3>
+    <div id="metricas"></div>
   </div>
 
   <script src="script.js"></script>

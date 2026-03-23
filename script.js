@@ -1033,7 +1033,7 @@ function desenharConexao(
     tx.textContent = rotulo;
     svg.appendChild(tx);
   }
-}  
+}
 
 function gerarHTMLResumoTempo(lista, tempoTotal) {
   return lista
@@ -1552,14 +1552,14 @@ function gerarFluxo() {
     ? (decisoes / etapas.length) * 100
     : 0;
 
-const infoProcessoData = {
-  desenho,
-  processo,
-  analista,
-  negocio,
-  area,
-  gestor
-};
+  const infoProcessoData = {
+    desenho,
+    processo,
+    analista,
+    negocio,
+    area,
+    gestor
+  };
 
   document.getElementById("infoProcesso").innerHTML =
     renderInformacoesProcessoExecutivas(infoProcessoData);
