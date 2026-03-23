@@ -328,24 +328,14 @@ function obterLarguraUtilTexto(etapa, larguraCaixa) {
   if (isPergunta(etapa.atividade)) {
     return Math.max(40, larguraCaixa * CONFIG.decisionTextWidthFactor);
   }
-
   return Math.max(60, larguraCaixa - CONFIG.rectTextPaddingHorizontal * 2);
 }
 
 function obterLinhasEtapa(etapa, larguraCaixa) {
   const larguraTexto = obterLarguraUtilTexto(etapa, larguraCaixa);
 
-  const linhasAtividade = quebrarTextoPorLargura(
-    etapa.atividade,
-    larguraTexto,
-    CONFIG.fontSize
-  );
-
-  const linhasSistema = quebrarTextoPorLargura(
-    etapa.sistema || "Sem sistema informado",
-    larguraTexto,
-    CONFIG.fontSize
-  );
+  const linhasAtividade = quebrarTextoPorLargura(etapa.atividade, larguraTexto, CONFIG.fontSize);
+  const linhasSistema = quebrarTextoPorLargura(etapa.sistema || "Sem sistema informado", larguraTexto, CONFIG.fontSize);
 
   return [
     ...linhasAtividade,
@@ -358,7 +348,6 @@ function obterAlturaNo(etapa, alturaPadraoBase) {
   if (isPergunta(etapa.atividade)) {
     return Math.ceil(alturaPadraoBase * CONFIG.decisionHeightFactor);
   }
-
   return alturaPadraoBase;
 }
 
@@ -381,9 +370,7 @@ function calcularAlturaPadraoNos(etapas) {
 
   etapas.forEach((etapa) => {
     const altura = calcularAlturaNecessariaEtapa(etapa);
-    if (altura > maiorAltura) {
-      maiorAltura = altura;
-    }
+    if (altura > maiorAltura) maiorAltura = altura;
   });
 
   return maiorAltura;
@@ -571,10 +558,7 @@ function desenharTextoSobreLinha(svg, texto, x, y) {
 
 function desenharPolyline(svg, points, className = "") {
   const polyline = criarElementoSVG("polyline");
-  polyline.setAttribute(
-    "points",
-    points.map((p) => `${p.x},${p.y}`).join(" ")
-  );
+  polyline.setAttribute("points", points.map((p) => `${p.x},${p.y}`).join(" "));
   polyline.setAttribute("fill", "none");
   polyline.setAttribute("stroke", CONFIG.stroke);
   polyline.setAttribute("stroke-width", CONFIG.lineWidth);
@@ -605,10 +589,8 @@ function normalizarPontos(points) {
       const a = resultado[i - 1];
       const b = resultado[i];
       const c = resultado[i + 1];
-
       const mesmoX = a.x === b.x && b.x === c.x;
       const mesmoY = a.y === b.y && b.y === c.y;
-
       if (mesmoX || mesmoY) {
         resultado.splice(i, 1);
         mudou = true;
@@ -630,16 +612,11 @@ function calcularComprimento(points) {
 
 function getAnchorPoint(node, side) {
   switch (side) {
-    case "left":
-      return { x: node.x, y: node.y + node.height / 2 };
-    case "right":
-      return { x: node.x + node.width, y: node.y + node.height / 2 };
-    case "top":
-      return { x: node.x + node.width / 2, y: node.y };
-    case "bottom":
-      return { x: node.x + node.width / 2, y: node.y + node.height };
-    default:
-      return { x: node.x + node.width, y: node.y + node.height / 2 };
+    case "left": return { x: node.x, y: node.y + node.height / 2 };
+    case "right": return { x: node.x + node.width, y: node.y + node.height / 2 };
+    case "top": return { x: node.x + node.width / 2, y: node.y };
+    case "bottom": return { x: node.x + node.width / 2, y: node.y + node.height };
+    default: return { x: node.x + node.width, y: node.y + node.height / 2 };
   }
 }
 
@@ -657,10 +634,7 @@ function segmentCruzaRetangulo(p1, p2, rect) {
     const x = p1.x;
     const minY = Math.min(p1.y, p2.y);
     const maxY = Math.max(p1.y, p2.y);
-
-    if (x > rect.left && x < rect.right) {
-      return maxY > rect.top && minY < rect.bottom;
-    }
+    if (x > rect.left && x < rect.right) return maxY > rect.top && minY < rect.bottom;
     return false;
   }
 
@@ -668,10 +642,7 @@ function segmentCruzaRetangulo(p1, p2, rect) {
     const y = p1.y;
     const minX = Math.min(p1.x, p2.x);
     const maxX = Math.max(p1.x, p2.x);
-
-    if (y > rect.top && y < rect.bottom) {
-      return maxX > rect.left && minX < rect.right;
-    }
+    if (y > rect.top && y < rect.bottom) return maxX > rect.left && minX < rect.right;
     return false;
   }
 
@@ -689,7 +660,6 @@ function pathCruzaCaixas(points, posicoes = {}, excludeIds = []) {
     for (const id of ids) {
       if (exclude.has(id)) continue;
       const rect = getNodeRect(posicoes[id]);
-
       const expandido = {
         left: rect.left - CONFIG.obstaclePadding,
         right: rect.right + CONFIG.obstaclePadding,
@@ -710,7 +680,6 @@ function detectarLadoSaida(points) {
   if (!points || points.length < 2) return "right";
   const p1 = points[0];
   const p2 = points[1];
-
   if (p2.x > p1.x) return "right";
   if (p2.x < p1.x) return "left";
   if (p2.y > p1.y) return "bottom";
@@ -721,7 +690,6 @@ function detectarLadoEntrada(points) {
   if (!points || points.length < 2) return "left";
   const p1 = points[points.length - 2];
   const p2 = points[points.length - 1];
-
   if (p2.x > p1.x) return "left";
   if (p2.x < p1.x) return "right";
   if (p2.y > p1.y) return "top";
@@ -734,19 +702,12 @@ function ajustarPrimeiroTrechoParaLado(points, start, side) {
   const novo = [start];
 
   if (side === "right" || side === "left") {
-    if (segundo.y !== start.y) {
-      novo.push({ x: segundo.x, y: start.y });
-    }
+    if (segundo.y !== start.y) novo.push({ x: segundo.x, y: start.y });
   } else {
-    if (segundo.x !== start.x) {
-      novo.push({ x: start.x, y: segundo.y });
-    }
+    if (segundo.x !== start.x) novo.push({ x: start.x, y: segundo.y });
   }
 
-  for (let i = 1; i < points.length; i++) {
-    novo.push(points[i]);
-  }
-
+  for (let i = 1; i < points.length; i++) novo.push(points[i]);
   return normalizarPontos(novo);
 }
 
@@ -754,53 +715,32 @@ function ajustarUltimoTrechoParaLado(points, end, side, destinoNode = null) {
   if (!points || points.length < 2) return points;
 
   let resultado = [...points];
-
   const penultimo = resultado[resultado.length - 2];
   const ultimo = resultado[resultado.length - 1];
 
   if (ultimo.x === end.x && ultimo.y === end.y) {
     let precisaAjuste = false;
-
-    if ((side === "left" || side === "right") && penultimo.y !== end.y) {
-      precisaAjuste = true;
-    }
-
-    if ((side === "top" || side === "bottom") && penultimo.x !== end.x) {
-      precisaAjuste = true;
-    }
-
-    if (!precisaAjuste) {
-      return normalizarPontos(resultado);
-    }
+    if ((side === "left" || side === "right") && penultimo.y !== end.y) precisaAjuste = true;
+    if ((side === "top" || side === "bottom") && penultimo.x !== end.x) precisaAjuste = true;
+    if (!precisaAjuste) return normalizarPontos(resultado);
   }
 
   const escape = (() => {
     switch (side) {
-      case "left":
-        return { x: end.x - CONFIG.routeGap, y: end.y };
-      case "right":
-        return { x: end.x + CONFIG.routeGap, y: end.y };
-      case "top":
-        return { x: end.x, y: end.y - CONFIG.routeGap };
-      case "bottom":
-        return { x: end.x, y: end.y + CONFIG.routeGap };
-      default:
-        return { x: end.x - CONFIG.routeGap, y: end.y };
+      case "left": return { x: end.x - CONFIG.routeGap, y: end.y };
+      case "right": return { x: end.x + CONFIG.routeGap, y: end.y };
+      case "top": return { x: end.x, y: end.y - CONFIG.routeGap };
+      case "bottom": return { x: end.x, y: end.y + CONFIG.routeGap };
+      default: return { x: end.x - CONFIG.routeGap, y: end.y };
     }
   })();
 
   if (destinoNode) {
     const nodeRect = getNodeRect(destinoNode);
-
-    if (side === "left") {
-      escape.x = Math.min(escape.x, nodeRect.left - CONFIG.routeGap);
-    } else if (side === "right") {
-      escape.x = Math.max(escape.x, nodeRect.right + CONFIG.routeGap);
-    } else if (side === "top") {
-      escape.y = Math.min(escape.y, nodeRect.top - CONFIG.routeGap);
-    } else if (side === "bottom") {
-      escape.y = Math.max(escape.y, nodeRect.bottom + CONFIG.routeGap);
-    }
+    if (side === "left") escape.x = Math.min(escape.x, nodeRect.left - CONFIG.routeGap);
+    else if (side === "right") escape.x = Math.max(escape.x, nodeRect.right + CONFIG.routeGap);
+    else if (side === "top") escape.y = Math.min(escape.y, nodeRect.top - CONFIG.routeGap);
+    else if (side === "bottom") escape.y = Math.max(escape.y, nodeRect.bottom + CONFIG.routeGap);
   }
 
   resultado[resultado.length - 1] = escape;
@@ -810,24 +750,15 @@ function ajustarUltimoTrechoParaLado(points, end, side, destinoNode = null) {
     const terceiro = resultado[resultado.length - 3];
     const novo = [];
 
-    for (let i = 0; i < resultado.length - 2; i++) {
-      novo.push(resultado[i]);
-    }
+    for (let i = 0; i < resultado.length - 2; i++) novo.push(resultado[i]);
 
     if (side === "left" || side === "right") {
-      if (escape.x !== terceiro.x && escape.y !== terceiro.y) {
-        novo.push({ x: escape.x, y: terceiro.y });
-      }
+      if (escape.x !== terceiro.x && escape.y !== terceiro.y) novo.push({ x: escape.x, y: terceiro.y });
     } else {
-      if (escape.x !== terceiro.x && escape.y !== terceiro.y) {
-        novo.push({ x: terceiro.x, y: escape.y });
-      }
+      if (escape.x !== terceiro.x && escape.y !== terceiro.y) novo.push({ x: terceiro.x, y: escape.y });
     }
 
-    for (let i = 1; i < resultado.length; i++) {
-      novo.push(resultado[i]);
-    }
-
+    for (let i = 1; i < resultado.length; i++) novo.push(resultado[i]);
     resultado = novo;
   }
 
@@ -836,26 +767,13 @@ function ajustarUltimoTrechoParaLado(points, end, side, destinoNode = null) {
 
 function gerarCandidatosRotas(start, end) {
   const candidates = [];
-
   const mids = [
     [{ x: end.x, y: start.y }],
     [{ x: start.x, y: end.y }],
-    [
-      { x: start.x + CONFIG.routeGap, y: start.y },
-      { x: start.x + CONFIG.routeGap, y: end.y }
-    ],
-    [
-      { x: start.x - CONFIG.routeGap, y: start.y },
-      { x: start.x - CONFIG.routeGap, y: end.y }
-    ],
-    [
-      { x: start.x, y: start.y + CONFIG.routeGap },
-      { x: end.x, y: start.y + CONFIG.routeGap }
-    ],
-    [
-      { x: start.x, y: start.y - CONFIG.routeGap },
-      { x: end.x, y: start.y - CONFIG.routeGap }
-    ]
+    [{ x: start.x + CONFIG.routeGap, y: start.y }, { x: start.x + CONFIG.routeGap, y: end.y }],
+    [{ x: start.x - CONFIG.routeGap, y: start.y }, { x: start.x - CONFIG.routeGap, y: end.y }],
+    [{ x: start.x, y: start.y + CONFIG.routeGap }, { x: end.x, y: start.y + CONFIG.routeGap }],
+    [{ x: start.x, y: start.y - CONFIG.routeGap }, { x: end.x, y: start.y - CONFIG.routeGap }]
   ];
 
   mids.forEach(midPoints => {
@@ -870,7 +788,6 @@ function encontrarRotaSegura(start, end, posicoes = {}, excludeIds = [], preferr
 
   const avaliadas = candidates.map(points => {
     let ajustado = [...points];
-
     const startSide = preferredStartSide || detectarLadoSaida(ajustado);
     const endSide = preferredEndSide || detectarLadoEntrada(ajustado);
 
@@ -932,14 +849,10 @@ function podeCompartilharDestino(origem, sharedInfo) {
 }
 
 function escolherParesCandidatos(origem, destino, rotulo = "") {
-  if (origem.isDecision && rotulo === "Sim") {
-    return [{ startSide: "right", endSide: "left" }];
-  }
+  if (origem.isDecision && rotulo === "Sim") return [{ startSide: "right", endSide: "left" }];
 
   if (origem.isDecision && rotulo === "Não") {
-    if (destino.gridRow <= origem.gridRow) {
-      return [{ startSide: "bottom", endSide: "bottom" }];
-    }
+    if (destino.gridRow <= origem.gridRow) return [{ startSide: "bottom", endSide: "bottom" }];
     return [{ startSide: "bottom", endSide: "top" }];
   }
 
@@ -1089,7 +1002,6 @@ function escolherRota(origem, destino, contexto = {}) {
               y: segmento.p1.y + deslocamento * direcao
             };
           }
-
           break;
         }
       }
@@ -1130,20 +1042,8 @@ function construirRotaCompartilhada(start, sharedInfo, posicoes = {}, excludeIds
   };
 }
 
-function desenharConexao(
-  svg,
-  origem,
-  destino,
-  rotulo = "",
-  ordemConexao = 0,
-  posicoes = {},
-  sharedRegistry = {}
-) {
-  let rota = escolherRota(origem, destino, {
-    rotulo,
-    ordemConexao,
-    posicoes
-  });
+function desenharConexao(svg, origem, destino, rotulo = "", ordemConexao = 0, posicoes = {}, sharedRegistry = {}) {
+  let rota = escolherRota(origem, destino, { rotulo, ordemConexao, posicoes });
 
   const sharedKey = `${destino.id}__${rota.endSide || "auto"}`;
   const sharedInfo = sharedRegistry[sharedKey];
@@ -1411,9 +1311,7 @@ function renderizarAnaliseExecutiva(dados) {
   return `
     <div class="exec-card">
       <div class="exec-card-title">Análise do Processo</div>
-
       ${renderResumoAnaliseExecutivo(dados)}
-
       ${renderTabelaAnaliseHTML({
         titulo: "Tempo por Tipo",
         columns: [
@@ -1423,7 +1321,6 @@ function renderizarAnaliseExecutiva(dados) {
         ],
         rows: tipoRows
       })}
-
       ${renderTabelaAnaliseHTML({
         titulo: "Tempo por Sistema",
         columns: [
@@ -1433,7 +1330,6 @@ function renderizarAnaliseExecutiva(dados) {
         ],
         rows: sistemaRows
       })}
-
       ${renderTabelaAnaliseHTML({
         titulo: "Pareto de Tempo",
         columns: [
@@ -1444,9 +1340,7 @@ function renderizarAnaliseExecutiva(dados) {
         ],
         rows: paretoRows
       })}
-
       ${renderTabelaSimulacaoMelhoria(dados.simulacaoMelhoria)}
-
       ${renderRankingOportunidades(dados.simulacaoMelhoria)}
     </div>
   `;
@@ -1467,12 +1361,7 @@ function gerarFluxo() {
   const area = obterValorCampo("area");
   const gestor = obterValorCampo("gestor");
 
-  const linhasBrutas = texto
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n")
-    .filter(l => l.trim() !== "");
-
+  const linhasBrutas = texto.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").filter(l => l.trim() !== "");
   let linhas = linhasBrutas.map(l => l.split("\t"));
 
   if (linhas.length && ehCabecalho(linhas[0])) {
@@ -1610,23 +1499,8 @@ function gerarFluxo() {
     isDecision: false
   };
 
-  desenharCapsula(
-    svg,
-    "Início",
-    posicoes["__INICIO__"].x,
-    posicoes["__INICIO__"].y,
-    posicoes["__INICIO__"].width,
-    posicoes["__INICIO__"].height
-  );
-
-  desenharCapsula(
-    svg,
-    "Fim",
-    posicoes["__FIM__"].x,
-    posicoes["__FIM__"].y,
-    posicoes["__FIM__"].width,
-    posicoes["__FIM__"].height
-  );
+  desenharCapsula(svg, "Início", posicoes["__INICIO__"].x, posicoes["__INICIO__"].y, posicoes["__INICIO__"].width, posicoes["__INICIO__"].height);
+  desenharCapsula(svg, "Fim", posicoes["__FIM__"].x, posicoes["__FIM__"].y, posicoes["__FIM__"].width, posicoes["__FIM__"].height);
 
   etapas.forEach((etapa) => {
     const pos = posicoes[etapa.id];
@@ -1650,46 +1524,21 @@ function gerarFluxo() {
       const destino = posicoes[destinoId];
       if (!origem || !destino) return;
 
-      desenharConexao(
-        svg,
-        origem,
-        destino,
-        rotulo,
-        index,
-        posicoes,
-        sharedRegistry
-      );
+      desenharConexao(svg, origem, destino, rotulo, index, posicoes, sharedRegistry);
 
       const destinoEtapa = etapaPorId[destinoId];
       if (destinoEtapa && destinoEtapa.ordem < origemEtapa.ordem) {
         loops++;
-        adicionarEtapasImpactadasPorRetorno(
-          origemEtapa.id,
-          destinoId,
-          etapaPorId,
-          etapas,
-          etapasImpactadasRetrabalho
-        );
+        adicionarEtapasImpactadasPorRetorno(origemEtapa.id, destinoId, etapaPorId, etapas, etapasImpactadasRetrabalho);
       }
     });
   };
 
-  desenharConexao(
-    svg,
-    posicoes["__INICIO__"],
-    posicoes[primeiraEtapa.id],
-    "",
-    0,
-    posicoes,
-    sharedRegistry
-  );
+  desenharConexao(svg, posicoes["__INICIO__"], posicoes[primeiraEtapa.id], "", 0, posicoes, sharedRegistry);
 
   etapas.forEach((etapa) => {
     tempoTotal += etapa.tempo;
-
-    if (isPergunta(etapa.atividade)) {
-      decisoes++;
-    }
+    if (isPergunta(etapa.atividade)) decisoes++;
 
     if (!tiposTempo[etapa.tipo]) tiposTempo[etapa.tipo] = 0;
     tiposTempo[etapa.tipo] += etapa.tempo;
@@ -1708,15 +1557,7 @@ function gerarFluxo() {
     conexoesExtrasCount += destinosExtras.length;
   });
 
-  desenharConexao(
-    svg,
-    posicoes[ultimaEtapa.id],
-    posicoes["__FIM__"],
-    "",
-    0,
-    posicoes,
-    sharedRegistry
-  );
+  desenharConexao(svg, posicoes[ultimaEtapa.id], posicoes["__FIM__"], "", 0, posicoes, sharedRegistry);
 
   document.getElementById("diagram").innerHTML = "";
   document.getElementById("diagram").appendChild(svg);
@@ -1724,44 +1565,21 @@ function gerarFluxo() {
   const atividadesTempo = etapas.map((etapa) => ({
     atividade: etapa.atividade,
     tempo: etapa.tempo
-  }));
+  })).sort((a, b) => b.tempo - a.tempo);
 
-  atividadesTempo.sort((a, b) => b.tempo - a.tempo);
-
-  const tiposOrdenados = Object.entries(tiposTempo)
-    .map(([nome, tempo]) => ({ nome, tempo }))
-    .sort((a, b) => b.tempo - a.tempo);
-
-  const sistemasOrdenados = Object.entries(sistemasTempo)
-    .map(([nome, tempo]) => ({ nome, tempo }))
-    .sort((a, b) => b.tempo - a.tempo);
+  const tiposOrdenados = Object.entries(tiposTempo).map(([nome, tempo]) => ({ nome, tempo })).sort((a, b) => b.tempo - a.tempo);
+  const sistemasOrdenados = Object.entries(sistemasTempo).map(([nome, tempo]) => ({ nome, tempo })).sort((a, b) => b.tempo - a.tempo);
 
   let tempoPotencialRetrabalho = 0;
   etapas.forEach((etapa) => {
-    if (etapasImpactadasRetrabalho.has(etapa.id)) {
-      tempoPotencialRetrabalho += etapa.tempo;
-    }
+    if (etapasImpactadasRetrabalho.has(etapa.id)) tempoPotencialRetrabalho += etapa.tempo;
   });
 
-  const impactoPotencialRetrabalhoNum = tempoTotal
-    ? (tempoPotencialRetrabalho / tempoTotal) * 100
-    : 0;
+  const impactoPotencialRetrabalhoNum = tempoTotal ? (tempoPotencialRetrabalho / tempoTotal) * 100 : 0;
+  const taxaDecisaoNum = etapas.length ? (decisoes / etapas.length) * 100 : 0;
 
-  const taxaDecisaoNum = etapas.length
-    ? (decisoes / etapas.length) * 100
-    : 0;
-
-  const infoProcessoData = {
-    desenho,
-    processo,
-    analista,
-    negocio,
-    area,
-    gestor
-  };
-
-  document.getElementById("infoProcesso").innerHTML =
-    renderInformacoesProcessoExecutivas(infoProcessoData);
+  const infoProcessoData = { desenho, processo, analista, negocio, area, gestor };
+  document.getElementById("infoProcesso").innerHTML = renderInformacoesProcessoExecutivas(infoProcessoData);
 
   const dadosAnalise = {
     tempoTotal,
@@ -1797,8 +1615,7 @@ function gerarFluxo() {
     simulacaoMelhoria: montarDadosSimulacaoMelhoria(etapas)
   };
 
-  document.getElementById("metricas").innerHTML =
-    renderizarAnaliseExecutiva(dadosAnalise);
+  document.getElementById("metricas").innerHTML = renderizarAnaliseExecutiva(dadosAnalise);
 }
 
 function obterSVGPronto() {
@@ -1814,17 +1631,10 @@ function coletarDadosAnaliseEstruturados() {
   const etapas = [];
   const texto = document.getElementById("entrada").value;
 
-  const linhasBrutas = texto
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n")
-    .filter(l => l.trim() !== "");
-
+  const linhasBrutas = texto.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").filter(l => l.trim() !== "");
   let linhas = linhasBrutas.map(l => l.split("\t"));
 
-  if (linhas.length && ehCabecalho(linhas[0])) {
-    linhas.shift();
-  }
+  if (linhas.length && ehCabecalho(linhas[0])) linhas.shift();
 
   linhas.forEach((col) => {
     while (col.length < 15) col.push("");
@@ -1864,21 +1674,18 @@ function coletarDadosAnaliseEstruturados() {
   etapas.sort((a, b) => a.ordem - b.ordem);
 
   const etapaPorId = {};
-  etapas.forEach(e => {
-    etapaPorId[e.id] = e;
-  });
+  etapas.forEach(e => { etapaPorId[e.id] = e; });
 
   let tempoTotal = 0;
   let loops = 0;
-  let decisoes = 0;
   let conexoesExtrasCount = 0;
+  let decisoes = 0;
   const etapasImpactadasRetrabalho = new Set();
   const tiposTempo = {};
   const sistemasTempo = {};
 
   etapas.forEach((etapa) => {
     tempoTotal += etapa.tempo;
-
     if (isPergunta(etapa.atividade)) decisoes++;
 
     if (!tiposTempo[etapa.tipo]) tiposTempo[etapa.tipo] = 0;
@@ -1920,18 +1727,11 @@ function coletarDadosAnaliseEstruturados() {
 
   let tempoPotencialRetrabalho = 0;
   etapas.forEach((etapa) => {
-    if (etapasImpactadasRetrabalho.has(etapa.id)) {
-      tempoPotencialRetrabalho += etapa.tempo;
-    }
+    if (etapasImpactadasRetrabalho.has(etapa.id)) tempoPotencialRetrabalho += etapa.tempo;
   });
 
-  const impactoPotencialRetrabalho = tempoTotal
-    ? (tempoPotencialRetrabalho / tempoTotal) * 100
-    : 0;
-
-  const taxaDecisao = etapas.length
-    ? (decisoes / etapas.length) * 100
-    : 0;
+  const impactoPotencialRetrabalho = tempoTotal ? (tempoPotencialRetrabalho / tempoTotal) * 100 : 0;
+  const taxaDecisao = etapas.length ? (decisoes / etapas.length) * 100 : 0;
 
   const tempoPorTipo = Object.entries(tiposTempo)
     .map(([tipo, tempo]) => ({
@@ -1951,10 +1751,7 @@ function coletarDadosAnaliseEstruturados() {
 
   const pareto = [...etapas]
     .sort((a, b) => b.tempo - a.tempo)
-    .map((e) => ({
-      atividade: e.atividade,
-      tempo: e.tempo
-    }));
+    .map((e) => ({ atividade: e.atividade, tempo: e.tempo }));
 
   let acumulado = 0;
   pareto.forEach((item) => {
@@ -1991,20 +1788,32 @@ function extrairLinhasInfoProcesso() {
     });
   }
 
-  return el.innerText
-    .split("\n")
-    .map(l => l.trim())
-    .filter(Boolean);
+  return el.innerText.split("\n").map(l => l.trim()).filter(Boolean);
 }
 
 function adicionarTextoQuebrado(doc, texto, x, y, maxWidth, lineHeight = 14, options = {}) {
   const linhas = doc.splitTextToSize(String(texto || ""), maxWidth);
-  if (linhas.length === 0) return y;
+  if (!linhas.length) return y;
   doc.text(linhas, x, y, options);
   return y + linhas.length * lineHeight;
 }
 
-function garantirEspacoPagina(doc, yAtual, alturaNecessaria, margem, pageHeight, onNewPage = null) {
+function limparTextoPDF(txt) {
+  return String(txt || "")
+    .replace(/⏱/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getPageSpec(doc) {
+  return {
+    pageWidth: doc.internal.pageSize.getWidth(),
+    pageHeight: doc.internal.pageSize.getHeight()
+  };
+}
+
+function garantirEspacoPagina(doc, yAtual, alturaNecessaria, margem, onNewPage = null) {
+  const { pageHeight } = getPageSpec(doc);
   if (yAtual + alturaNecessaria > pageHeight - margem) {
     doc.addPage();
     let novoY = margem;
@@ -2016,14 +1825,28 @@ function garantirEspacoPagina(doc, yAtual, alturaNecessaria, margem, pageHeight,
   return yAtual;
 }
 
-function limparTextoPDF(txt) {
-  return String(txt || "")
-    .replace(/⏱/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+function iniciarNovaPaginaPaisagem(doc, titulo = "") {
+  doc.addPage("a4", "landscape");
+  const margem = 36;
+  let y = margem;
+  const { pageWidth } = getPageSpec(doc);
+
+  if (titulo) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(17, 24, 39);
+    doc.text(titulo, margem, y);
+    y += 16;
+  }
+
+  return {
+    margem,
+    y,
+    larguraUtil: pageWidth - margem * 2
+  };
 }
 
-function desenharLegendaPDF(doc, x, y, larguraUtil) {
+function desenharLegendaPDF(doc, x, y) {
   const itens = [
     { cor: "#95d5b2", texto: "Verde: Oportunidade de automação" },
     { cor: "#8ecae6", texto: "Azul: Oportunidade de melhoria de processo" },
@@ -2033,6 +1856,7 @@ function desenharLegendaPDF(doc, x, y, larguraUtil) {
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
+  doc.setTextColor(17, 24, 39);
   doc.text("Legenda", x, y);
 
   let cursorY = y + 14;
@@ -2040,9 +1864,11 @@ function desenharLegendaPDF(doc, x, y, larguraUtil) {
   doc.setFontSize(10);
 
   itens.forEach((item) => {
+    const rgb = hexToRgb(item.cor);
     doc.setDrawColor(120);
-    doc.setFillColor(item.cor);
+    doc.setFillColor(rgb.r, rgb.g, rgb.b);
     doc.rect(x, cursorY - 8, 10, 10, "FD");
+    doc.setTextColor(31, 41, 55);
     doc.text(item.texto, x + 18, cursorY);
     cursorY += 16;
   });
@@ -2050,7 +1876,16 @@ function desenharLegendaPDF(doc, x, y, larguraUtil) {
   return cursorY + 6;
 }
 
-function desenharCardsResumoPDF(doc, dados, x, y, larguraUtil, margem, pageHeight) {
+function hexToRgb(hex) {
+  const h = hex.replace("#", "");
+  return {
+    r: parseInt(h.substring(0, 2), 16),
+    g: parseInt(h.substring(2, 4), 16),
+    b: parseInt(h.substring(4, 6), 16)
+  };
+}
+
+function desenharCardsResumoPDF(doc, dados, x, y, larguraUtil, margem) {
   const cards = [
     { label: "Tempo total do processo", value: formatarTempo(dados.tempoTotal) },
     { label: "Loops detectados", value: String(dados.loops) },
@@ -2065,19 +1900,17 @@ function desenharCardsResumoPDF(doc, dados, x, y, larguraUtil, margem, pageHeigh
   const gap = 12;
   const cols = 2;
   const cardWidth = (larguraUtil - gap) / cols;
-  const cardHeight = 52;
-
+  const cardHeight = 54;
   let cursorY = y;
 
   for (let i = 0; i < cards.length; i += cols) {
-    cursorY = garantirEspacoPagina(doc, cursorY, cardHeight + 4, margem, pageHeight);
+    cursorY = garantirEspacoPagina(doc, cursorY, cardHeight + 4, margem);
 
     for (let c = 0; c < cols; c++) {
       const item = cards[i + c];
       if (!item) continue;
 
       const cardX = x + c * (cardWidth + gap);
-
       doc.setDrawColor(219, 227, 238);
       doc.setFillColor(248, 250, 252);
       doc.roundedRect(cardX, cursorY, cardWidth, cardHeight, 8, 8, "FD");
@@ -2090,9 +1923,8 @@ function desenharCardsResumoPDF(doc, dados, x, y, larguraUtil, margem, pageHeigh
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
       doc.setTextColor(17, 24, 39);
-
       const linhas = doc.splitTextToSize(item.value, cardWidth - 20);
-      doc.text(linhas, cardX + 10, cursorY + 33);
+      doc.text(linhas, cardX + 10, cursorY + 34);
     }
 
     cursorY += cardHeight + gap;
@@ -2110,16 +1942,17 @@ function desenharTabelaPDF(doc, config) {
     yInicial,
     larguraTotal,
     margem,
-    pageHeight
+    pageTitle = "",
+    fontSize = 9
   } = config;
 
-  const borderWidth = 0.6;
-  const cellPaddingX = 6;
-  const lineHeight = 11;
+  const borderWidth = 0.5;
+  const cellPaddingX = 5;
+  const lineHeight = fontSize + 2;
   const minRowHeight = 20;
-  const gapAntesTitulo = 16;
+  const gapAntesTitulo = 14;
   const gapTituloCabecalho = 6;
-  const gapDepoisTabela = 22;
+  const gapDepoisTabela = 20;
 
   let y = yInicial + gapAntesTitulo;
 
@@ -2127,9 +1960,9 @@ function desenharTabelaPDF(doc, config) {
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   const colWidths = weights.map(w => (larguraTotal * w) / totalWeight);
 
-  const getHeaderHeight = () => {
+  const buildHeaderHeight = () => {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
+    doc.setFontSize(fontSize);
 
     let maxLines = 1;
     columns.forEach((col, i) => {
@@ -2137,26 +1970,33 @@ function desenharTabelaPDF(doc, config) {
       if (linhas.length > maxLines) maxLines = linhas.length;
     });
 
-    return Math.max(minRowHeight, maxLines * lineHeight + 12);
+    return Math.max(minRowHeight, maxLines * lineHeight + 10);
   };
 
-  const getCellBlock = (valor, width, align) => {
-    if (align === "left") {
-      return doc.splitTextToSize(valor, width - cellPaddingX * 2);
+  const headerHeight = buildHeaderHeight();
+
+  const drawTitleAndHeader = (yStart) => {
+    if (pageTitle) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(17, 24, 39);
+      doc.text(pageTitle, margem, margem);
     }
-    return [valor];
-  };
-
-  const drawTableHeader = (yHeader) => {
-    const headerHeight = getHeaderHeight();
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setLineWidth(borderWidth);
+    doc.setFontSize(11);
+    doc.setTextColor(17, 24, 39);
+    doc.text(titulo, x, yStart);
+
+    let yHeader = yStart + gapTituloCabecalho;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(fontSize);
     doc.setFillColor(234, 241, 251);
+    doc.setDrawColor(214, 224, 238);
+    doc.setLineWidth(borderWidth);
 
     let currentX = x;
-
     columns.forEach((col, i) => {
       const width = colWidths[i];
       const linhas = doc.splitTextToSize(col.header, width - cellPaddingX * 2);
@@ -2164,12 +2004,10 @@ function desenharTabelaPDF(doc, config) {
       doc.rect(currentX, yHeader, width, headerHeight, "FD");
 
       const totalTextHeight = linhas.length * lineHeight;
-      const startY = yHeader + (headerHeight - totalTextHeight) / 2 + 8;
+      const startY = yHeader + (headerHeight - totalTextHeight) / 2 + fontSize;
 
       linhas.forEach((linha, idx) => {
-        doc.text(linha, currentX + width / 2, startY + idx * lineHeight, {
-          align: "center"
-        });
+        doc.text(linha, currentX + width / 2, startY + idx * lineHeight, { align: "center" });
       });
 
       currentX += width;
@@ -2178,55 +2016,58 @@ function desenharTabelaPDF(doc, config) {
     return yHeader + headerHeight;
   };
 
-  const drawTitleAndHeader = (yStart) => {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(17, 24, 39);
-    doc.text(titulo, x, yStart);
+  y = garantirEspacoPagina(doc, y, 18 + gapTituloCabecalho + headerHeight, margem, (novoY) => {
+    if (pageTitle) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(17, 24, 39);
+      doc.text(pageTitle, margem, margem);
+      return margem + 16;
+    }
+    return novoY;
+  });
 
-    let yLocal = yStart + gapTituloCabecalho;
-    yLocal = drawTableHeader(yLocal);
-    return yLocal;
-  };
-
-  y = garantirEspacoPagina(doc, y, 18 + gapTituloCabecalho + getHeaderHeight(), margem, pageHeight);
   y = drawTitleAndHeader(y);
 
   rows.forEach((row) => {
     doc.setFont(row.isTotal ? "helvetica" : "helvetica", row.isTotal ? "bold" : "normal");
-    doc.setFontSize(10);
-    doc.setLineWidth(borderWidth);
+    doc.setFontSize(fontSize);
+    doc.setTextColor(31, 41, 55);
 
     let maxLines = 1;
-
     const rowLineCache = columns.map((col, i) => {
       const raw = row[col.key] !== undefined && row[col.key] !== null ? String(row[col.key]) : "";
       const valor = limparTextoPDF(raw);
       const align = col.align || "left";
-      const linhas = getCellBlock(valor, colWidths[i], align);
+      const linhas = align === "left"
+        ? doc.splitTextToSize(valor, colWidths[i] - cellPaddingX * 2)
+        : [valor];
 
       if (linhas.length > maxLines) maxLines = linhas.length;
       return linhas;
     });
 
-    const rowHeight = Math.max(minRowHeight, maxLines * lineHeight + 12);
+    const rowHeight = Math.max(minRowHeight, maxLines * lineHeight + 10);
 
-    y = garantirEspacoPagina(
-      doc,
-      y,
-      rowHeight,
-      margem,
-      pageHeight,
-      (novoY) => {
+    y = garantirEspacoPagina(doc, y, rowHeight, margem, (novoY) => {
+      let baseY = novoY;
+      if (pageTitle) {
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(12);
-        doc.setLineWidth(borderWidth);
-        return drawTitleAndHeader(novoY);
+        doc.setFontSize(13);
+        doc.setTextColor(17, 24, 39);
+        doc.text(pageTitle, margem, margem);
+        baseY = margem + 16;
       }
-    );
+      return drawTitleAndHeader(baseY);
+    });
+
+    doc.setLineWidth(borderWidth);
+    doc.setDrawColor(230, 236, 243);
+
+    if (row.isTotal) doc.setFillColor(238, 247, 240);
+    else doc.setFillColor(255, 255, 255);
 
     let currentX = x;
-    doc.setFillColor(row.isTotal ? 238 : 255, row.isTotal ? 247 : 255, row.isTotal ? 240 : 255);
 
     columns.forEach((col, i) => {
       const width = colWidths[i];
@@ -2236,19 +2077,15 @@ function desenharTabelaPDF(doc, config) {
       doc.rect(currentX, y, width, rowHeight, "FD");
 
       const totalTextHeight = linhas.length * lineHeight;
-      const startY = y + (rowHeight - totalTextHeight) / 2 + 8;
+      const startY = y + (rowHeight - totalTextHeight) / 2 + fontSize;
 
       if (align === "center") {
         linhas.forEach((linha, idx) => {
-          doc.text(linha, currentX + width / 2, startY + idx * lineHeight, {
-            align: "center"
-          });
+          doc.text(linha, currentX + width / 2, startY + idx * lineHeight, { align: "center" });
         });
       } else if (align === "right") {
         linhas.forEach((linha, idx) => {
-          doc.text(linha, currentX + width - cellPaddingX, startY + idx * lineHeight, {
-            align: "right"
-          });
+          doc.text(linha, currentX + width - cellPaddingX, startY + idx * lineHeight, { align: "right" });
         });
       } else {
         linhas.forEach((linha, idx) => {
@@ -2271,7 +2108,6 @@ async function baixarAnalisePDF() {
 
   const infoLinhas = extrairLinhasInfoProcesso();
   const dados = coletarDadosAnaliseEstruturados();
-
   const { jsPDF } = window.jspdf;
 
   const doc = new jsPDF({
@@ -2280,11 +2116,9 @@ async function baixarAnalisePDF() {
     format: "a4"
   });
 
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
   const margem = 40;
-  const larguraUtil = pageWidth - margem * 2;
-
+  let { pageWidth } = getPageSpec(doc);
+  let larguraUtil = pageWidth - margem * 2;
   let y = margem;
 
   const processoNome = obterValorCampo("processo") || "Fluxograma do Processo";
@@ -2296,30 +2130,31 @@ async function baixarAnalisePDF() {
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  y = garantirEspacoPagina(doc, y, 24, margem, pageHeight);
+  doc.setTextColor(17, 24, 39);
+  y = garantirEspacoPagina(doc, y, 24, margem);
   doc.text("Informações do Processo", margem, y);
   y += 16;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
+  doc.setTextColor(31, 41, 55);
 
   infoLinhas.forEach((linha) => {
-    y = garantirEspacoPagina(doc, y, 18, margem, pageHeight);
+    y = garantirEspacoPagina(doc, y, 18, margem);
     y = adicionarTextoQuebrado(doc, linha, margem, y, larguraUtil, 13);
   });
 
   y += 10;
-  y = garantirEspacoPagina(doc, y, 90, margem, pageHeight);
-  y = desenharLegendaPDF(doc, margem, y, larguraUtil);
+  y = garantirEspacoPagina(doc, y, 90, margem);
+  y = desenharLegendaPDF(doc, margem, y);
 
   const svgWidth = Number(svg.getAttribute("width")) || 1200;
   const svgHeight = Number(svg.getAttribute("height")) || 800;
-
   const escala = Math.min(larguraUtil / svgWidth, 1);
   const larguraSvgPdf = svgWidth * escala;
   const alturaSvgPdf = svgHeight * escala;
 
-  y = garantirEspacoPagina(doc, y, alturaSvgPdf + 20, margem, pageHeight);
+  y = garantirEspacoPagina(doc, y, alturaSvgPdf + 20, margem);
 
   await doc.svg(svg, {
     x: margem + (larguraUtil - larguraSvgPdf) / 2,
@@ -2329,7 +2164,7 @@ async function baixarAnalisePDF() {
   });
 
   y += alturaSvgPdf + 24;
-  y = garantirEspacoPagina(doc, y, 28, margem, pageHeight);
+  y = garantirEspacoPagina(doc, y, 28, margem);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
@@ -2337,7 +2172,7 @@ async function baixarAnalisePDF() {
   doc.text("Análise do Processo", margem, y);
   y += 16;
 
-  y = desenharCardsResumoPDF(doc, dados, margem, y, larguraUtil, margem, pageHeight);
+  y = desenharCardsResumoPDF(doc, dados, margem, y, larguraUtil, margem);
 
   y = desenharTabelaPDF(doc, {
     titulo: "Tempo por Tipo",
@@ -2355,7 +2190,8 @@ async function baixarAnalisePDF() {
     yInicial: y,
     larguraTotal: larguraUtil,
     margem,
-    pageHeight
+    pageTitle: "Análise do Processo",
+    fontSize: 9
   });
 
   y = desenharTabelaPDF(doc, {
@@ -2374,13 +2210,20 @@ async function baixarAnalisePDF() {
     yInicial: y,
     larguraTotal: larguraUtil,
     margem,
-    pageHeight
+    pageTitle: "Análise do Processo",
+    fontSize: 9
   });
 
-  y = desenharTabelaPDF(doc, {
+  // Pareto em landscape para respirar melhor
+  let landscape = iniciarNovaPaginaPaisagem(doc, "Análise do Processo");
+  let margemL = landscape.margem;
+  let yL = landscape.y;
+  let larguraUtilL = landscape.larguraUtil;
+
+  yL = desenharTabelaPDF(doc, {
     titulo: "Pareto de Tempo",
     columns: [
-      { header: "Atividade", key: "atividade", weight: 3.1, align: "left" },
+      { header: "Atividade", key: "atividade", weight: 4.2, align: "left" },
       { header: "Tempo (horas)", key: "tempoFmt", weight: 1.2, align: "center" },
       { header: "%", key: "percentualFmt", weight: 0.9, align: "center" },
       { header: "% Acumulado", key: "paretoFmt", weight: 1.2, align: "center" }
@@ -2391,23 +2234,30 @@ async function baixarAnalisePDF() {
       percentualFmt: `${formatarPercentual(item.percentual)}%`,
       paretoFmt: `${formatarPercentual(item.pareto)}%`
     })),
-    x: margem,
-    yInicial: y,
-    larguraTotal: larguraUtil,
-    margem,
-    pageHeight
+    x: margemL,
+    yInicial: yL,
+    larguraTotal: larguraUtilL,
+    margem: margemL,
+    pageTitle: "Análise do Processo",
+    fontSize: 8.5
   });
 
-  y = desenharTabelaPDF(doc, {
+  // Simulação em landscape com colunas mais largas
+  landscape = iniciarNovaPaginaPaisagem(doc, "Análise do Processo");
+  margemL = landscape.margem;
+  yL = landscape.y;
+  larguraUtilL = landscape.larguraUtil;
+
+  yL = desenharTabelaPDF(doc, {
     titulo: "Simulação de Melhoria (As Is vs To Be)",
     columns: [
-      { header: "Atividade", key: "atividade", weight: 3.0, align: "left" },
-      { header: "As Is", key: "tempoAsIsFmt", weight: 1.1, align: "center" },
-      { header: "% Red.", key: "reducaoFmt", weight: 1.0, align: "center" },
-      { header: "Categoria", key: "categoriaFmt", weight: 1.6, align: "left" },
-      { header: "Ganho", key: "ganhoFmt", weight: 1.1, align: "center" },
-      { header: "To Be", key: "tempoToBeFmt", weight: 1.1, align: "center" },
-      { header: "Observação", key: "observacao", weight: 2.0, align: "left" }
+      { header: "Atividade", key: "atividade", weight: 4.4, align: "left" },
+      { header: "As Is", key: "tempoAsIsFmt", weight: 1.0, align: "center" },
+      { header: "% Red.", key: "reducaoFmt", weight: 0.9, align: "center" },
+      { header: "Categoria", key: "categoriaFmt", weight: 2.1, align: "left" },
+      { header: "Ganho", key: "ganhoFmt", weight: 1.0, align: "center" },
+      { header: "To Be", key: "tempoToBeFmt", weight: 1.0, align: "center" },
+      { header: "Observação", key: "observacao", weight: 3.2, align: "left" }
     ],
     rows: [
       ...dados.simulacaoMelhoria.rows.map(item => ({
@@ -2430,22 +2280,28 @@ async function baixarAnalisePDF() {
         isTotal: true
       }
     ],
-    x: margem,
-    yInicial: y,
-    larguraTotal: larguraUtil,
-    margem,
-    pageHeight
+    x: margemL,
+    yInicial: yL,
+    larguraTotal: larguraUtilL,
+    margem: margemL,
+    pageTitle: "Análise do Processo",
+    fontSize: 8.3
   });
 
   if (dados.simulacaoMelhoria.ranking.length) {
-    y = desenharTabelaPDF(doc, {
+    landscape = iniciarNovaPaginaPaisagem(doc, "Análise do Processo");
+    margemL = landscape.margem;
+    yL = landscape.y;
+    larguraUtilL = landscape.larguraUtil;
+
+    yL = desenharTabelaPDF(doc, {
       titulo: "Ranking das Top Atividades por Ganho Potencial",
       columns: [
         { header: "#", key: "ranking", weight: 0.6, align: "center" },
-        { header: "Atividade", key: "atividade", weight: 3.2, align: "left" },
+        { header: "Atividade", key: "atividade", weight: 4.0, align: "left" },
         { header: "Ganho", key: "ganhoFmt", weight: 1.2, align: "center" },
         { header: "% Red.", key: "reducaoFmt", weight: 1.0, align: "center" },
-        { header: "Categoria", key: "categoria", weight: 2.0, align: "left" }
+        { header: "Categoria", key: "categoria", weight: 2.2, align: "left" }
       ],
       rows: dados.simulacaoMelhoria.ranking.map((item, index) => ({
         ranking: String(index + 1),
@@ -2454,11 +2310,12 @@ async function baixarAnalisePDF() {
         reducaoFmt: `${formatarPercentual(item.percentualReducao)}%`,
         categoria: item.categoriaOportunidade || "Sem oportunidade"
       })),
-      x: margem,
-      yInicial: y,
-      larguraTotal: larguraUtil,
-      margem,
-      pageHeight
+      x: margemL,
+      yInicial: yL,
+      larguraTotal: larguraUtilL,
+      margem: margemL,
+      pageTitle: "Análise do Processo",
+      fontSize: 8.8
     });
   }
 
