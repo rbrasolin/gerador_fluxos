@@ -284,11 +284,12 @@ function gerarNomeArquivo() {
 }
 
 function limparTudo() {
+  limparCampo("desenho");
   limparCampo("processo");
   limparCampo("analista");
   limparCampo("negocio");
   limparCampo("area");
-  limparCampo("coordenador");
+  limparCampo("gestor");
   limparCampo("entrada");
 
   const diagram = document.getElementById("diagram");
@@ -856,9 +857,58 @@ function escolherRota(origem, destino, contexto = {}) {
     const end = getAnchorPoint(destino, par.endSide);
     const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, par.endSide, par.startSide, destino);
 
+    const pontosRota = rota.points || [];
+    let comprimentoTotal = 0;
+    const segmentos = [];
+
+    for (let i = 0; i < pontosRota.length - 1; i++) {
+      const p1 = pontosRota[i];
+      const p2 = pontosRota[i + 1];
+      const comprimento = Math.abs(p2.x - p1.x) + Math.abs(p2.y - p1.y);
+
+      if (comprimento > 0) {
+        segmentos.push({
+          p1,
+          p2,
+          comprimento,
+          inicio: comprimentoTotal,
+          fim: comprimentoTotal + comprimento
+        });
+        comprimentoTotal += comprimento;
+      }
+    }
+
+    let labelPoint = { x: start.x + 18, y: start.y - 10 };
+
+    if (segmentos.length > 0 && comprimentoTotal > 0) {
+      const alvo = comprimentoTotal / 2;
+
+      for (const segmento of segmentos) {
+        if (alvo >= segmento.inicio && alvo <= segmento.fim) {
+          const deslocamento = alvo - segmento.inicio;
+
+          if (segmento.p1.y === segmento.p2.y) {
+            const direcao = segmento.p2.x >= segmento.p1.x ? 1 : -1;
+            labelPoint = {
+              x: segmento.p1.x + deslocamento * direcao,
+              y: segmento.p1.y
+            };
+          } else if (segmento.p1.x === segmento.p2.x) {
+            const direcao = segmento.p2.y >= segmento.p1.y ? 1 : -1;
+            labelPoint = {
+              x: segmento.p1.x,
+              y: segmento.p1.y + deslocamento * direcao
+            };
+          }
+
+          break;
+        }
+      }
+    }
+
     tentativas.push({
       ...rota,
-      label: { x: start.x + 18, y: start.y - 10 }
+      label: labelPoint
     });
   }
 
@@ -954,12 +1004,31 @@ function desenharConexao(
   svg.appendChild(path);
 
   if (rotulo) {
+    const larguraTexto = medirLarguraTexto(rotulo, 12, "bold");
+    const larguraCapsula = Math.max(42, larguraTexto + 20);
+    const alturaCapsula = 24;
+    const xCapsula = rota.label.x - larguraCapsula / 2;
+    const yCapsula = rota.label.y - alturaCapsula / 2 - 1;
+
+    const bg = criarElementoSVG("rect");
+    bg.setAttribute("x", xCapsula);
+    bg.setAttribute("y", yCapsula);
+    bg.setAttribute("width", larguraCapsula);
+    bg.setAttribute("height", alturaCapsula);
+    bg.setAttribute("rx", alturaCapsula / 2);
+    bg.setAttribute("ry", alturaCapsula / 2);
+    bg.setAttribute("fill", "#ffffff");
+    bg.setAttribute("stroke", "#111111");
+    bg.setAttribute("stroke-width", "1");
+    svg.appendChild(bg);
+
     const tx = criarElementoSVG("text");
     tx.setAttribute("x", rota.label.x);
-    tx.setAttribute("y", rota.label.y);
+    tx.setAttribute("y", rota.label.y + 4);
     tx.setAttribute("text-anchor", "middle");
     tx.setAttribute("font-family", CONFIG.fontFamily);
     tx.setAttribute("font-size", "12");
+    tx.setAttribute("font-weight", "bold");
     tx.setAttribute("fill", "#111111");
     tx.textContent = rotulo;
     svg.appendChild(tx);
@@ -1019,6 +1088,10 @@ function renderInformacoesProcessoExecutivas(info) {
       <div class="exec-card-title">Informações do Processo</div>
       <div class="exec-info-grid">
         <div class="exec-info-item">
+          <div class="exec-info-label">Desenho</div>
+          <div class="exec-info-value">${escaparHTML(info.desenho || "Não informado")}</div>
+        </div>
+        <div class="exec-info-item">
           <div class="exec-info-label">Processo</div>
           <div class="exec-info-value">${escaparHTML(info.processo || "Não informado")}</div>
         </div>
@@ -1035,8 +1108,8 @@ function renderInformacoesProcessoExecutivas(info) {
           <div class="exec-info-value">${escaparHTML(info.area || "Não informado")}</div>
         </div>
         <div class="exec-info-item">
-          <div class="exec-info-label">Coordenador</div>
-          <div class="exec-info-value">${escaparHTML(info.coordenador || "Não informado")}</div>
+          <div class="exec-info-label">Gestor</div>
+          <div class="exec-info-value">${escaparHTML(info.gestor || "Não informado")}</div>
         </div>
       </div>
     </div>
@@ -1190,11 +1263,12 @@ function gerarFluxo() {
     return;
   }
 
+  const desenho = obterValorCampo("desenho");
   const processo = obterValorCampo("processo");
   const analista = obterValorCampo("analista");
   const negocio = obterValorCampo("negocio");
   const area = obterValorCampo("area");
-  const coordenador = obterValorCampo("coordenador");
+  const gestor = obterValorCampo("gestor");
 
   const linhasBrutas = texto
     .replace(/\r\n/g, "\n")
@@ -1479,11 +1553,12 @@ function gerarFluxo() {
     : 0;
 
   const infoProcessoData = {
+    desenho,
     processo,
     analista,
     negocio,
     area,
-    coordenador
+    gestor
   };
 
   document.getElementById("infoProcesso").innerHTML =
