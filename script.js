@@ -284,11 +284,12 @@ function gerarNomeArquivo() {
 }
 
 function limparTudo() {
+  limparCampo("desenho");
   limparCampo("processo");
   limparCampo("analista");
   limparCampo("negocio");
   limparCampo("area");
-  limparCampo("coordenador");
+  limparCampo("gestor");
   limparCampo("entrada");
 
   const diagram = document.getElementById("diagram");
@@ -1032,6 +1033,7 @@ function desenharConexao(
     tx.textContent = rotulo;
     svg.appendChild(tx);
   }
+}  
 
 function gerarHTMLResumoTempo(lista, tempoTotal) {
   return lista
@@ -1086,6 +1088,10 @@ function renderInformacoesProcessoExecutivas(info) {
       <div class="exec-card-title">Informações do Processo</div>
       <div class="exec-info-grid">
         <div class="exec-info-item">
+          <div class="exec-info-label">Desenho</div>
+          <div class="exec-info-value">${escaparHTML(info.desenho || "Não informado")}</div>
+        </div>
+        <div class="exec-info-item">
           <div class="exec-info-label">Processo</div>
           <div class="exec-info-value">${escaparHTML(info.processo || "Não informado")}</div>
         </div>
@@ -1102,8 +1108,8 @@ function renderInformacoesProcessoExecutivas(info) {
           <div class="exec-info-value">${escaparHTML(info.area || "Não informado")}</div>
         </div>
         <div class="exec-info-item">
-          <div class="exec-info-label">Coordenador</div>
-          <div class="exec-info-value">${escaparHTML(info.coordenador || "Não informado")}</div>
+          <div class="exec-info-label">Gestor</div>
+          <div class="exec-info-value">${escaparHTML(info.gestor || "Não informado")}</div>
         </div>
       </div>
     </div>
@@ -1257,11 +1263,12 @@ function gerarFluxo() {
     return;
   }
 
+  const desenho = obterValorCampo("desenho");
   const processo = obterValorCampo("processo");
   const analista = obterValorCampo("analista");
   const negocio = obterValorCampo("negocio");
   const area = obterValorCampo("area");
-  const coordenador = obterValorCampo("coordenador");
+  const gestor = obterValorCampo("gestor");
 
   const linhasBrutas = texto
     .replace(/\r\n/g, "\n")
@@ -1545,13 +1552,14 @@ function gerarFluxo() {
     ? (decisoes / etapas.length) * 100
     : 0;
 
-  const infoProcessoData = {
-    processo,
-    analista,
-    negocio,
-    area,
-    coordenador
-  };
+const infoProcessoData = {
+  desenho,
+  processo,
+  analista,
+  negocio,
+  area,
+  gestor
+};
 
   document.getElementById("infoProcesso").innerHTML =
     renderInformacoesProcessoExecutivas(infoProcessoData);
