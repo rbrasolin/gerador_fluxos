@@ -230,3 +230,139 @@ td {
     grid-template-columns: 1fr;
   }
 }
+
+.exec-card {
+  background: #ffffff;
+  border: 1px solid #d9dfe7;
+  border-radius: 10px;
+  padding: 18px 18px 20px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+}
+
+.exec-card-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #101828;
+  margin-bottom: 16px;
+}
+
+.exec-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.exec-info-item,
+.exec-summary-item {
+  background: #f8fafc;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.exec-info-label,
+.exec-summary-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #667085;
+  margin-bottom: 6px;
+}
+
+.exec-info-value,
+.exec-summary-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #101828;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.exec-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.exec-table-block {
+  margin-top: 18px;
+}
+
+.exec-table-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #101828;
+  margin: 0 0 8px 0;
+}
+
+.exec-table-wrap {
+  overflow-x: auto;
+}
+
+.exec-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+  table-layout: fixed;
+}
+
+.exec-table th,
+.exec-table td {
+  border: 1px solid #d0d5dd;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.45;
+  vertical-align: middle;
+}
+
+.exec-table th {
+  background: #f2f4f7;
+  color: #344054;
+  font-weight: 700;
+  text-align: center;
+}
+
+.exec-table td {
+  background: #ffffff;
+  color: #101828;
+  font-weight: 400;
+}
+
+.exec-table th:first-child,
+.exec-table td:first-child {
+  width: 58%;
+  text-align: left;
+}
+
+.exec-table th:not(:first-child),
+.exec-table td:not(:first-child) {
+  width: auto;
+}
+
+.exec-table .th-center,
+.exec-table .td-center {
+  text-align: center;
+}
+
+#infoProcesso,
+#metricas {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin-top: 8px;
+}
+
+@media (max-width: 900px) {
+  .exec-info-grid,
+  .exec-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .exec-table th,
+  .exec-table td {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+}
