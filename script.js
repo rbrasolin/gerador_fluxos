@@ -15,7 +15,7 @@ const CONFIG = {
   cornerRadius: 12,
   decisionWidth: 180,
   decisionTextWidthFactor: 0.52,
-  decisionHeightFactor: 1.30,
+  decisionHeightFactor: 1.3,
   routeGap: 28,
   entryExitGap: 40,
   laneGap: 36,
@@ -417,14 +417,6 @@ function limparTudo() {
   if (metricas) metricas.innerHTML = "";
 
   ultimoNomeArquivo = "fluxograma_processo";
-}
-
-function adicionarLoopSeNecessario(origemId, destinoId, etapaPorId, etapaAtual) {
-  const destino = etapaPorId[destinoId];
-  if (destino && destino.ordem < etapaAtual.ordem) {
-    return 1;
-  }
-  return 0;
 }
 
 function adicionarEtapasImpactadasPorRetorno(origemId, destinoId, etapaPorId, etapasOrdenadas, etapasImpactadasRef) {
@@ -934,6 +926,11 @@ function buildOrthogonalToMerge(start, mergePoint, end, endSide, posicoes = {}, 
   return normalizarPontos([...ateMergeObj.points, end]);
 }
 
+function podeCompartilharDestino(origem, sharedInfo) {
+  if (!sharedInfo) return false;
+  return origem.gridCol === sharedInfo.sourceGridCol;
+}
+
 function escolherParesCandidatos(origem, destino, rotulo = "") {
   if (origem.isDecision && rotulo === "Sim") {
     return [{ startSide: "right", endSide: "left" }];
@@ -949,21 +946,10 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
   const dx = destino.gridCol - origem.gridCol;
   const dy = destino.gridRow - origem.gridRow;
 
-  if (dx === 0 && dy > 0) {
-    return [{ startSide: "bottom", endSide: "top" }];
-  }
-
-  if (dx === 0 && dy < 0) {
-    return [{ startSide: "top", endSide: "bottom" }];
-  }
-
-  if (dy === 0 && dx > 0) {
-    return [{ startSide: "right", endSide: "left" }];
-  }
-
-  if (dy === 0 && dx < 0) {
-    return [{ startSide: "left", endSide: "right" }];
-  }
+  if (dx === 0 && dy > 0) return [{ startSide: "bottom", endSide: "top" }];
+  if (dx === 0 && dy < 0) return [{ startSide: "top", endSide: "bottom" }];
+  if (dy === 0 && dx > 0) return [{ startSide: "right", endSide: "left" }];
+  if (dy === 0 && dx < 0) return [{ startSide: "left", endSide: "right" }];
 
   if (dx > 0 && dy > 0) {
     return [
@@ -1144,11 +1130,6 @@ function construirRotaCompartilhada(start, sharedInfo, posicoes = {}, excludeIds
   };
 }
 
-function podeCompartilharDestino(origem, sharedInfo) {
-  if (!sharedInfo) return false;
-  return origem.gridCol === sharedInfo.sourceGridCol;
-}
-
 function desenharConexao(
   svg,
   origem,
@@ -1318,20 +1299,20 @@ function renderTabelaSimulacaoMelhoria(dados) {
   const maiorGanho = Math.max(...dados.rows.map(item => item.ganhoPotencial || 0), 0);
 
   const rows = dados.rows.map(item => ({
-    ordemFmt: item.ordemFmt,
     atividade: item.atividade,
     tempoAsIsFmt: formatarTempo(item.tempo),
     reducaoFmt: `${formatarPercentual(item.percentualReducao)}%`,
+    categoriaFmt: item.categoriaOportunidade || "Sem oportunidade",
     ganhoFmt: formatarTempo(item.ganhoPotencial),
     tempoToBeFmt: formatarTempo(item.tempoToBe),
     observacao: item.observacao || "-"
   }));
 
   rows.push({
-    ordemFmt: "TOTAL",
     atividade: `${dados.quantidadeAtividades} atividade(s)`,
     tempoAsIsFmt: formatarTempo(dados.tempoTotalAsIs),
     reducaoFmt: `${formatarPercentual(dados.eficienciaPotencial)}%`,
+    categoriaFmt: "-",
     ganhoFmt: formatarTempo(dados.ganhoPotencialHoras),
     tempoToBeFmt: formatarTempo(dados.tempoTotalToBe),
     observacao: `Eficiência total: ${formatarPercentual(dados.eficienciaPotencial)}%`,
@@ -1341,10 +1322,10 @@ function renderTabelaSimulacaoMelhoria(dados) {
   const thead = `
     <thead>
       <tr>
-        <th class="th-center">Ordem</th>
         <th>Atividade</th>
         <th class="th-center">Tempo As Is</th>
         <th class="th-center">% Redução</th>
+        <th>Categoria</th>
         <th class="th-center">Ganho Potencial</th>
         <th class="th-center">Tempo To Be</th>
         <th>Observação</th>
@@ -1359,10 +1340,10 @@ function renderTabelaSimulacaoMelhoria(dados) {
         const rowClass = row.rowClass || (isMaiorOportunidade ? "row-highlight-opportunity" : "");
         return `
           <tr class="${rowClass}">
-            <td class="td-center">${escaparHTML(row.ordemFmt)}</td>
             <td>${escaparHTML(row.atividade)}</td>
             <td class="td-center">${escaparHTML(row.tempoAsIsFmt)}</td>
             <td class="td-center">${escaparHTML(row.reducaoFmt)}</td>
+            <td>${escaparHTML(row.categoriaFmt)}</td>
             <td class="td-center">${escaparHTML(row.ganhoFmt)}</td>
             <td class="td-center">${escaparHTML(row.tempoToBeFmt)}</td>
             <td>${escaparHTML(row.observacao)}</td>
@@ -1408,12 +1389,6 @@ function renderRankingOportunidades(dados) {
 }
 
 function renderizarAnaliseExecutiva(dados) {
-  const top3Rows = dados.top3Gargalos.map(item => ({
-    atividade: item.atividade,
-    tempoFmt: formatarTempo(item.tempo),
-    percentualFmt: `${formatarPercentual(item.percentual)}%`
-  }));
-
   const tipoRows = dados.tempoPorTipo.map(item => ({
     tipo: item.tipo,
     tempoFmt: formatarTempo(item.tempo),
@@ -1438,16 +1413,6 @@ function renderizarAnaliseExecutiva(dados) {
       <div class="exec-card-title">Análise do Processo</div>
 
       ${renderResumoAnaliseExecutivo(dados)}
-
-      ${renderTabelaAnaliseHTML({
-        titulo: "Top 3 Gargalos",
-        columns: [
-          { header: "Atividade", key: "atividade", align: "left" },
-          { header: "Tempo (horas)", key: "tempoFmt", align: "center" },
-          { header: "%", key: "percentualFmt", align: "center" }
-        ],
-        rows: top3Rows
-      })}
 
       ${renderTabelaAnaliseHTML({
         titulo: "Tempo por Tipo",
@@ -1806,11 +1771,6 @@ function gerarFluxo() {
     impactoPotencialRetrabalho: impactoPotencialRetrabalhoNum,
     decisoes,
     taxaDecisao: taxaDecisaoNum,
-    top3Gargalos: atividadesTempo.slice(0, 3).map(item => ({
-      atividade: item.atividade,
-      tempo: item.tempo,
-      percentual: tempoTotal ? (item.tempo / tempoTotal) * 100 : 0
-    })),
     tempoPorTipo: tiposOrdenados.map(item => ({
       tipo: item.nome,
       tempo: item.tempo,
@@ -1840,10 +1800,6 @@ function gerarFluxo() {
   document.getElementById("metricas").innerHTML =
     renderizarAnaliseExecutiva(dadosAnalise);
 }
-
-/* =========================
-   EXPORTAÇÃO SVG E PDF
-========================= */
 
 function obterSVGPronto() {
   const svgOriginal = document.querySelector("#diagram svg");
@@ -1977,15 +1933,6 @@ function coletarDadosAnaliseEstruturados() {
     ? (decisoes / etapas.length) * 100
     : 0;
 
-  const top3Gargalos = [...etapas]
-    .sort((a, b) => b.tempo - a.tempo)
-    .slice(0, 3)
-    .map((e) => ({
-      atividade: e.atividade,
-      tempo: e.tempo,
-      percentual: tempoTotal ? (e.tempo / tempoTotal) * 100 : 0
-    }));
-
   const tempoPorTipo = Object.entries(tiposTempo)
     .map(([tipo, tempo]) => ({
       tipo,
@@ -2024,7 +1971,6 @@ function coletarDadosAnaliseEstruturados() {
     impactoPotencialRetrabalho,
     decisoes,
     taxaDecisao,
-    top3Gargalos,
     tempoPorTipo,
     tempoPorSistema,
     pareto,
@@ -2075,6 +2021,84 @@ function limparTextoPDF(txt) {
     .replace(/⏱/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function desenharLegendaPDF(doc, x, y, larguraUtil) {
+  const itens = [
+    { cor: "#95d5b2", texto: "Verde: Oportunidade de automação" },
+    { cor: "#8ecae6", texto: "Azul: Oportunidade de melhoria de processo" },
+    { cor: "#ffd166", texto: "Amarelo: Já automatizado" },
+    { cor: "#ffffff", texto: "Branco: Sem oportunidade clara" }
+  ];
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text("Legenda", x, y);
+
+  let cursorY = y + 14;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+
+  itens.forEach((item) => {
+    doc.setDrawColor(120);
+    doc.setFillColor(item.cor);
+    doc.rect(x, cursorY - 8, 10, 10, "FD");
+    doc.text(item.texto, x + 18, cursorY);
+    cursorY += 16;
+  });
+
+  return cursorY + 6;
+}
+
+function desenharCardsResumoPDF(doc, dados, x, y, larguraUtil, margem, pageHeight) {
+  const cards = [
+    { label: "Tempo total do processo", value: formatarTempo(dados.tempoTotal) },
+    { label: "Loops detectados", value: String(dados.loops) },
+    { label: "Potencial retrabalho", value: `${formatarTempo(dados.tempoPotencialRetrabalho)} | ${formatarPercentual(dados.impactoPotencialRetrabalho)}%` },
+    { label: "Taxa de decisão", value: `${dados.decisoes} etapa(s) | ${formatarPercentual(dados.taxaDecisao)}%` },
+    { label: "Ganho potencial em horas", value: formatarTempo(dados.simulacaoMelhoria.ganhoPotencialHoras) },
+    { label: "Tempo total To Be", value: formatarTempo(dados.simulacaoMelhoria.tempoTotalToBe) },
+    { label: "Eficiência potencial", value: `${formatarPercentual(dados.simulacaoMelhoria.eficienciaPotencial)}%` },
+    { label: "Atividades na simulação", value: String(dados.simulacaoMelhoria.quantidadeAtividades) }
+  ];
+
+  const gap = 12;
+  const cols = 2;
+  const cardWidth = (larguraUtil - gap) / cols;
+  const cardHeight = 52;
+
+  let cursorY = y;
+
+  for (let i = 0; i < cards.length; i += cols) {
+    cursorY = garantirEspacoPagina(doc, cursorY, cardHeight + 4, margem, pageHeight);
+
+    for (let c = 0; c < cols; c++) {
+      const item = cards[i + c];
+      if (!item) continue;
+
+      const cardX = x + c * (cardWidth + gap);
+
+      doc.setDrawColor(219, 227, 238);
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(cardX, cursorY, cardWidth, cardHeight, 8, 8, "FD");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.text(item.label, cardX + 10, cursorY + 16);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(17, 24, 39);
+
+      const linhas = doc.splitTextToSize(item.value, cardWidth - 20);
+      doc.text(linhas, cardX + 10, cursorY + 33);
+    }
+
+    cursorY += cardHeight + gap;
+  }
+
+  return cursorY + 4;
 }
 
 function desenharTabelaPDF(doc, config) {
@@ -2129,6 +2153,7 @@ function desenharTabelaPDF(doc, config) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setLineWidth(borderWidth);
+    doc.setFillColor(234, 241, 251);
 
     let currentX = x;
 
@@ -2136,7 +2161,7 @@ function desenharTabelaPDF(doc, config) {
       const width = colWidths[i];
       const linhas = doc.splitTextToSize(col.header, width - cellPaddingX * 2);
 
-      doc.rect(currentX, yHeader, width, headerHeight);
+      doc.rect(currentX, yHeader, width, headerHeight, "FD");
 
       const totalTextHeight = linhas.length * lineHeight;
       const startY = yHeader + (headerHeight - totalTextHeight) / 2 + 8;
@@ -2156,6 +2181,7 @@ function desenharTabelaPDF(doc, config) {
   const drawTitleAndHeader = (yStart) => {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
+    doc.setTextColor(17, 24, 39);
     doc.text(titulo, x, yStart);
 
     let yLocal = yStart + gapTituloCabecalho;
@@ -2199,18 +2225,15 @@ function desenharTabelaPDF(doc, config) {
       }
     );
 
-    doc.setFont(row.isTotal ? "helvetica" : "helvetica", row.isTotal ? "bold" : "normal");
-    doc.setFontSize(10);
-    doc.setLineWidth(borderWidth);
-
     let currentX = x;
+    doc.setFillColor(row.isTotal ? 238 : 255, row.isTotal ? 247 : 255, row.isTotal ? 240 : 255);
 
     columns.forEach((col, i) => {
       const width = colWidths[i];
       const align = col.align || "left";
       const linhas = rowLineCache[i];
 
-      doc.rect(currentX, y, width, rowHeight);
+      doc.rect(currentX, y, width, rowHeight, "FD");
 
       const totalTextHeight = linhas.length * lineHeight;
       const startY = y + (rowHeight - totalTextHeight) / 2 + 8;
@@ -2285,7 +2308,9 @@ async function baixarAnalisePDF() {
     y = adicionarTextoQuebrado(doc, linha, margem, y, larguraUtil, 13);
   });
 
-  y += 14;
+  y += 10;
+  y = garantirEspacoPagina(doc, y, 90, margem, pageHeight);
+  y = desenharLegendaPDF(doc, margem, y, larguraUtil);
 
   const svgWidth = Number(svg.getAttribute("width")) || 1200;
   const svgHeight = Number(svg.getAttribute("height")) || 800;
@@ -2308,58 +2333,11 @@ async function baixarAnalisePDF() {
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
+  doc.setTextColor(17, 24, 39);
   doc.text("Análise do Processo", margem, y);
-  y += 18;
+  y += 16;
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-
-  y = garantirEspacoPagina(doc, y, 18, margem, pageHeight);
-  doc.text(`Tempo total do processo: ${formatarTempo(dados.tempoTotal)}`, margem, y);
-  y += 18;
-
-  y = garantirEspacoPagina(doc, y, 18, margem, pageHeight);
-  doc.text(`Loops detectados: ${dados.loops}`, margem, y);
-  y += 18;
-
-  y = garantirEspacoPagina(doc, y, 18, margem, pageHeight);
-  doc.text(`Potencial retrabalho: ${formatarTempo(dados.tempoPotencialRetrabalho)} | ${formatarPercentual(dados.impactoPotencialRetrabalho)}%`, margem, y);
-  y += 18;
-
-  y = garantirEspacoPagina(doc, y, 18, margem, pageHeight);
-  doc.text(`Taxa de decisão: ${dados.decisoes} etapa(s) | ${formatarPercentual(dados.taxaDecisao)}%`, margem, y);
-  y += 18;
-
-  y = garantirEspacoPagina(doc, y, 18, margem, pageHeight);
-  doc.text(`Ganho potencial em horas: ${formatarTempo(dados.simulacaoMelhoria.ganhoPotencialHoras)}`, margem, y);
-  y += 18;
-
-  y = garantirEspacoPagina(doc, y, 18, margem, pageHeight);
-  doc.text(`Tempo total To Be: ${formatarTempo(dados.simulacaoMelhoria.tempoTotalToBe)}`, margem, y);
-  y += 18;
-
-  y = garantirEspacoPagina(doc, y, 18, margem, pageHeight);
-  doc.text(`Eficiência potencial: ${formatarPercentual(dados.simulacaoMelhoria.eficienciaPotencial)}%`, margem, y);
-  y += 24;
-
-  y = desenharTabelaPDF(doc, {
-    titulo: "Top 3 Gargalos",
-    columns: [
-      { header: "Atividade", key: "atividade", weight: 3.2, align: "left" },
-      { header: "Tempo (horas)", key: "tempoFmt", weight: 1.2, align: "center" },
-      { header: "%", key: "percentualFmt", weight: 1.0, align: "center" }
-    ],
-    rows: dados.top3Gargalos.map(item => ({
-      atividade: item.atividade,
-      tempoFmt: formatarTempo(item.tempo),
-      percentualFmt: `${formatarPercentual(item.percentual)}%`
-    })),
-    x: margem,
-    yInicial: y,
-    larguraTotal: larguraUtil,
-    margem,
-    pageHeight
-  });
+  y = desenharCardsResumoPDF(doc, dados, margem, y, larguraUtil, margem, pageHeight);
 
   y = desenharTabelaPDF(doc, {
     titulo: "Tempo por Tipo",
@@ -2423,29 +2401,29 @@ async function baixarAnalisePDF() {
   y = desenharTabelaPDF(doc, {
     titulo: "Simulação de Melhoria (As Is vs To Be)",
     columns: [
-      { header: "Ordem", key: "ordemFmt", weight: 0.9, align: "center" },
       { header: "Atividade", key: "atividade", weight: 3.0, align: "left" },
-      { header: "As Is", key: "tempoAsIsFmt", weight: 1.2, align: "center" },
+      { header: "As Is", key: "tempoAsIsFmt", weight: 1.1, align: "center" },
       { header: "% Red.", key: "reducaoFmt", weight: 1.0, align: "center" },
-      { header: "Ganho", key: "ganhoFmt", weight: 1.2, align: "center" },
-      { header: "To Be", key: "tempoToBeFmt", weight: 1.2, align: "center" },
-      { header: "Observação", key: "observacao", weight: 2.1, align: "left" }
+      { header: "Categoria", key: "categoriaFmt", weight: 1.6, align: "left" },
+      { header: "Ganho", key: "ganhoFmt", weight: 1.1, align: "center" },
+      { header: "To Be", key: "tempoToBeFmt", weight: 1.1, align: "center" },
+      { header: "Observação", key: "observacao", weight: 2.0, align: "left" }
     ],
     rows: [
       ...dados.simulacaoMelhoria.rows.map(item => ({
-        ordemFmt: item.ordemFmt,
         atividade: item.atividade,
         tempoAsIsFmt: formatarTempo(item.tempo),
         reducaoFmt: `${formatarPercentual(item.percentualReducao)}%`,
+        categoriaFmt: item.categoriaOportunidade || "Sem oportunidade",
         ganhoFmt: formatarTempo(item.ganhoPotencial),
         tempoToBeFmt: formatarTempo(item.tempoToBe),
         observacao: item.observacao || "-"
       })),
       {
-        ordemFmt: "TOTAL",
         atividade: `${dados.simulacaoMelhoria.quantidadeAtividades} atividade(s)`,
         tempoAsIsFmt: formatarTempo(dados.simulacaoMelhoria.tempoTotalAsIs),
         reducaoFmt: `${formatarPercentual(dados.simulacaoMelhoria.eficienciaPotencial)}%`,
+        categoriaFmt: "-",
         ganhoFmt: formatarTempo(dados.simulacaoMelhoria.ganhoPotencialHoras),
         tempoToBeFmt: formatarTempo(dados.simulacaoMelhoria.tempoTotalToBe),
         observacao: `Eficiência total: ${formatarPercentual(dados.simulacaoMelhoria.eficienciaPotencial)}%`,
