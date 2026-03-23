@@ -218,10 +218,6 @@ button.ghost {
   margin-bottom: 18px;
 }
 
-.exec-summary-grid-improvement {
-  margin-top: 10px;
-}
-
 .exec-summary-item {
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border: 1px solid #dbe7f5;
@@ -233,11 +229,6 @@ button.ghost {
 .exec-summary-item-improvement {
   border-color: #cfe5da;
   background: linear-gradient(180deg, #ffffff 0%, #f5fbf7 100%);
-}
-
-.highlight-gain-card {
-  border: 2px solid #16a34a;
-  box-shadow: 0 10px 22px rgba(22, 163, 74, 0.14);
 }
 
 .exec-summary-label {
