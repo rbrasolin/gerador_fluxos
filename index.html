@@ -13,95 +13,51 @@
 </head>
 <body>
 
-  <div class="page container">
+  <div class="page">
     <h1>Gerador de Fluxograma de Processos</h1>
 
-    <div class="section">
-      <div class="top-form form-grid">
-        <div class="field field-group">
-          <label for="desenho">Desenho</label>
-          <input id="desenho" type="text" placeholder="Ex.: As Is / To Be" />
-        </div>
-
-        <div class="field field-group">
-          <label for="processo">Nome do Processo</label>
-          <input id="processo" type="text" placeholder="Ex.: Fechamento OPEX" />
-        </div>
-
-        <div class="field field-group">
-          <label for="analista">Analista</label>
-          <input id="analista" type="text" placeholder="Ex.: Ricardo" />
-        </div>
-
-        <div class="field field-group">
-          <label for="negocio">Negócio</label>
-          <input id="negocio" type="text" placeholder="Ex.: Raizen / Comgás / Rumo" />
-        </div>
-
-        <div class="field field-group">
-          <label for="area">Área</label>
-          <input id="area" type="text" placeholder="Ex.: Controladoria" />
-        </div>
-
-        <div class="field field-group">
-          <label for="gestor">Gestor</label>
-          <input id="gestor" type="text" placeholder="Ex.: Nome do gestor imediato" />
-        </div>
+    <div class="top-form">
+      <div class="field">
+        <label for="processo">Nome do Processo</label>
+        <input id="processo" type="text" placeholder="Ex.: Fechamento OPEX" />
       </div>
 
-      <h3>Cole a tabela do Excel</h3>
-      <div class="field-group">
-        <textarea id="entrada" placeholder="Cole aqui a tabela copiada do Excel"></textarea>
-      </div>
-
-      <div class="actions button-row">
-        <button type="button" class="primary" onclick="gerarFluxo()">GERAR FLUXO</button>
-        <button type="button" class="secondary" onclick="limparTudo()">LIMPAR</button>
-      </div>
-
-      <div class="legend">
-        <div class="legend-item">
-          <span class="legend-color legend-green"></span>
-          <span>Verde: Oportunidade de automação</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-color legend-blue"></span>
-          <span>Azul: Oportunidade de melhoria de processo</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-color legend-yellow"></span>
-          <span>Amarelo: Já automatizado</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-color legend-white"></span>
-          <span>Branco: Sem oportunidade clara</span>
-        </div>
+      <div class="field">
+        <label for="analista">Analista</label>
+        <input id="analista" type="text" placeholder="Ex.: Ricardo" />
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-header">
-        <h3>Fluxo</h3>
-        <div class="actions inline-actions button-row">
-          <button type="button" class="primary" onclick="baixarSVG()">Baixar Fluxo</button>
-          <button type="button" class="secondary" onclick="baixarAnalisePDF()">Baixar Análise</button>
-        </div>
+    <h3>Cole a tabela do Excel</h3>
+    <textarea id="entrada" placeholder="Cole aqui a tabela copiada do Excel"></textarea>
+
+    <div class="actions">
+      <button type="button" onclick="gerarFluxo()">GERAR FLUXO</button>
+      <button type="button" class="secondary" onclick="limparTudo()">LIMPAR</button>
+    </div>
+
+    <hr>
+
+    <div class="section-header">
+      <h3>Fluxo</h3>
+      <div class="actions inline-actions">
+        <button type="button" onclick="baixarSVG()">Baixar Fluxo</button>
+        
+        
       </div>
-
-      <div id="diagramWrap">
-        <div id="diagram"></div>
-      </div>
     </div>
 
-    <div class="section">
-      <h3>Informações do Processo</h3>
-      <div id="infoProcesso"></div>
+    <div id="diagramWrap">
+      <div id="diagram"></div>
     </div>
 
-    <div class="section">
-      <h3>Análise do Processo</h3>
-      <div id="metricas"></div>
-    </div>
+    <hr>
+
+    <h3>Informações do Processo</h3>
+    <div id="infoProcesso"></div>
+
+    <h3>Análise do Processo</h3>
+    <div id="metricas"></div>
   </div>
 
   <script src="script.js"></script>
