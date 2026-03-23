@@ -33,6 +33,25 @@ function limpar(txt) {
   return String(txt).replace(/"/g, "").replace(/\(/g, "").replace(/\)/g, "").trim();
 }
 
+function escaparHTML(txt) {
+  return String(txt || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function obterValorCampo(id) {
+  const el = document.getElementById(id);
+  return el ? limpar(el.value) : "";
+}
+
+function limparCampo(id) {
+  const el = document.getElementById(id);
+  if (el) el.value = "";
+}
+
 function normalizarCor(cor) {
   const c = limpar(cor).toLowerCase();
   const permitidas = ["blue", "yellow", "green", "red", "white"];
@@ -265,12 +284,21 @@ function gerarNomeArquivo() {
 }
 
 function limparTudo() {
-  document.getElementById("processo").value = "";
-  document.getElementById("analista").value = "";
-  document.getElementById("entrada").value = "";
-  document.getElementById("diagram").innerHTML = "";
-  document.getElementById("infoProcesso").innerHTML = "";
-  document.getElementById("metricas").innerHTML = "";
+  limparCampo("processo");
+  limparCampo("analista");
+  limparCampo("negocio");
+  limparCampo("area");
+  limparCampo("coordenador");
+  limparCampo("entrada");
+
+  const diagram = document.getElementById("diagram");
+  const infoProcesso = document.getElementById("infoProcesso");
+  const metricas = document.getElementById("metricas");
+
+  if (diagram) diagram.innerHTML = "";
+  if (infoProcesso) infoProcesso.innerHTML = "";
+  if (metricas) metricas.innerHTML = "";
+
   ultimoNomeArquivo = "fluxograma_processo";
 }
 
@@ -938,6 +966,53 @@ function desenharConexao(
   }
 }
 
+function gerarHTMLResumoTempo(lista, tempoTotal) {
+  return lista
+    .map(item => {
+      const pct = tempoTotal ? formatarPercentual((item.tempo / tempoTotal) * 100) : "0,0";
+      return '<div class="analytics-item">' +
+        escaparHTML(item.nome) +
+        ' — <span class="icon-time">⏱</span>' + formatarTempo(item.tempo) +
+        ' <span class="icon-pct">%</span>' + pct + '%' +
+      '</div>';
+    })
+    .join("");
+}
+
+function gerarTabelaPareto(atividadesTempo, tempoTotal) {
+  let acumulado = 0;
+
+  const linhas = atividadesTempo.map((item) => {
+    const percentual = tempoTotal ? (item.tempo / tempoTotal) * 100 : 0;
+    acumulado += percentual;
+
+    return (
+      '<tr>' +
+        '<td style="padding:8px;border:1px solid #d9d9d9;vertical-align:top;">' + escaparHTML(item.atividade) + '</td>' +
+        '<td style="padding:8px;border:1px solid #d9d9d9;white-space:nowrap;text-align:center;">⏱ ' + formatarTempo(item.tempo) + '</td>' +
+        '<td style="padding:8px;border:1px solid #d9d9d9;white-space:nowrap;text-align:center;">' + formatarPercentual(percentual) + '%</td>' +
+        '<td style="padding:8px;border:1px solid #d9d9d9;white-space:nowrap;text-align:center;">' + formatarPercentual(acumulado) + '%</td>' +
+      '</tr>'
+    );
+  }).join("");
+
+  return (
+    '<div style="overflow-x:auto;">' +
+      '<table style="width:100%;border-collapse:collapse;font-size:14px;">' +
+        '<thead>' +
+          '<tr>' +
+            '<th style="padding:10px;border:1px solid #d9d9d9;background:#f5f5f5;text-align:left;">Atividade</th>' +
+            '<th style="padding:10px;border:1px solid #d9d9d9;background:#f5f5f5;text-align:center;">Tempo</th>' +
+            '<th style="padding:10px;border:1px solid #d9d9d9;background:#f5f5f5;text-align:center;">%</th>' +
+            '<th style="padding:10px;border:1px solid #d9d9d9;background:#f5f5f5;text-align:center;">Pareto</th>' +
+          '</tr>' +
+        '</thead>' +
+        '<tbody>' + linhas + '</tbody>' +
+      '</table>' +
+    '</div>'
+  );
+}
+
 function gerarFluxo() {
   const texto = document.getElementById("entrada").value;
 
@@ -946,8 +1021,11 @@ function gerarFluxo() {
     return;
   }
 
-  const processo = limpar(document.getElementById("processo").value);
-  const analista = limpar(document.getElementById("analista").value);
+  const processo = obterValorCampo("processo");
+  const analista = obterValorCampo("analista");
+  const negocio = obterValorCampo("negocio");
+  const area = obterValorCampo("area");
+  const coordenador = obterValorCampo("coordenador");
 
   const linhasBrutas = texto
     .replace(/\r\n/g, "\n")
@@ -971,7 +1049,7 @@ function gerarFluxo() {
     const id = limpar(col[1]);
     const atividade = limpar(col[2]);
     const tipo = limpar(col[3]) || "Não informado";
-    const sistema = limpar(col[4]);
+    const sistema = limpar(col[4]) || "Sem sistema informado";
     const tempo = tempoParaSegundos(limpar(col[5]));
     const proxSim = limpar(col[6]);
     const proxNao = limpar(col[7]);
@@ -1191,12 +1269,16 @@ function gerarFluxo() {
   ultimoNomeArquivo = gerarNomeArquivo();
 
   document.getElementById("infoProcesso").innerHTML =
-    "<b>Processo:</b> " + (processo || "Não informado") + "<br>" +
-    "<b>Analista:</b> " + (analista || "Não informado");
+    "<b>Processo:</b> " + (escaparHTML(processo) || "Não informado") + "<br>" +
+    "<b>Analista:</b> " + (escaparHTML(analista) || "Não informado") + "<br>" +
+    "<b>Negócio:</b> " + (escaparHTML(negocio) || "Não informado") + "<br>" +
+    "<b>Área:</b> " + (escaparHTML(area) || "Não informado") + "<br>" +
+    "<b>Coordenador:</b> " + (escaparHTML(coordenador) || "Não informado");
 
   let tempoTotal = 0;
   const atividadesTempo = [];
   const tiposTempo = {};
+  const sistemasTempo = {};
 
   etapas.forEach((etapa) => {
     tempoTotal += etapa.tempo;
@@ -1204,6 +1286,9 @@ function gerarFluxo() {
 
     if (!tiposTempo[etapa.tipo]) tiposTempo[etapa.tipo] = 0;
     tiposTempo[etapa.tipo] += etapa.tempo;
+
+    if (!sistemasTempo[etapa.sistema]) sistemasTempo[etapa.sistema] = 0;
+    sistemasTempo[etapa.sistema] += etapa.tempo;
   });
 
   atividadesTempo.sort((a, b) => b.tempo - a.tempo);
@@ -1213,34 +1298,24 @@ function gerarFluxo() {
     .map(a => {
       const pct = tempoTotal ? formatarPercentual((a.tempo / tempoTotal) * 100) : "0,0";
       return '<div class="analytics-item">' +
-        a.atividade +
+        escaparHTML(a.atividade) +
         ' — <span class="icon-time">⏱</span>' + formatarTempo(a.tempo) +
         ' <span class="icon-pct">%</span>' + pct + '%' +
       '</div>';
     })
     .join("");
 
-  let paretoHTML = "";
-  atividadesTempo.forEach(a => {
-    const pct = tempoTotal ? formatarPercentual((a.tempo / tempoTotal) * 100) : "0,0";
-    paretoHTML += '<div class="analytics-item">' +
-      a.atividade +
-      ' — <span class="icon-time">⏱</span>' + formatarTempo(a.tempo) +
-      ' <span class="icon-pct">%</span>' + pct + '%' +
-    '</div>';
-  });
+  const tiposOrdenados = Object.entries(tiposTempo)
+    .map(([nome, tempo]) => ({ nome, tempo }))
+    .sort((a, b) => b.tempo - a.tempo);
 
-  const tiposOrdenados = Object.entries(tiposTempo).sort((a, b) => b[1] - a[1]);
+  const sistemasOrdenados = Object.entries(sistemasTempo)
+    .map(([nome, tempo]) => ({ nome, tempo }))
+    .sort((a, b) => b.tempo - a.tempo);
 
-  let tiposHTML = "";
-  tiposOrdenados.forEach(([tipo, tempo]) => {
-    const pct = tempoTotal ? formatarPercentual((tempo / tempoTotal) * 100) : "0,0";
-    tiposHTML += '<div class="analytics-item">' +
-      tipo +
-      ' — <span class="icon-time">⏱</span>' + formatarTempo(tempo) +
-      ' <span class="icon-pct">%</span>' + pct + '%' +
-    '</div>';
-  });
+  const tiposHTML = gerarHTMLResumoTempo(tiposOrdenados, tempoTotal);
+  const sistemasHTML = gerarHTMLResumoTempo(sistemasOrdenados, tempoTotal);
+  const paretoHTML = gerarTabelaPareto(atividadesTempo, tempoTotal);
 
   let tempoPotencialRetrabalho = 0;
   etapas.forEach((etapa) => {
@@ -1270,11 +1345,18 @@ function gerarFluxo() {
           '<div class="analytics-item"><b>Impacto potencial de retrabalho:</b> <span class="icon-time">⏱</span>' + formatarTempo(tempoPotencialRetrabalho) + ' <span class="icon-pct">%</span>' + impactoPotencialRetrabalho + '%</div>' +
           '<div class="analytics-item"><b>Taxa de decisão:</b> ' + decisoes + ' etapa(s) <span class="icon-pct">%</span>' + taxaDecisao + '%</div>' +
         '</div>' +
+
         '<div class="analytics-section">' +
           '<div class="analytics-title">Tempo por tipo</div>' +
           tiposHTML +
         '</div>' +
+
+        '<div class="analytics-section">' +
+          '<div class="analytics-title">Tempo por sistema</div>' +
+          sistemasHTML +
+        '</div>' +
       '</div>' +
+
       '<div class="analytics-col">' +
         '<div class="analytics-section">' +
           '<div class="analytics-title">Pareto de tempo</div>' +
@@ -1313,4 +1395,3 @@ function baixarSVG() {
 function baixarFluxo() {
   baixarSVG();
 }
-
