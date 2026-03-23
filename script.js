@@ -303,13 +303,26 @@ function limparTudo() {
   ultimoNomeArquivo = "fluxograma_processo";
 }
 
-function adicionarLoopSeNecessario(origemId, destinoId, etapaPorId, etapaAtual, etapasOrigemComRetornoRef) {
+function adicionarLoopSeNecessario(origemId, destinoId, etapaPorId, etapaAtual) {
   const destino = etapaPorId[destinoId];
   if (destino && destino.ordem < etapaAtual.ordem) {
-    etapasOrigemComRetornoRef.add(origemId);
     return 1;
   }
   return 0;
+}
+
+function adicionarEtapasImpactadasPorRetorno(origemId, destinoId, etapaPorId, etapasOrdenadas, etapasImpactadasRef) {
+  const origem = etapaPorId[origemId];
+  const destino = etapaPorId[destinoId];
+
+  if (!origem || !destino) return;
+  if (destino.ordem >= origem.ordem) return;
+
+  etapasOrdenadas.forEach((etapa) => {
+    if (etapa.ordem >= destino.ordem && etapa.ordem <= origem.ordem) {
+      etapasImpactadasRef.add(etapa.id);
+    }
+  });
 }
 
 function desenharCapsula(svg, texto, x, y, width = 60, height = 36) {
@@ -1168,7 +1181,7 @@ function renderResumoAnaliseExecutivo(dados) {
         <div class="exec-summary-value">${dados.loops}</div>
       </div>
       <div class="exec-summary-item">
-        <div class="exec-summary-label">Possibilidade potencial de retrabalho</div>
+        <div class="exec-summary-label">Potencial retrabalho</div>
         <div class="exec-summary-value">${formatarTempo(dados.tempoPotencialRetrabalho)} | ${formatarPercentual(dados.impactoPotencialRetrabalho)}%</div>
       </div>
       <div class="exec-summary-item">
@@ -1437,7 +1450,7 @@ function gerarFluxo() {
   let loops = 0;
   let decisoes = 0;
   let conexoesExtrasCount = 0;
-  const etapasOrigemComRetorno = new Set();
+  const etapasImpactadasRetrabalho = new Set();
   const sharedRegistry = {};
 
   desenharConexao(svg, posicoes["__INICIO__"], posicoes[primeiraEtapa.id], "", 0, posicoes, sharedRegistry);
@@ -1454,7 +1467,8 @@ function gerarFluxo() {
     destinosSim.forEach((destinoId, indice) => {
       const destino = etapaPorId[destinoId];
       if (destino && destino.ordem < etapa.ordem) {
-        loops += adicionarLoopSeNecessario(etapa.id, destinoId, etapaPorId, etapa, etapasOrigemComRetorno);
+        loops += adicionarLoopSeNecessario(etapa.id, destinoId, etapaPorId, etapa);
+        adicionarEtapasImpactadasPorRetorno(etapa.id, destinoId, etapaPorId, etapas, etapasImpactadasRetrabalho);
       }
 
       desenharConexao(
@@ -1471,7 +1485,8 @@ function gerarFluxo() {
     destinosNao.forEach((destinoId, indice) => {
       const destino = etapaPorId[destinoId];
       if (destino && destino.ordem < etapa.ordem) {
-        loops += adicionarLoopSeNecessario(etapa.id, destinoId, etapaPorId, etapa, etapasOrigemComRetorno);
+        loops += adicionarLoopSeNecessario(etapa.id, destinoId, etapaPorId, etapa);
+        adicionarEtapasImpactadasPorRetorno(etapa.id, destinoId, etapaPorId, etapas, etapasImpactadasRetrabalho);
       }
 
       desenharConexao(
@@ -1488,7 +1503,8 @@ function gerarFluxo() {
     destinosExtras.forEach((destinoId, indice) => {
       const destino = etapaPorId[destinoId];
       if (destino && destino.ordem < etapa.ordem) {
-        loops += adicionarLoopSeNecessario(etapa.id, destinoId, etapaPorId, etapa, etapasOrigemComRetorno);
+        loops += adicionarLoopSeNecessario(etapa.id, destinoId, etapaPorId, etapa);
+        adicionarEtapasImpactadasPorRetorno(etapa.id, destinoId, etapaPorId, etapas, etapasImpactadasRetrabalho);
       }
 
       conexoesExtrasCount++;
@@ -1539,7 +1555,7 @@ function gerarFluxo() {
 
   let tempoPotencialRetrabalho = 0;
   etapas.forEach((etapa) => {
-    if (etapasOrigemComRetorno.has(etapa.id)) {
+    if (etapasImpactadasRetrabalho.has(etapa.id)) {
       tempoPotencialRetrabalho += etapa.tempo;
     }
   });
@@ -1674,7 +1690,7 @@ function coletarDadosAnaliseEstruturados() {
   let loops = 0;
   let decisoes = 0;
   let conexoesExtrasCount = 0;
-  const etapasOrigemComRetorno = new Set();
+  const etapasImpactadasRetrabalho = new Set();
   const tiposTempo = {};
   const sistemasTempo = {};
 
@@ -1697,7 +1713,7 @@ function coletarDadosAnaliseEstruturados() {
       const destino = etapaPorId[destinoId];
       if (destino && destino.ordem < etapa.ordem) {
         loops++;
-        etapasOrigemComRetorno.add(etapa.id);
+        adicionarEtapasImpactadasPorRetorno(etapa.id, destinoId, etapaPorId, etapas, etapasImpactadasRetrabalho);
       }
     });
 
@@ -1705,7 +1721,7 @@ function coletarDadosAnaliseEstruturados() {
       const destino = etapaPorId[destinoId];
       if (destino && destino.ordem < etapa.ordem) {
         loops++;
-        etapasOrigemComRetorno.add(etapa.id);
+        adicionarEtapasImpactadasPorRetorno(etapa.id, destinoId, etapaPorId, etapas, etapasImpactadasRetrabalho);
       }
     });
 
@@ -1715,14 +1731,14 @@ function coletarDadosAnaliseEstruturados() {
       const destino = etapaPorId[destinoId];
       if (destino && destino.ordem < etapa.ordem) {
         loops++;
-        etapasOrigemComRetorno.add(etapa.id);
+        adicionarEtapasImpactadasPorRetorno(etapa.id, destinoId, etapaPorId, etapas, etapasImpactadasRetrabalho);
       }
     });
   });
 
   let tempoPotencialRetrabalho = 0;
   etapas.forEach((etapa) => {
-    if (etapasOrigemComRetorno.has(etapa.id)) {
+    if (etapasImpactadasRetrabalho.has(etapa.id)) {
       tempoPotencialRetrabalho += etapa.tempo;
     }
   });
@@ -2081,7 +2097,7 @@ async function baixarAnalisePDF() {
 
   y = garantirEspacoPagina(doc, y, 18, margem, pageHeight);
   doc.text(
-    `Possibilidade potencial de retrabalho: ${formatarTempo(dados.tempoPotencialRetrabalho)} | ${formatarPercentual(dados.impactoPotencialRetrabalho)}%`,
+    `Potencial retrabalho: ${formatarTempo(dados.tempoPotencialRetrabalho)} | ${formatarPercentual(dados.impactoPotencialRetrabalho)}%`,
     margem,
     y
   );
