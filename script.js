@@ -240,18 +240,50 @@ function obterLinhasEtapa(etapa, larguraCaixa) {
   );
 
   return [
-    ...linhasAtividade,
-    ...linhasSistema,
-    formatarTempo(etapa.tempo)
-  ];
+  ...linhasAtividade,
+  formatarTempo(etapa.tempo)
+];
+
+function desenharSistemaSeparado(svg, etapa, pos) {
+  const altura = 24;
+  const y = pos.y + pos.h - altura;
+
+  const g = criarElementoSVG("g");
+
+  const rect = criarElementoSVG("rect");
+  rect.setAttribute("x", pos.x);
+  rect.setAttribute("y", y);
+  rect.setAttribute("width", pos.w);
+  rect.setAttribute("height", altura);
+  rect.setAttribute("fill", "#f5f5f5");
+  rect.setAttribute("stroke", CONFIG.stroke);
+  rect.setAttribute("stroke-width", "1.5");
+
+  g.appendChild(rect);
+
+  const text = criarElementoSVG("text");
+  text.setAttribute("x", pos.x + pos.w / 2);
+  text.setAttribute("y", y + 16);
+  text.setAttribute("text-anchor", "middle");
+  text.setAttribute("font-family", CONFIG.fontFamily);
+  text.setAttribute("font-size", CONFIG.smallFontSize);
+  text.setAttribute("fill", "#111111");
+
+  text.textContent = etapa.sistema || "Sem sistema";
+
+  g.appendChild(text);
+
+  svg.appendChild(g);
 }
 
 function obterAlturaNo(etapa, alturaPadraoBase) {
+  const alturaSistema = 24;
+
   if (isPergunta(etapa.atividade)) {
-    return Math.ceil(alturaPadraoBase * CONFIG.decisionHeightFactor);
+    return Math.ceil(alturaPadraoBase * CONFIG.decisionHeightFactor) + alturaSistema;
   }
 
-  return alturaPadraoBase;
+  return alturaPadraoBase + alturaSistema;
 }
 
 function calcularAlturaNecessariaEtapa(etapa) {
@@ -365,6 +397,7 @@ function desenharNo(svg, etapa, pos) {
   const g = criarElementoSVG("g");
   const fill = corHex(etapa.cor);
   const pergunta = isPergunta(etapa.atividade);
+  desenharSistemaSeparado(svg, etapa, pos);
 
   if (pergunta) {
     const cx = pos.x + pos.w / 2;
@@ -394,8 +427,11 @@ function desenharNo(svg, etapa, pos) {
   }
 
   const linhas = obterLinhasEtapa(etapa, pos.w);
+  const alturaSistema = 24;
+  const areaUtil = pos.h - alturaSistema;
+
   const totalAlturaTexto = linhas.length * CONFIG.textLineHeight;
-  const inicioYTexto = pos.y + (pos.h - totalAlturaTexto) / 2 + 14;
+  const inicioYTexto = pos.y + (areaUtil - totalAlturaTexto) / 2 + 14;
 
   linhas.forEach((linha, i) => {
     const text = criarElementoSVG("text");
