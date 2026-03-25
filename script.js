@@ -22,6 +22,7 @@ const CONFIG = {
   lanePaddingTop: 26,
   lanePaddingBottom: 26,
   laneLabelWidth: 70,
+  laneEntryWidth: 110,
   laneHeaderFontSize: 16,
   laneHeaderFill: "#f7f7f7",
   laneBorder: "#bdbdbd",
