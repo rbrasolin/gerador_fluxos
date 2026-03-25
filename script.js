@@ -445,7 +445,7 @@ function desenharNo(svg, etapa, pos) {
   rect.setAttribute("stroke", CONFIG.stroke);
   rect.setAttribute("stroke-width", "2");
   g.appendChild(rect);
-
+  }
   const linhas = obterLinhasEtapa(etapa, pos.w);
   const alturaSistema = 24;
   const areaUtil = pos.h - alturaSistema;
