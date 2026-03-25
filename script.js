@@ -18,7 +18,14 @@ const CONFIG = {
   decisionHeightFactor: 1.30,
   routeGap: 28,
   entryExitGap: 40,
-  laneGap: 36,
+  laneGap: 28,
+  lanePaddingTop: 26,
+  lanePaddingBottom: 26,
+  laneLabelWidth: 70,
+  laneHeaderFontSize: 16,
+  laneHeaderFill: "#f7f7f7",
+  laneBorder: "#bdbdbd",
+  laneSeparator: "#d6d6d6",
   sameRowTolerance: 1,
   sameColTolerance: 1,
   sharedMergeGap: 34,
@@ -404,6 +411,60 @@ function desenharNo(svg, etapa, pos) {
   svg.appendChild(g);
 }
 
+function desenharRaias(svg, areasOrdenadas, lanes, svgWidth) {
+  areasOrdenadas.forEach((area) => {
+    const lane = lanes[area];
+    if (!lane) return;
+
+    const g = criarElementoSVG("g");
+
+    const rectExterno = criarElementoSVG("rect");
+    rectExterno.setAttribute("x", lane.x);
+    rectExterno.setAttribute("y", lane.y);
+    rectExterno.setAttribute("width", lane.width);
+    rectExterno.setAttribute("height", lane.height);
+    rectExterno.setAttribute("fill", "#ffffff");
+    rectExterno.setAttribute("stroke", CONFIG.laneBorder);
+    rectExterno.setAttribute("stroke-width", "1.2");
+    g.appendChild(rectExterno);
+
+    const header = criarElementoSVG("rect");
+    header.setAttribute("x", lane.x);
+    header.setAttribute("y", lane.y);
+    header.setAttribute("width", CONFIG.laneLabelWidth);
+    header.setAttribute("height", lane.height);
+    header.setAttribute("fill", CONFIG.laneHeaderFill);
+    header.setAttribute("stroke", CONFIG.laneBorder);
+    header.setAttribute("stroke-width", "1");
+    g.appendChild(header);
+
+    const separator = criarElementoSVG("line");
+    separator.setAttribute("x1", lane.x + CONFIG.laneLabelWidth);
+    separator.setAttribute("y1", lane.y);
+    separator.setAttribute("x2", lane.x + CONFIG.laneLabelWidth);
+    separator.setAttribute("y2", lane.y + lane.height);
+    separator.setAttribute("stroke", CONFIG.laneSeparator);
+    separator.setAttribute("stroke-width", "1");
+    g.appendChild(separator);
+
+    const texto = criarElementoSVG("text");
+    const tx = lane.x + CONFIG.laneLabelWidth / 2;
+    const ty = lane.y + lane.height / 2;
+    texto.setAttribute("x", tx);
+    texto.setAttribute("y", ty);
+    texto.setAttribute("text-anchor", "middle");
+    texto.setAttribute("font-family", CONFIG.fontFamily);
+    texto.setAttribute("font-size", String(CONFIG.laneHeaderFontSize));
+    texto.setAttribute("font-weight", "bold");
+    texto.setAttribute("fill", "#333333");
+    texto.setAttribute("transform", `rotate(-90 ${tx} ${ty})`);
+    texto.textContent = area;
+    g.appendChild(texto);
+
+    svg.appendChild(g);
+  });
+}
+
 function getAnchorPoint(node, side) {
   switch (side) {
     case "right":
@@ -757,7 +818,7 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
   }
 
   const dx = destino.gridCol - origem.gridCol;
-  const dy = destino.gridRow - origem.gridRow;
+  const dy = destino.gridRowGlobal - origem.gridRowGlobal;
 
   if (dx === 0 && dy > 0) {
     return [{ startSide: "bottom", endSide: "top" }];
@@ -1299,20 +1360,21 @@ function gerarFluxo() {
   const idsValidos = new Set();
 
   linhas.forEach((col) => {
-    while (col.length < 12) col.push("");
+    while (col.length < 13) col.push("");
 
     const ordem = Number(limpar(col[0])) || 0;
     const id = limpar(col[1]);
     const atividade = limpar(col[2]);
-    const tipo = limpar(col[3]) || "Não informado";
-    const sistema = limpar(col[4]) || "Sem sistema informado";
-    const tempo = tempoParaSegundos(limpar(col[5]));
-    const proxSim = limpar(col[6]);
-    const proxNao = limpar(col[7]);
-    const conexoesExtras = limpar(col[8]);
-    const coluna = Number(limpar(col[9])) || 1;
-    const linha = Number(limpar(col[10])) || 1;
-    const cor = normalizarCor(col[11]);
+    const areaEtapa = limpar(col[3]) || "Sem Área";
+    const tipo = limpar(col[4]) || "Não informado";
+    const sistema = limpar(col[5]) || "Sem sistema informado";
+    const tempo = tempoParaSegundos(limpar(col[6]));
+    const proxSim = limpar(col[7]);
+    const proxNao = limpar(col[8]);
+    const conexoesExtras = limpar(col[9]);
+    const coluna = Number(limpar(col[10])) || 1;
+    const linha = Number(limpar(col[11])) || 1;
+    const cor = normalizarCor(col[12]);
 
     if (!id || !atividade) return;
 
@@ -1320,6 +1382,7 @@ function gerarFluxo() {
       ordem,
       id,
       atividade,
+      area: areaEtapa,
       tipo,
       sistema,
       tempo,
@@ -1352,17 +1415,69 @@ function gerarFluxo() {
   const colSlotWidth = Math.max(CONFIG.boxWidth, CONFIG.decisionWidth);
 
   const maxColuna = Math.max(...etapas.map(e => e.coluna), 1) + 1;
-  const maxLinha = Math.max(...etapas.map(e => e.linha), 1) + 1;
 
-  const svgWidth =
-    CONFIG.marginX * 2 +
+  const areasOrdenadas = [];
+  const areaJaExiste = new Set();
+  etapas.forEach((e) => {
+    const nome = e.area || "Sem Área";
+    if (!areaJaExiste.has(nome)) {
+      areaJaExiste.add(nome);
+      areasOrdenadas.push(nome);
+    }
+  });
+
+  const linhasPorArea = {};
+  areasOrdenadas.forEach((nome) => {
+    linhasPorArea[nome] = 1;
+  });
+
+  etapas.forEach((e) => {
+    const nome = e.area || "Sem Área";
+    linhasPorArea[nome] = Math.max(linhasPorArea[nome] || 1, e.linha || 1);
+  });
+
+  const laneContentWidth =
     maxColuna * colSlotWidth +
     (maxColuna - 1) * CONFIG.colGap;
 
-  const svgHeight =
-    CONFIG.marginY * 2 +
-    maxLinha * rowSlotHeight +
-    (maxLinha - 1) * CONFIG.rowGap;
+  const lanes = {};
+  let cursorY = CONFIG.marginY;
+  let rowOffsetGlobal = 0;
+
+  areasOrdenadas.forEach((nome) => {
+    const qtdLinhas = linhasPorArea[nome] || 1;
+
+    const contentHeight =
+      qtdLinhas * rowSlotHeight +
+      (qtdLinhas - 1) * CONFIG.rowGap;
+
+    const laneHeight =
+      CONFIG.lanePaddingTop +
+      contentHeight +
+      CONFIG.lanePaddingBottom;
+
+    lanes[nome] = {
+      x: CONFIG.marginX,
+      y: cursorY,
+      width: CONFIG.laneLabelWidth + laneContentWidth + 30,
+      height: laneHeight,
+      contentX: CONFIG.marginX + CONFIG.laneLabelWidth + 20,
+      contentY: cursorY + CONFIG.lanePaddingTop,
+      rows: qtdLinhas,
+      rowOffsetGlobalStart: rowOffsetGlobal
+    };
+
+    rowOffsetGlobal += qtdLinhas + 2;
+    cursorY += laneHeight + CONFIG.laneGap;
+  });
+
+  const svgWidth =
+    CONFIG.marginX * 2 +
+    CONFIG.laneLabelWidth +
+    30 +
+    laneContentWidth;
+
+  const svgHeight = cursorY;
 
   const svg = criarElementoSVG("svg");
   svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -1388,15 +1503,18 @@ function gerarFluxo() {
   defs.appendChild(marker);
   svg.appendChild(defs);
 
+  desenharRaias(svg, areasOrdenadas, lanes, svgWidth);
+
   const posicoes = {};
 
   etapas.forEach((e) => {
     const pergunta = isPergunta(e.atividade);
     const w = pergunta ? CONFIG.decisionWidth : CONFIG.boxWidth;
     const h = obterAlturaNo(e, alturaPadraoNos);
+    const lane = lanes[e.area || "Sem Área"];
 
-    const slotX = CONFIG.marginX + (e.coluna - 1) * (colSlotWidth + CONFIG.colGap);
-    const slotY = CONFIG.marginY + (e.linha - 1) * (rowSlotHeight + CONFIG.rowGap);
+    const slotX = lane.contentX + (e.coluna - 1) * (colSlotWidth + CONFIG.colGap);
+    const slotY = lane.contentY + (e.linha - 1) * (rowSlotHeight + CONFIG.rowGap);
 
     const x = slotX + (colSlotWidth - w) / 2;
     const y = slotY + (rowSlotHeight - h) / 2;
@@ -1409,7 +1527,9 @@ function gerarFluxo() {
       h,
       isDecision: pergunta,
       gridCol: e.coluna,
-      gridRow: e.linha
+      gridRow: e.linha,
+      gridRowGlobal: lane.rowOffsetGlobalStart + e.linha,
+      area: e.area || "Sem Área"
     };
   });
 
@@ -1426,7 +1546,9 @@ function gerarFluxo() {
     h: 36,
     isDecision: false,
     gridCol: Math.max(0, primeiraPos.gridCol - 1),
-    gridRow: primeiraPos.gridRow
+    gridRow: primeiraPos.gridRow,
+    gridRowGlobal: primeiraPos.gridRowGlobal,
+    area: primeiraPos.area
   };
 
   posicoes["__FIM__"] = {
@@ -1437,7 +1559,9 @@ function gerarFluxo() {
     h: 36,
     isDecision: false,
     gridCol: ultimaPos.gridCol + 1,
-    gridRow: ultimaPos.gridRow
+    gridRow: ultimaPos.gridRow,
+    gridRowGlobal: ultimaPos.gridRowGlobal,
+    area: ultimaPos.area
   };
 
   desenharCapsula(svg, "Início", posicoes["__INICIO__"].x, posicoes["__INICIO__"].y, 60, 36);
@@ -1652,17 +1776,18 @@ function coletarDadosAnaliseEstruturados() {
   }
 
   linhas.forEach((col) => {
-    while (col.length < 12) col.push("");
+    while (col.length < 13) col.push("");
 
     const ordem = Number(limpar(col[0])) || 0;
     const id = limpar(col[1]);
     const atividade = limpar(col[2]);
-    const tipo = limpar(col[3]) || "Não informado";
-    const sistema = limpar(col[4]) || "Sem sistema informado";
-    const tempo = tempoParaSegundos(limpar(col[5]));
-    const proxSim = limpar(col[6]);
-    const proxNao = limpar(col[7]);
-    const conexoesExtras = limpar(col[8]);
+    const areaEtapa = limpar(col[3]) || "Sem Área";
+    const tipo = limpar(col[4]) || "Não informado";
+    const sistema = limpar(col[5]) || "Sem sistema informado";
+    const tempo = tempoParaSegundos(limpar(col[6]));
+    const proxSim = limpar(col[7]);
+    const proxNao = limpar(col[8]);
+    const conexoesExtras = limpar(col[9]);
 
     if (!id || !atividade) return;
 
@@ -1670,6 +1795,7 @@ function coletarDadosAnaliseEstruturados() {
       ordem,
       id,
       atividade,
+      area: areaEtapa,
       tipo,
       sistema,
       tempo,
