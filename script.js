@@ -436,17 +436,15 @@ function desenharNo(svg, etapa, pos) {
     polygon.setAttribute("stroke-width", "2");
     g.appendChild(polygon);
   } else {
-    const rect = criarElementoSVG("rect");
-rect.setAttribute("x", pos.x);
-rect.setAttribute("y", pos.y);
-rect.setAttribute("width", pos.w);
-rect.setAttribute("height", pos.h);
-rect.setAttribute("fill", fill);
-rect.setAttribute("stroke", CONFIG.stroke);
-rect.setAttribute("stroke-width", "2");
-rect.setAttribute("rx", 0);
-rect.setAttribute("ry", 0);
-g.appendChild(rect);
+  const rect = criarElementoSVG("rect");
+  rect.setAttribute("x", pos.x);
+  rect.setAttribute("y", pos.y);
+  rect.setAttribute("width", pos.w);
+  rect.setAttribute("height", pos.h);
+  rect.setAttribute("fill", fill);
+  rect.setAttribute("stroke", CONFIG.stroke);
+  rect.setAttribute("stroke-width", "2");
+  g.appendChild(rect);
 
   const linhas = obterLinhasEtapa(etapa, pos.w);
   const alturaSistema = 24;
