@@ -1360,21 +1360,21 @@ function gerarFluxo() {
   const idsValidos = new Set();
 
   linhas.forEach((col) => {
-    while (col.length < 13) col.push("");
+  while (col.length < 13) col.push("");
 
-    const ordem = Number(limpar(col[0])) || 0;
-    const id = limpar(col[1]);
-    const atividade = limpar(col[2]);
-    const areaEtapa = limpar(col[3]) || "Sem Área";
-    const tipo = limpar(col[4]) || "Não informado";
-    const sistema = limpar(col[5]) || "Sem sistema informado";
-    const tempo = tempoParaSegundos(limpar(col[6]));
-    const proxSim = limpar(col[7]);
-    const proxNao = limpar(col[8]);
-    const conexoesExtras = limpar(col[9]);
-    const coluna = Number(limpar(col[10])) || 1;
-    const linha = Number(limpar(col[11])) || 1;
-    const cor = normalizarCor(col[12]);
+  const ordem = Number(limpar(col[0])) || 0;
+  const id = limpar(col[1]);
+  const areaEtapa = limpar(col[2]) || "Sem Área";
+  const atividade = limpar(col[3]);
+  const tipo = limpar(col[4]) || "Não informado";
+  const sistema = limpar(col[5]) || "Sem sistema informado";
+  const tempo = tempoParaSegundos(limpar(col[6]));
+  const proxSim = limpar(col[7]);
+  const proxNao = limpar(col[8]);
+  const conexoesExtras = limpar(col[9]);
+  const coluna = Number(limpar(col[10])) || 1;
+  const linha = Number(limpar(col[11])) || 1;
+  const cor = normalizarCor(col[12]);
 
     if (!id || !atividade) return;
 
@@ -1775,19 +1775,19 @@ function coletarDadosAnaliseEstruturados() {
     linhas.shift();
   }
 
-  linhas.forEach((col) => {
-    while (col.length < 13) col.push("");
+ linhas.forEach((col) => {
+  while (col.length < 13) col.push("");
 
-    const ordem = Number(limpar(col[0])) || 0;
-    const id = limpar(col[1]);
-    const atividade = limpar(col[2]);
-    const areaEtapa = limpar(col[3]) || "Sem Área";
-    const tipo = limpar(col[4]) || "Não informado";
-    const sistema = limpar(col[5]) || "Sem sistema informado";
-    const tempo = tempoParaSegundos(limpar(col[6]));
-    const proxSim = limpar(col[7]);
-    const proxNao = limpar(col[8]);
-    const conexoesExtras = limpar(col[9]);
+  const ordem = Number(limpar(col[0])) || 0;
+  const id = limpar(col[1]);
+  const areaEtapa = limpar(col[2]) || "Sem Área";
+  const atividade = limpar(col[3]);
+  const tipo = limpar(col[4]) || "Não informado";
+  const sistema = limpar(col[5]) || "Sem sistema informado";
+  const tempo = tempoParaSegundos(limpar(col[6]));
+  const proxSim = limpar(col[7]);
+  const proxNao = limpar(col[8]);
+  const conexoesExtras = limpar(col[9]);
 
     if (!id || !atividade) return;
 
