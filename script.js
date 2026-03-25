@@ -1538,18 +1538,20 @@ function gerarFluxo() {
   const primeiraPos = posicoes[primeiraEtapa.id];
   const ultimaPos = posicoes[ultimaEtapa.id];
 
-  posicoes["__INICIO__"] = {
-    id: "__INICIO__",
-    x: primeiraPos.x - 60 - CONFIG.entryExitGap,
-    y: primeiraPos.y + (primeiraPos.h - 36) / 2,
-    w: 60,
-    h: 36,
-    isDecision: false,
-    gridCol: Math.max(0, primeiraPos.gridCol - 1),
-    gridRow: primeiraPos.gridRow,
-    gridRowGlobal: primeiraPos.gridRowGlobal,
-    area: primeiraPos.area
-  };
+  const primeiraLane = lanes[primeiraEtapa.area];
+
+posicoes["__INICIO__"] = {
+  id: "__INICIO__",
+  x: primeiraLane.contentX - 60 - CONFIG.entryExitGap,
+  y: primeiraPos.y + (primeiraPos.h - 36) / 2,
+  w: 60,
+  h: 36,
+  isDecision: false,
+  gridCol: Math.max(0, primeiraPos.gridCol - 1),
+  gridRow: primeiraPos.gridRow,
+  gridRowGlobal: primeiraPos.gridRowGlobal,
+  area: primeiraPos.area
+};
 
   posicoes["__FIM__"] = {
     id: "__FIM__",
