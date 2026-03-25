@@ -250,8 +250,7 @@ function desenharSistemaSeparado(svg, etapa, pos) {
   rect.setAttribute("y", y);
   rect.setAttribute("width", pos.w);
   rect.setAttribute("height", altura);
-  rect.setAttribute("fill", "#f5f5f5");
-  rect.setAttribute("stroke", CONFIG.stroke);
+  rect.setAttribute("class", "system");
   rect.setAttribute("stroke-width", "1.5");
   g.appendChild(rect);
 
@@ -441,8 +440,7 @@ function desenharNo(svg, etapa, pos) {
   rect.setAttribute("y", pos.y);
   rect.setAttribute("width", pos.w);
   rect.setAttribute("height", pos.h);
-  rect.setAttribute("fill", fill);
-  rect.setAttribute("stroke", CONFIG.stroke);
+  rect.setAttribute("class", `box ${etapa.cor}`);
   rect.setAttribute("stroke-width", "2");
   g.appendChild(rect);
   }
@@ -1805,6 +1803,33 @@ posicoes["__INICIO__"] = {
   document.getElementById("metricas").innerHTML =
     renderizarAnaliseExecutiva(dadosAnalise);
 }
+
+  const style = criarElementoSVG("style");
+style.textContent = `
+  .box {
+    stroke: #111;
+    stroke-width: 2;
+  }
+
+  .green { fill: #95d5b2; }
+  .blue { fill: #8ecae6; }
+  .yellow { fill: #ffd166; }
+  .red { fill: #ef476f; }
+  .white { fill: #ffffff; }
+
+  .system {
+    fill: #f5f5f5;
+    stroke: #111;
+    stroke-width: 1.5;
+  }
+
+  .text {
+    font-family: Arial, sans-serif;
+    fill: #111;
+  }
+`;
+svg.appendChild(style);
+
 
 /* =========================
    EXPORTAÇÃO SVG E PDF
