@@ -1460,9 +1460,9 @@ function gerarFluxo() {
     lanes[nome] = {
       x: CONFIG.marginX,
       y: cursorY,
-      width: CONFIG.laneLabelWidth + laneContentWidth + 30,
+      width: CONFIG.laneLabelWidth + CONFIG.laneEntryWidth + laneContentWidth,
       height: laneHeight,
-      contentX: CONFIG.marginX + CONFIG.laneLabelWidth + 20,
+      contentX: CONFIG.marginX + CONFIG.laneLabelWidth + CONFIG.laneEntryWidth,
       contentY: cursorY + CONFIG.lanePaddingTop,
       rows: qtdLinhas,
       rowOffsetGlobalStart: rowOffsetGlobal
@@ -1473,10 +1473,10 @@ function gerarFluxo() {
   });
 
   const svgWidth =
-    CONFIG.marginX * 2 +
-    CONFIG.laneLabelWidth +
-    30 +
-    laneContentWidth;
+  CONFIG.marginX * 2 +
+  CONFIG.laneLabelWidth +
+  CONFIG.laneEntryWidth +
+  laneContentWidth;
 
   const svgHeight = cursorY;
 
@@ -1543,7 +1543,7 @@ function gerarFluxo() {
 
 posicoes["__INICIO__"] = {
   id: "__INICIO__",
-  x: primeiraLane.contentX - 60 - CONFIG.entryExitGap,
+  x: primeiraLane.x + CONFIG.laneLabelWidth + 20,
   y: primeiraPos.y + (primeiraPos.h - 36) / 2,
   w: 60,
   h: 36,
