@@ -233,16 +233,40 @@ function obterLinhasEtapa(etapa, larguraCaixa) {
     CONFIG.fontSize
   );
 
-  const linhasSistema = quebrarTextoPorLargura(
-    etapa.sistema || "Sem sistema informado",
-    larguraTexto,
-    CONFIG.fontSize
-  );
-
   return [
-  ...linhasAtividade,
-  formatarTempo(etapa.tempo)
-];
+    ...linhasAtividade,
+    formatarTempo(etapa.tempo)
+  ];
+}
+
+function desenharSistemaSeparado(svg, etapa, pos) {
+  const altura = 24;
+  const y = pos.y + pos.h - altura;
+
+  const g = criarElementoSVG("g");
+
+  const rect = criarElementoSVG("rect");
+  rect.setAttribute("x", pos.x);
+  rect.setAttribute("y", y);
+  rect.setAttribute("width", pos.w);
+  rect.setAttribute("height", altura);
+  rect.setAttribute("fill", "#f5f5f5");
+  rect.setAttribute("stroke", CONFIG.stroke);
+  rect.setAttribute("stroke-width", "1.5");
+  g.appendChild(rect);
+
+  const text = criarElementoSVG("text");
+  text.setAttribute("x", pos.x + pos.w / 2);
+  text.setAttribute("y", y + 16);
+  text.setAttribute("text-anchor", "middle");
+  text.setAttribute("font-family", CONFIG.fontFamily);
+  text.setAttribute("font-size", CONFIG.smallFontSize);
+  text.setAttribute("fill", "#111111");
+  text.textContent = etapa.sistema || "Sem sistema";
+  g.appendChild(text);
+
+  svg.appendChild(g);
+}
 
 function desenharSistemaSeparado(svg, etapa, pos) {
   const altura = 24;
@@ -397,7 +421,6 @@ function desenharNo(svg, etapa, pos) {
   const g = criarElementoSVG("g");
   const fill = corHex(etapa.cor);
   const pergunta = isPergunta(etapa.atividade);
-  desenharSistemaSeparado(svg, etapa, pos);
 
   if (pergunta) {
     const cx = pos.x + pos.w / 2;
@@ -446,6 +469,7 @@ function desenharNo(svg, etapa, pos) {
   });
 
   svg.appendChild(g);
+  desenharSistemaSeparado(svg, etapa, pos);
 }
 
 function desenharRaias(svg, areasOrdenadas, lanes, svgWidth) {
