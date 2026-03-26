@@ -251,7 +251,6 @@ function desenharSistemaSeparado(svg, etapa, pos) {
   rect.setAttribute("width", pos.w);
   rect.setAttribute("height", altura);
   rect.setAttribute("class", "system");
-  rect.setAttribute("stroke-width", "1.5");
   g.appendChild(rect);
 
   const text = criarElementoSVG("text");
@@ -262,40 +261,8 @@ function desenharSistemaSeparado(svg, etapa, pos) {
   text.setAttribute("font-size", CONFIG.smallFontSize);
   text.setAttribute("fill", "#111111");
   text.textContent = etapa.sistema || "Sem sistema";
-  g.appendChild(text);
-
-  svg.appendChild(g);
-}
-
-function desenharSistemaSeparado(svg, etapa, pos) {
-  const altura = 24;
-  const y = pos.y + pos.h - altura;
-
-  const g = criarElementoSVG("g");
-
-  const rect = criarElementoSVG("rect");
-  rect.setAttribute("x", pos.x);
-  rect.setAttribute("y", y);
-  rect.setAttribute("width", pos.w);
-  rect.setAttribute("height", altura);
-  rect.setAttribute("fill", "#f5f5f5");
-  rect.setAttribute("stroke", CONFIG.stroke);
-  rect.setAttribute("stroke-width", "1.5");
-
-  g.appendChild(rect);
-
-  const text = criarElementoSVG("text");
-  text.setAttribute("x", pos.x + pos.w / 2);
-  text.setAttribute("y", y + 16);
-  text.setAttribute("text-anchor", "middle");
-  text.setAttribute("font-family", CONFIG.fontFamily);
-  text.setAttribute("font-size", CONFIG.smallFontSize);
-  text.setAttribute("fill", "#111111");
-
-  text.textContent = etapa.sistema || "Sem sistema";
 
   g.appendChild(text);
-
   svg.appendChild(g);
 }
 
@@ -418,7 +385,6 @@ function desenharCapsula(svg, texto, x, y, width = 60, height = 36) {
 
 function desenharNo(svg, etapa, pos) {
   const g = criarElementoSVG("g");
-  const fill = corHex(etapa.cor);
   const pergunta = isPergunta(etapa.atividade);
 
   if (pergunta) {
@@ -426,14 +392,12 @@ function desenharNo(svg, etapa, pos) {
     const cy = pos.y + pos.h / 2;
 
     const polygon = criarElementoSVG("polygon");
-    polygon.setAttribute(
-      "points",
-      `${cx},${pos.y} ${pos.x + pos.w},${cy} ${cx},${pos.y + pos.h} ${pos.x},${cy}`
-    );
-    polygon.setAttribute("fill", fill);
-    polygon.setAttribute("stroke", CONFIG.stroke);
-    polygon.setAttribute("stroke-width", "2");
-    g.appendChild(polygon);
+polygon.setAttribute(
+  "points",
+  `${cx},${pos.y} ${pos.x + pos.w},${cy} ${cx},${pos.y + pos.h} ${pos.x},${cy}`
+);
+polygon.setAttribute("class", `box ${etapa.cor}`);
+g.appendChild(polygon);
   } else {
   const rect = criarElementoSVG("rect");
   rect.setAttribute("x", pos.x);
@@ -441,7 +405,6 @@ function desenharNo(svg, etapa, pos) {
   rect.setAttribute("width", pos.w);
   rect.setAttribute("height", pos.h);
   rect.setAttribute("class", `box ${etapa.cor}`);
-  rect.setAttribute("stroke-width", "2");
   g.appendChild(rect);
   }
   const linhas = obterLinhasEtapa(etapa, pos.w);
@@ -464,7 +427,10 @@ function desenharNo(svg, etapa, pos) {
   });
 
   svg.appendChild(g);
+
+if (!pergunta) {
   desenharSistemaSeparado(svg, etapa, pos);
+}
 }
 
 function desenharRaias(svg, areasOrdenadas, lanes, svgWidth) {
@@ -1542,6 +1508,32 @@ function gerarFluxo() {
   svg.setAttribute("viewBox", `0 0 ${svgWidth} ${svgHeight}`);
   svg.setAttribute("style", "background:#ffffff");
 
+  const style = criarElementoSVG("style");
+style.textContent = `
+  .box {
+    stroke: #111111;
+    stroke-width: 2;
+  }
+
+  .green { fill: #95d5b2; }
+  .blue { fill: #8ecae6; }
+  .yellow { fill: #ffd166; }
+  .red { fill: #ef476f; }
+  .white { fill: #ffffff; }
+
+  .system {
+    fill: #f5f5f5;
+    stroke: #111111;
+    stroke-width: 1.5;
+  }
+
+  .text {
+    font-family: Arial, sans-serif;
+    fill: #111111;
+  }
+`;
+svg.appendChild(style);
+
   const defs = criarElementoSVG("defs");
   const marker = criarElementoSVG("marker");
   marker.setAttribute("id", "arrow");
@@ -1800,36 +1792,12 @@ posicoes["__INICIO__"] = {
     })()
   };
 
+  
+
   document.getElementById("metricas").innerHTML =
     renderizarAnaliseExecutiva(dadosAnalise);
+
 }
-
-  const style = criarElementoSVG("style");
-style.textContent = `
-  .box {
-    stroke: #111;
-    stroke-width: 2;
-  }
-
-  .green { fill: #95d5b2; }
-  .blue { fill: #8ecae6; }
-  .yellow { fill: #ffd166; }
-  .red { fill: #ef476f; }
-  .white { fill: #ffffff; }
-
-  .system {
-    fill: #f5f5f5;
-    stroke: #111;
-    stroke-width: 1.5;
-  }
-
-  .text {
-    font-family: Arial, sans-serif;
-    fill: #111;
-  }
-`;
-svg.appendChild(style);
-
 
 /* =========================
    EXPORTAÇÃO SVG E PDF
