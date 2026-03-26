@@ -347,27 +347,42 @@ function desenharNoExcel(svg, etapa, pos) {
     g.appendChild(linhaSeparadora);
 
     const linhasAtividade = quebrarTextoPorLargura(
-      etapa.atividade,
-      obterLarguraUtilTexto(etapa, pos.w),
-      CONFIG.fontSize
-    );
+  etapa.atividade,
+  obterLarguraUtilTexto(etapa, pos.w),
+  CONFIG.fontSize
+);
 
-    const linhaTempo = formatarTempo(etapa.tempo);
-    const linhasTexto = [...linhasAtividade, linhaTempo];
+const linhaTempo = formatarTempo(etapa.tempo);
 
-    const areaUtil = pos.h - alturaSistema - 6;
-    const totalAlturaTexto = linhasTexto.length * CONFIG.textLineHeight;
-    const inicioYTexto = pos.y + (areaUtil - totalAlturaTexto) / 2 + 14;
+const areaUtil = pos.h - alturaSistema - 6;
+const totalAlturaTexto = (linhasAtividade.length * CONFIG.textLineHeight) + CONFIG.textLineHeight;
+const inicioYTexto = pos.y + (areaUtil - totalAlturaTexto) / 2 + 14;
 
-    desenharTextoMultilinhaSVG(
-      g,
-      linhasTexto,
-      pos.x + pos.w / 2,
-      inicioYTexto,
-      CONFIG.fontSize,
-      CONFIG.textLineHeight,
-      "#111111"
-    );
+// atividade: uma forma por linha
+linhasAtividade.forEach((linha, i) => {
+  const text = criarElementoSVG("text");
+  text.setAttribute("x", pos.x + pos.w / 2);
+  text.setAttribute("y", inicioYTexto + i * CONFIG.textLineHeight);
+  text.setAttribute("text-anchor", "middle");
+  text.setAttribute("font-family", CONFIG.fontFamily);
+  text.setAttribute("font-size", String(CONFIG.fontSize));
+  text.setAttribute("fill", "#111111");
+  text.setAttribute("xml:space", "preserve");
+  text.textContent = linha;
+  g.appendChild(text);
+});
+
+// tempo: uma forma separada
+const textTempo = criarElementoSVG("text");
+textTempo.setAttribute("x", pos.x + pos.w / 2);
+textTempo.setAttribute("y", inicioYTexto + linhasAtividade.length * CONFIG.textLineHeight);
+textTempo.setAttribute("text-anchor", "middle");
+textTempo.setAttribute("font-family", CONFIG.fontFamily);
+textTempo.setAttribute("font-size", String(CONFIG.smallFontSize));
+textTempo.setAttribute("fill", "#111111");
+textTempo.setAttribute("xml:space", "preserve");
+textTempo.textContent = linhaTempo;
+g.appendChild(textTempo);
 
     const textoSistema = criarElementoSVG("text");
     textoSistema.setAttribute("x", pos.x + pos.w / 2);
