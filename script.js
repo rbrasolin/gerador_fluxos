@@ -266,6 +266,124 @@ function desenharSistemaSeparado(svg, etapa, pos) {
   svg.appendChild(g);
 }
 
+function desenharTextoMultilinhaSVG(g, linhas, x, yInicial, fontSize, lineHeight, fill = "#111111", fontWeight = "normal") {
+  const text = criarElementoSVG("text");
+  text.setAttribute("x", x);
+  text.setAttribute("y", yInicial);
+  text.setAttribute("text-anchor", "middle");
+  text.setAttribute("font-family", CONFIG.fontFamily);
+  text.setAttribute("font-size", String(fontSize));
+  text.setAttribute("font-weight", fontWeight);
+  text.setAttribute("fill", fill);
+  text.setAttribute("xml:space", "preserve");
+
+  linhas.forEach((linha, i) => {
+    const tspan = criarElementoSVG("tspan");
+    tspan.setAttribute("x", x);
+    if (i === 0) {
+      tspan.setAttribute("dy", "0");
+    } else {
+      tspan.setAttribute("dy", String(lineHeight));
+    }
+    tspan.textContent = linha;
+    text.appendChild(tspan);
+  });
+
+  g.appendChild(text);
+}
+
+function desenharNoExcel(svg, etapa, pos) {
+  const g = criarElementoSVG("g");
+  const pergunta = isPergunta(etapa.atividade);
+
+  if (pergunta) {
+    const cx = pos.x + pos.w / 2;
+    const cy = pos.y + pos.h / 2;
+
+    const polygon = criarElementoSVG("polygon");
+    polygon.setAttribute(
+      "points",
+      `${cx},${pos.y} ${pos.x + pos.w},${cy} ${cx},${pos.y + pos.h} ${pos.x},${cy}`
+    );
+    polygon.setAttribute("fill", corHex(etapa.cor));
+    polygon.setAttribute("stroke", "#111111");
+    polygon.setAttribute("stroke-width", "2");
+    g.appendChild(polygon);
+
+    const linhas = obterLinhasEtapa(etapa, pos.w);
+    const totalAlturaTexto = linhas.length * CONFIG.textLineHeight;
+    const inicioYTexto = pos.y + (pos.h - totalAlturaTexto) / 2 + 14;
+
+    desenharTextoMultilinhaSVG(
+      g,
+      linhas,
+      pos.x + pos.w / 2,
+      inicioYTexto,
+      CONFIG.fontSize,
+      CONFIG.textLineHeight,
+      "#111111"
+    );
+  } else {
+    const alturaSistema = 24;
+    const ySeparador = pos.y + pos.h - alturaSistema;
+
+    const rectPrincipal = criarElementoSVG("rect");
+    rectPrincipal.setAttribute("x", pos.x);
+    rectPrincipal.setAttribute("y", pos.y);
+    rectPrincipal.setAttribute("width", pos.w);
+    rectPrincipal.setAttribute("height", pos.h);
+    rectPrincipal.setAttribute("fill", corHex(etapa.cor));
+    rectPrincipal.setAttribute("stroke", "#111111");
+    rectPrincipal.setAttribute("stroke-width", "2");
+    g.appendChild(rectPrincipal);
+
+    const linhaSeparadora = criarElementoSVG("line");
+    linhaSeparadora.setAttribute("x1", pos.x);
+    linhaSeparadora.setAttribute("y1", ySeparador);
+    linhaSeparadora.setAttribute("x2", pos.x + pos.w);
+    linhaSeparadora.setAttribute("y2", ySeparador);
+    linhaSeparadora.setAttribute("stroke", "#111111");
+    linhaSeparadora.setAttribute("stroke-width", "1.5");
+    g.appendChild(linhaSeparadora);
+
+    const linhasAtividade = quebrarTextoPorLargura(
+      etapa.atividade,
+      obterLarguraUtilTexto(etapa, pos.w),
+      CONFIG.fontSize
+    );
+
+    const linhaTempo = formatarTempo(etapa.tempo);
+    const linhasTexto = [...linhasAtividade, linhaTempo];
+
+    const areaUtil = pos.h - alturaSistema - 6;
+    const totalAlturaTexto = linhasTexto.length * CONFIG.textLineHeight;
+    const inicioYTexto = pos.y + (areaUtil - totalAlturaTexto) / 2 + 14;
+
+    desenharTextoMultilinhaSVG(
+      g,
+      linhasTexto,
+      pos.x + pos.w / 2,
+      inicioYTexto,
+      CONFIG.fontSize,
+      CONFIG.textLineHeight,
+      "#111111"
+    );
+
+    const textoSistema = criarElementoSVG("text");
+    textoSistema.setAttribute("x", pos.x + pos.w / 2);
+    textoSistema.setAttribute("y", ySeparador + 16);
+    textoSistema.setAttribute("text-anchor", "middle");
+    textoSistema.setAttribute("font-family", CONFIG.fontFamily);
+    textoSistema.setAttribute("font-size", String(CONFIG.smallFontSize));
+    textoSistema.setAttribute("fill", "#111111");
+    textoSistema.setAttribute("xml:space", "preserve");
+    textoSistema.textContent = etapa.sistema || "Sem sistema";
+    g.appendChild(textoSistema);
+  }
+
+  svg.appendChild(g);
+}
+
 function obterAlturaNo(etapa, alturaPadraoBase) {
   const alturaSistema = 24;
 
@@ -1131,6 +1249,118 @@ function desenharConexao(
   }
 }
 
+function desenharConexaoExcel(
+  svg,
+  origem,
+  destino,
+  rotulo = "",
+  ordemConexao = 0,
+  posicoes = {},
+  sharedRegistry = {}
+) {
+  let rota = escolherRota(origem, destino, {
+    rotulo,
+    ordemConexao,
+    posicoes
+  });
+
+  const sharedKey = `${destino.id}__${rota.endSide || "auto"}`;
+  const sharedInfo = sharedRegistry[sharedKey];
+
+  if (
+    destino.id !== "__FIM__" &&
+    destino.id !== "__INICIO__" &&
+    sharedInfo &&
+    origem.id !== sharedInfo.origemId &&
+    podeCompartilharDestino(origem, sharedInfo)
+  ) {
+    const parPreferido = escolherParesCandidatos(origem, destino, origem.isDecision ? rotulo : "")[0];
+    const startReal = getAnchorPoint(origem, parPreferido.startSide);
+
+    rota = construirRotaCompartilhada(
+      startReal,
+      sharedInfo,
+      posicoes,
+      [origem.id, destino.id, "__INICIO__", "__FIM__"],
+      parPreferido.startSide
+    );
+  } else if (destino.id !== "__FIM__" && destino.id !== "__INICIO__") {
+    const end = rota.points[rota.points.length - 1];
+    sharedRegistry[sharedKey] = {
+      origemId: origem.id,
+      sourceGridCol: origem.gridCol,
+      endSide: rota.endSide || "left",
+      end: { x: end.x, y: end.y },
+      mergePoint: getMergePoint(end, rota.endSide || "left"),
+      label: rota.label
+    };
+  }
+
+  const path = criarElementoSVG("path");
+  path.setAttribute("d", createPolylinePath(rota.points));
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "#111111");
+  path.setAttribute("stroke-width", CONFIG.lineWidth);
+  path.setAttribute("stroke-linejoin", "round");
+  path.setAttribute("stroke-linecap", "round");
+  svg.appendChild(path);
+
+  const p1 = rota.points[rota.points.length - 2];
+  const p2 = rota.points[rota.points.length - 1];
+
+  const arrow = criarElementoSVG("path");
+  let dArrow = "";
+
+  if (p2.x > p1.x) {
+    dArrow = `M ${p2.x - 10} ${p2.y - 4} L ${p2.x} ${p2.y} L ${p2.x - 10} ${p2.y + 4}`;
+  } else if (p2.x < p1.x) {
+    dArrow = `M ${p2.x + 10} ${p2.y - 4} L ${p2.x} ${p2.y} L ${p2.x + 10} ${p2.y + 4}`;
+  } else if (p2.y > p1.y) {
+    dArrow = `M ${p2.x - 4} ${p2.y - 10} L ${p2.x} ${p2.y} L ${p2.x + 4} ${p2.y - 10}`;
+  } else {
+    dArrow = `M ${p2.x - 4} ${p2.y + 10} L ${p2.x} ${p2.y} L ${p2.x + 4} ${p2.y + 10}`;
+  }
+
+  arrow.setAttribute("d", dArrow);
+  arrow.setAttribute("fill", "none");
+  arrow.setAttribute("stroke", "#111111");
+  arrow.setAttribute("stroke-width", CONFIG.lineWidth);
+  arrow.setAttribute("stroke-linejoin", "round");
+  arrow.setAttribute("stroke-linecap", "round");
+  svg.appendChild(arrow);
+
+  if (rotulo) {
+    const larguraTexto = medirLarguraTexto(rotulo, 12, "bold");
+    const larguraCapsula = Math.max(42, larguraTexto + 20);
+    const alturaCapsula = 24;
+    const xCapsula = rota.label.x - larguraCapsula / 2;
+    const yCapsula = rota.label.y - alturaCapsula / 2 - 1;
+
+    const bg = criarElementoSVG("rect");
+    bg.setAttribute("x", xCapsula);
+    bg.setAttribute("y", yCapsula);
+    bg.setAttribute("width", larguraCapsula);
+    bg.setAttribute("height", alturaCapsula);
+    bg.setAttribute("rx", alturaCapsula / 2);
+    bg.setAttribute("ry", alturaCapsula / 2);
+    bg.setAttribute("fill", "#ffffff");
+    bg.setAttribute("stroke", "#111111");
+    bg.setAttribute("stroke-width", "1");
+    svg.appendChild(bg);
+
+    const tx = criarElementoSVG("text");
+    tx.setAttribute("x", rota.label.x);
+    tx.setAttribute("y", rota.label.y + 4);
+    tx.setAttribute("text-anchor", "middle");
+    tx.setAttribute("font-family", CONFIG.fontFamily);
+    tx.setAttribute("font-size", "12");
+    tx.setAttribute("font-weight", "bold");
+    tx.setAttribute("fill", "#111111");
+    tx.textContent = rotulo;
+    svg.appendChild(tx);
+  }
+}
+
 function gerarHTMLResumoTempo(lista, tempoTotal) {
   return lista
     .map(item => {
@@ -1799,6 +2029,278 @@ posicoes["__INICIO__"] = {
 
 }
 
+function gerarFluxoExcel() {
+  const texto = document.getElementById("entrada").value;
+
+  if (!texto.trim()) {
+    alert("Cole a tabela do Excel primeiro.");
+    return;
+  }
+
+  const linhasBrutas = texto
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .filter(l => l.trim() !== "");
+
+  let linhas = linhasBrutas.map(l => l.split("\t"));
+
+  if (linhas.length && ehCabecalho(linhas[0])) {
+    linhas.shift();
+  }
+
+  const etapas = [];
+  const idsValidos = new Set();
+
+  linhas.forEach((col) => {
+    while (col.length < 13) col.push("");
+
+    const ordem = Number(limpar(col[0])) || 0;
+    const id = limpar(col[1]);
+    const areaEtapa = limpar(col[2]) || "Sem Área";
+    const atividade = limpar(col[3]);
+    const tipo = limpar(col[4]) || "Não informado";
+    const sistema = limpar(col[5]) || "Sem sistema informado";
+    const tempo = tempoParaSegundos(limpar(col[6]));
+    const proxSim = limpar(col[7]);
+    const proxNao = limpar(col[8]);
+    const conexoesExtras = limpar(col[9]);
+    const coluna = Number(limpar(col[10])) || 1;
+    const linha = Number(limpar(col[11])) || 1;
+    const cor = normalizarCor(col[12]);
+
+    if (!id || !atividade) return;
+
+    etapas.push({
+      ordem,
+      id,
+      atividade,
+      area: areaEtapa,
+      tipo,
+      sistema,
+      tempo,
+      proxSim,
+      proxNao,
+      conexoesExtras,
+      coluna,
+      linha,
+      cor
+    });
+
+    idsValidos.add(id);
+  });
+
+  if (!etapas.length) {
+    alert("Nenhuma etapa válida foi encontrada na tabela.");
+    return;
+  }
+
+  etapas.sort((a, b) => a.ordem - b.ordem);
+
+  const etapaPorId = {};
+  etapas.forEach(e => {
+    etapaPorId[e.id] = e;
+  });
+
+  const alturaPadraoNos = calcularAlturaPadraoNos(etapas);
+  const maiorAlturaLosango = Math.ceil(alturaPadraoNos * CONFIG.decisionHeightFactor);
+  const rowSlotHeight = Math.max(alturaPadraoNos, maiorAlturaLosango);
+  const colSlotWidth = Math.max(CONFIG.boxWidth, CONFIG.decisionWidth);
+
+  const maxColuna = Math.max(...etapas.map(e => e.coluna), 1) + 1;
+
+  const areasOrdenadas = [];
+  const areaJaExiste = new Set();
+  etapas.forEach((e) => {
+    const nome = e.area || "Sem Área";
+    if (!areaJaExiste.has(nome)) {
+      areaJaExiste.add(nome);
+      areasOrdenadas.push(nome);
+    }
+  });
+
+  const linhasPorArea = {};
+  areasOrdenadas.forEach((nome) => {
+    linhasPorArea[nome] = 1;
+  });
+
+  etapas.forEach((e) => {
+    const nome = e.area || "Sem Área";
+    linhasPorArea[nome] = Math.max(linhasPorArea[nome] || 1, e.linha || 1);
+  });
+
+  const laneContentWidth =
+    maxColuna * colSlotWidth +
+    (maxColuna - 1) * CONFIG.colGap;
+
+  const lanes = {};
+  let cursorY = CONFIG.marginY;
+  let rowOffsetGlobal = 0;
+
+  areasOrdenadas.forEach((nome) => {
+    const qtdLinhas = linhasPorArea[nome] || 1;
+
+    const contentHeight =
+      qtdLinhas * rowSlotHeight +
+      (qtdLinhas - 1) * CONFIG.rowGap;
+
+    const laneHeight =
+      CONFIG.lanePaddingTop +
+      contentHeight +
+      CONFIG.lanePaddingBottom;
+
+    lanes[nome] = {
+      x: CONFIG.marginX,
+      y: cursorY,
+      width: CONFIG.laneLabelWidth + CONFIG.laneEntryWidth + laneContentWidth,
+      height: laneHeight,
+      contentX: CONFIG.marginX + CONFIG.laneLabelWidth + CONFIG.laneEntryWidth,
+      contentY: cursorY + CONFIG.lanePaddingTop,
+      rows: qtdLinhas,
+      rowOffsetGlobalStart: rowOffsetGlobal
+    };
+
+    rowOffsetGlobal += qtdLinhas + 2;
+    cursorY += laneHeight + CONFIG.laneGap;
+  });
+
+  const svgWidth =
+    CONFIG.marginX * 2 +
+    CONFIG.laneLabelWidth +
+    CONFIG.laneEntryWidth +
+    laneContentWidth;
+
+  const svgHeight = cursorY;
+
+  const svg = criarElementoSVG("svg");
+  svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  svg.setAttribute("width", svgWidth);
+  svg.setAttribute("height", svgHeight);
+  svg.setAttribute("viewBox", `0 0 ${svgWidth} ${svgHeight}`);
+  svg.setAttribute("style", "background:#ffffff");
+
+  desenharRaias(svg, areasOrdenadas, lanes, svgWidth);
+
+  const posicoes = {};
+
+  etapas.forEach((e) => {
+    const pergunta = isPergunta(e.atividade);
+    const w = pergunta ? CONFIG.decisionWidth : CONFIG.boxWidth;
+    const h = obterAlturaNo(e, alturaPadraoNos);
+    const lane = lanes[e.area || "Sem Área"];
+
+    const slotX = lane.contentX + (e.coluna - 1) * (colSlotWidth + CONFIG.colGap);
+    const slotY = lane.contentY + (e.linha - 1) * (rowSlotHeight + CONFIG.rowGap);
+
+    const x = slotX + (colSlotWidth - w) / 2;
+    const y = slotY + (rowSlotHeight - h) / 2;
+
+    posicoes[e.id] = {
+      id: e.id,
+      x,
+      y,
+      w,
+      h,
+      isDecision: pergunta,
+      gridCol: e.coluna,
+      gridRow: e.linha,
+      gridRowGlobal: lane.rowOffsetGlobalStart + e.linha,
+      area: e.area || "Sem Área"
+    };
+  });
+
+  const primeiraEtapa = etapas[0];
+  const ultimaEtapa = etapas[etapas.length - 1];
+  const primeiraPos = posicoes[primeiraEtapa.id];
+  const ultimaPos = posicoes[ultimaEtapa.id];
+  const primeiraLane = lanes[primeiraEtapa.area];
+
+  posicoes["__INICIO__"] = {
+    id: "__INICIO__",
+    x: primeiraLane.x + CONFIG.laneLabelWidth + 20,
+    y: primeiraPos.y + (primeiraPos.h - 36) / 2,
+    w: 60,
+    h: 36,
+    isDecision: false,
+    gridCol: Math.max(0, primeiraPos.gridCol - 1),
+    gridRow: primeiraPos.gridRow,
+    gridRowGlobal: primeiraPos.gridRowGlobal,
+    area: primeiraPos.area
+  };
+
+  posicoes["__FIM__"] = {
+    id: "__FIM__",
+    x: ultimaPos.x + ultimaPos.w + CONFIG.entryExitGap,
+    y: ultimaPos.y + (ultimaPos.h - 36) / 2,
+    w: 60,
+    h: 36,
+    isDecision: false,
+    gridCol: ultimaPos.gridCol + 1,
+    gridRow: ultimaPos.gridRow,
+    gridRowGlobal: ultimaPos.gridRowGlobal,
+    area: ultimaPos.area
+  };
+
+  desenharCapsula(svg, "Início", posicoes["__INICIO__"].x, posicoes["__INICIO__"].y, 60, 36);
+  desenharCapsula(svg, "Fim", posicoes["__FIM__"].x, posicoes["__FIM__"].y, 60, 36);
+
+  etapas.forEach((etapa) => {
+    desenharNoExcel(svg, etapa, posicoes[etapa.id]);
+  });
+
+  const sharedRegistry = {};
+  desenharConexaoExcel(svg, posicoes["__INICIO__"], posicoes[primeiraEtapa.id], "", 0, posicoes, sharedRegistry);
+
+  etapas.forEach((etapa) => {
+    const origem = posicoes[etapa.id];
+    const destinosSim = quebrarListaIds(etapa.proxSim).filter(destino => destinoEhValido(destino, idsValidos));
+    const destinosNao = quebrarListaIds(etapa.proxNao).filter(destino => destinoEhValido(destino, idsValidos));
+    const destinosExtras = quebrarListaIds(etapa.conexoesExtras).filter(destino => destinoEhValido(destino, idsValidos));
+
+    const pergunta = isPergunta(etapa.atividade);
+
+    destinosSim.forEach((destinoId, indice) => {
+      desenharConexaoExcel(
+        svg,
+        origem,
+        posicoes[destinoId],
+        pergunta ? (indice === 0 ? "Sim" : `Sim ${indice + 1}`) : "",
+        indice,
+        posicoes,
+        sharedRegistry
+      );
+    });
+
+    destinosNao.forEach((destinoId, indice) => {
+      desenharConexaoExcel(
+        svg,
+        origem,
+        posicoes[destinoId],
+        pergunta ? (indice === 0 ? "Não" : `Não ${indice + 1}`) : (indice === 0 ? "Não" : `Não ${indice + 1}`),
+        indice,
+        posicoes,
+        sharedRegistry
+      );
+    });
+
+    destinosExtras.forEach((destinoId, indice) => {
+      desenharConexaoExcel(svg, origem, posicoes[destinoId], "", indice + 1, posicoes, sharedRegistry);
+    });
+  });
+
+  etapas.forEach((etapa) => {
+    const destinosSim = quebrarListaIds(etapa.proxSim).filter(destino => destinoEhValido(destino, idsValidos));
+    const destinosNao = quebrarListaIds(etapa.proxNao).filter(destino => destinoEhValido(destino, idsValidos));
+    const destinosExtras = quebrarListaIds(etapa.conexoesExtras).filter(destino => destinoEhValido(destino, idsValidos));
+
+    if (destinosSim.length === 0 && destinosNao.length === 0 && destinosExtras.length === 0) {
+      desenharConexaoExcel(svg, posicoes[etapa.id], posicoes["__FIM__"], "", 0, posicoes, sharedRegistry);
+    }
+  });
+
+  return svg;
+}
+
 /* =========================
    EXPORTAÇÃO SVG E PDF
 ========================= */
@@ -2383,6 +2885,23 @@ function baixarSVG() {
   const link = document.createElement("a");
   link.href = url;
   link.download = `${ultimoNomeArquivo}.svg`;
+  link.click();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function baixarSVGExcel() {
+  const svg = gerarFluxoExcel();
+  if (!svg) return;
+
+  const serializer = new XMLSerializer();
+  const source = serializer.serializeToString(svg);
+  const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${gerarNomeArquivo()}_excel.svg`;
   link.click();
 
   setTimeout(() => URL.revokeObjectURL(url), 1000);
