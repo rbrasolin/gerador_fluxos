@@ -51,7 +51,7 @@ const EXCEL_LAYOUT = {
   laneEntryWidth: 12,
   startGap: 16,
   endGap: 26,
-  laneTextOffsetLeft: 65,
+  laneTextOffsetLeft: 80,
   extraLeftPadding: 50
 };
 
