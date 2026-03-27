@@ -47,10 +47,10 @@ const EXCEL_LAYOUT = {
   laneGap: 18,
   lanePaddingTop: 18,
   lanePaddingBottom: 18,
-  laneLabelWidth: 32,
+  laneLabelWidth: 22,
   laneEntryWidth: 12,
   startGap: 16,
-  endGap: 10
+  endGap: 26
 };
 
 function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
@@ -667,7 +667,7 @@ function desenharRaias(svg, areasOrdenadas, lanes, svgWidth) {
 function desenharRaiasExcel(svg, lanes) {
   lanes.forEach((lane) => {
     const textoArea = criarElementoSVG("text");
-    const areaCenterX = lane.x + EXCEL_LAYOUT.laneLabelWidth / 2;
+    const areaCenterX = lane.x + Math.max(10, EXCEL_LAYOUT.laneLabelWidth / 2 - 6);
     const areaCenterY = lane.y + lane.height / 2;
 
     textoArea.setAttribute(
