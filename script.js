@@ -42,11 +42,15 @@ const EXCEL_EXPORT_SCALE = 0.65;
 // 0.65 = redução forte
 
 const EXCEL_LAYOUT = {
-  colGap: 70,          // antes 140
-  rowGap: 36,          // antes 70
-  laneGap: 18,         // antes 28
-  lanePaddingTop: 18,  // antes 26
-  lanePaddingBottom: 18
+  colGap: 70,
+  rowGap: 36,
+  laneGap: 18,
+  lanePaddingTop: 18,
+  lanePaddingBottom: 18,
+  laneLabelWidth: 32,
+  laneEntryWidth: 12,
+  startGap: 16,
+  endGap: 10
 };
 
 function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
@@ -657,6 +661,30 @@ function desenharRaias(svg, areasOrdenadas, lanes, svgWidth) {
     g.appendChild(texto);
 
     svg.appendChild(g);
+  });
+}
+
+function desenharRaiasExcel(svg, lanes) {
+  lanes.forEach((lane) => {
+    const textoArea = criarElementoSVG("text");
+    const areaCenterX = lane.x + EXCEL_LAYOUT.laneLabelWidth / 2;
+    const areaCenterY = lane.y + lane.height / 2;
+
+    textoArea.setAttribute(
+      "transform",
+      `rotate(-90 ${areaCenterX} ${areaCenterY})`
+    );
+    textoArea.setAttribute("x", areaCenterX);
+    textoArea.setAttribute("y", areaCenterY);
+    textoArea.setAttribute("text-anchor", "middle");
+    textoArea.setAttribute("dominant-baseline", "middle");
+    textoArea.setAttribute("font-family", CONFIG.fontFamily);
+    textoArea.setAttribute("font-size", CONFIG.laneHeaderFontSize);
+    textoArea.setAttribute("font-weight", "bold");
+    textoArea.setAttribute("fill", "#333333");
+    textoArea.textContent = lane.area;
+
+    svg.appendChild(textoArea);
   });
 }
 
@@ -2199,18 +2227,18 @@ function gerarFluxoExcel() {
       contentHeight +
       EXCEL_LAYOUT.lanePaddingBottom;
 
-        lanes.push({
-      area: nomeArea,
-      x: laneLeft,
-      y: cursorY,
-      width: CONFIG.laneLabelWidth + CONFIG.laneEntryWidth + laneContentWidth,
-      height: laneHeight,
-      contentX: laneLeft + CONFIG.laneLabelWidth + CONFIG.laneEntryWidth,
-      contentY: cursorY + EXCEL_LAYOUT.lanePaddingTop,
-      contentHeight,
-      rows: qtdLinhas,
-      rowOffsetGlobalStart: rowOffsetGlobal
-    });
+  lanes.push({
+    area: nomeArea,
+    x: laneLeft,
+    y: cursorY,
+    width: EXCEL_LAYOUT.laneLabelWidth + EXCEL_LAYOUT.laneEntryWidth + laneContentWidth,
+    height: laneHeight,
+    contentX: laneLeft + EXCEL_LAYOUT.laneLabelWidth + EXCEL_LAYOUT.laneEntryWidth,
+    contentY: cursorY + EXCEL_LAYOUT.lanePaddingTop,
+    contentHeight,
+    rows: qtdLinhas,
+    rowOffsetGlobalStart: rowOffsetGlobal
+  });
 
     rowOffsetGlobal += qtdLinhas + 2;
 
@@ -2218,12 +2246,13 @@ function gerarFluxoExcel() {
   });
 
   const larguraSvg = Math.max(
-    CONFIG.marginX * 2 +
-      CONFIG.laneLabelWidth +
-      CONFIG.laneEntryWidth +
-      laneContentWidth,
-    1200
-  );
+  CONFIG.marginX * 2 +
+    EXCEL_LAYOUT.laneLabelWidth +
+    EXCEL_LAYOUT.laneEntryWidth +
+    laneContentWidth +
+    100,
+  1000
+);
 
   const alturaSvg = Math.max(cursorY + CONFIG.marginY, 500);
 
@@ -2234,68 +2263,7 @@ function gerarFluxoExcel() {
   svg.setAttribute("viewBox", `0 0 ${larguraSvg} ${alturaSvg}`);
   svg.setAttribute("style", "background:#ffffff");
 
-  lanes.forEach((lane) => {
-    const grupo = criarElementoSVG("g");
-
-    const rectLane = criarElementoSVG("rect");
-    rectLane.setAttribute("x", lane.x);
-    rectLane.setAttribute("y", lane.y);
-    rectLane.setAttribute("width", lane.width);
-    rectLane.setAttribute("height", lane.height);
-    rectLane.setAttribute("fill", "#ffffff");
-    rectLane.setAttribute("stroke", CONFIG.laneBorder);
-    rectLane.setAttribute("stroke-width", "1.2");
-    grupo.appendChild(rectLane);
-
-    const rectHeader = criarElementoSVG("rect");
-    rectHeader.setAttribute("x", lane.x);
-    rectHeader.setAttribute("y", lane.y);
-    rectHeader.setAttribute("width", CONFIG.laneLabelWidth);
-    rectHeader.setAttribute("height", lane.height);
-    rectHeader.setAttribute("fill", CONFIG.laneHeaderFill);
-    rectHeader.setAttribute("stroke", CONFIG.laneSeparator);
-    rectHeader.setAttribute("stroke-width", "1");
-    grupo.appendChild(rectHeader);
-
-    const linhaSeparadora = criarElementoSVG("line");
-    linhaSeparadora.setAttribute("x1", lane.x + CONFIG.laneLabelWidth);
-    linhaSeparadora.setAttribute("y1", lane.y);
-    linhaSeparadora.setAttribute("x2", lane.x + CONFIG.laneLabelWidth);
-    linhaSeparadora.setAttribute("y2", lane.y + lane.height);
-    linhaSeparadora.setAttribute("stroke", CONFIG.laneSeparator);
-    linhaSeparadora.setAttribute("stroke-width", "1");
-    grupo.appendChild(linhaSeparadora);
-
-    const linhaEntrada = criarElementoSVG("line");
-    linhaEntrada.setAttribute("x1", lane.x + CONFIG.laneLabelWidth + CONFIG.laneEntryWidth);
-    linhaEntrada.setAttribute("y1", lane.y);
-    linhaEntrada.setAttribute("x2", lane.x + CONFIG.laneLabelWidth + CONFIG.laneEntryWidth);
-    linhaEntrada.setAttribute("y2", lane.y + lane.height);
-    linhaEntrada.setAttribute("stroke", CONFIG.laneSeparator);
-    linhaEntrada.setAttribute("stroke-width", "1");
-    grupo.appendChild(linhaEntrada);
-
-    const textoArea = criarElementoSVG("text");
-    const areaCenterX = lane.x + CONFIG.laneLabelWidth / 2;
-    const areaCenterY = lane.y + lane.height / 2;
-
-    textoArea.setAttribute(
-      "transform",
-      `rotate(-90 ${areaCenterX} ${areaCenterY})`
-    );
-    textoArea.setAttribute("x", areaCenterX);
-    textoArea.setAttribute("y", areaCenterY);
-    textoArea.setAttribute("text-anchor", "middle");
-    textoArea.setAttribute("dominant-baseline", "middle");
-    textoArea.setAttribute("font-family", CONFIG.fontFamily);
-    textoArea.setAttribute("font-size", CONFIG.laneHeaderFontSize);
-    textoArea.setAttribute("font-weight", "bold");
-    textoArea.setAttribute("fill", "#333333");
-    textoArea.textContent = lane.area;
-    grupo.appendChild(textoArea);
-
-    svg.appendChild(grupo);
-  });
+  desenharRaiasExcel(svg, lanes);
 
   const laneByArea = {};
   lanes.forEach(lane => {
@@ -2345,42 +2313,42 @@ function gerarFluxoExcel() {
   const laneUltima = laneByArea[ultimaEtapa.area || "Sem Área"];
 
   posicoes["__INICIO__"] = {
-    id: "__INICIO__",
-    x: lanePrimeira.x + CONFIG.laneLabelWidth + 24,
-    y: posicoes[primeiraEtapa.id].cy - 18,
-    w: 60,
-    h: 36,
-    cx: lanePrimeira.x + CONFIG.laneLabelWidth + 24 + 30,
-    cy: posicoes[primeiraEtapa.id].cy,
-    top: posicoes[primeiraEtapa.id].cy - 18,
-    bottom: posicoes[primeiraEtapa.id].cy + 18,
-    left: lanePrimeira.x + CONFIG.laneLabelWidth + 24,
-    right: lanePrimeira.x + CONFIG.laneLabelWidth + 24 + 60,
-    isDecision: false,
-    gridCol: 0,
-    gridRow: primeiraEtapa.linha,
-    gridRowGlobal: lanePrimeira.rowOffsetGlobalStart + primeiraEtapa.linha,
-    area: primeiraEtapa.area || "Sem Área"
-  };
+  id: "__INICIO__",
+  x: posicoes[primeiraEtapa.id].x - 60 - EXCEL_LAYOUT.startGap,
+  y: posicoes[primeiraEtapa.id].cy - 18,
+  w: 60,
+  h: 36,
+  cx: posicoes[primeiraEtapa.id].x - EXCEL_LAYOUT.startGap - 30,
+  cy: posicoes[primeiraEtapa.id].cy,
+  top: posicoes[primeiraEtapa.id].cy - 18,
+  bottom: posicoes[primeiraEtapa.id].cy + 18,
+  left: posicoes[primeiraEtapa.id].x - 60 - EXCEL_LAYOUT.startGap,
+  right: posicoes[primeiraEtapa.id].x - EXCEL_LAYOUT.startGap,
+  isDecision: false,
+  gridCol: 0,
+  gridRow: primeiraEtapa.linha,
+  gridRowGlobal: lanePrimeira.rowOffsetGlobalStart + primeiraEtapa.linha,
+  area: primeiraEtapa.area || "Sem Área"
+};
 
   posicoes["__FIM__"] = {
-    id: "__FIM__",
-    x: laneUltima.contentX + maxColuna * (colSlotWidth + EXCEL_LAYOUT.colGap) - EXCEL_LAYOUT.colGap + 24,
-    y: posicoes[ultimaEtapa.id].cy - 18,
-    w: 60,
-    h: 36,
-    cx: laneUltima.contentX + maxColuna * (colSlotWidth + EXCEL_LAYOUT.colGap) - EXCEL_LAYOUT.colGap + 24 + 30,
-    cy: posicoes[ultimaEtapa.id].cy,
-    top: posicoes[ultimaEtapa.id].cy - 18,
-    bottom: posicoes[ultimaEtapa.id].cy + 18,
-    left: laneUltima.contentX + maxColuna * (colSlotWidth + EXCEL_LAYOUT.colGap) - EXCEL_LAYOUT.colGap + 24,
-    right: laneUltima.contentX + maxColuna * (colSlotWidth + EXCEL_LAYOUT.colGap) - EXCEL_LAYOUT.colGap + 24 + 60,
-    isDecision: false,
-    gridCol: maxColuna + 1,
-    gridRow: ultimaEtapa.linha,
-    gridRowGlobal: laneUltima.rowOffsetGlobalStart + ultimaEtapa.linha,
-    area: ultimaEtapa.area || "Sem Área"
-  };
+  id: "__FIM__",
+  x: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap,
+  y: posicoes[ultimaEtapa.id].cy - 18,
+  w: 60,
+  h: 36,
+  cx: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap + 30,
+  cy: posicoes[ultimaEtapa.id].cy,
+  top: posicoes[ultimaEtapa.id].cy - 18,
+  bottom: posicoes[ultimaEtapa.id].cy + 18,
+  left: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap,
+  right: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap + 60,
+  isDecision: false,
+  gridCol: ultimaEtapa.coluna + 1,
+  gridRow: ultimaEtapa.linha,
+  gridRowGlobal: laneUltima.rowOffsetGlobalStart + ultimaEtapa.linha,
+  area: ultimaEtapa.area || "Sem Área"
+};
 
   desenharCapsula(svg, "Início", posicoes["__INICIO__"].x, posicoes["__INICIO__"].y, 60, 36);
   desenharCapsula(svg, "Fim", posicoes["__FIM__"].x, posicoes["__FIM__"].y, 60, 36);
