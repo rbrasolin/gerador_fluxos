@@ -50,7 +50,9 @@ const EXCEL_LAYOUT = {
   laneLabelWidth: 22,
   laneEntryWidth: 12,
   startGap: 16,
-  endGap: 26
+  endGap: 26,
+  laneTextOffsetLeft: 42,
+  extraLeftPadding: 50
 };
 
 function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
@@ -667,7 +669,11 @@ function desenharRaias(svg, areasOrdenadas, lanes, svgWidth) {
 function desenharRaiasExcel(svg, lanes) {
   lanes.forEach((lane) => {
     const textoArea = criarElementoSVG("text");
-    const areaCenterX = lane.x + Math.max(10, EXCEL_LAYOUT.laneLabelWidth / 2 - 6);
+
+    const areaCenterX = Math.max(
+      14,
+      lane.x - EXCEL_LAYOUT.laneTextOffsetLeft
+    );
     const areaCenterY = lane.y + lane.height / 2;
 
     textoArea.setAttribute(
@@ -2206,7 +2212,7 @@ function gerarFluxoExcel() {
     maxColuna * colSlotWidth +
     (maxColuna - 1) * EXCEL_LAYOUT.colGap;
 
-  const laneLeft = CONFIG.marginX;
+  const laneLeft = CONFIG.marginX + EXCEL_LAYOUT.extraLeftPadding;
   const laneTop = CONFIG.marginY;
 
   let cursorY = laneTop;
