@@ -42,17 +42,17 @@ const EXCEL_EXPORT_SCALE = 0.65;
 // 0.65 = redução forte
 
 const EXCEL_LAYOUT = {
-  colGap: 70,
-  rowGap: 36,
-  laneGap: 18,
-  lanePaddingTop: 18,
-  lanePaddingBottom: 18,
-  laneLabelWidth: 22,
-  laneEntryWidth: 12,
-  startGap: 16,
-  endGap: 26,
-  laneTextOffsetLeft: 120, // distância entre nome da raia
-  extraLeftPadding: 50
+  colGap: 70, //Espaço horizontal entre as colunas (atividades)
+  rowGap: 36, //Espaço vertical entre atividades dentro da mesma raia
+  laneGap: 50, //Espaço entre uma raia e outra
+  lanePaddingTop: 18, //Espaço interno no topo da raia, Se estiver baixo → caixa “grudada” no topo
+  lanePaddingBottom: 18, //Espaço interno na parte de baixo da raia, Evita que última atividade fique colada na borda
+  laneLabelWidth: 22, //“Reserva” horizontal para a área da raia (estrutura no desenho da raia, não aplica no excel)
+  laneEntryWidth: 12, //Espaço entre: área do nome da raia e início do fluxo (Muito pequeno → fluxo começa “em cima” da raia)
+  startGap: 16, //Distância entre: o “Início” e a primeira atividade
+  endGap: 26, //Distância entre: última atividade e o “Fim”
+  laneTextOffsetLeft: 120, //Distância do nome da raia para a esquerda (Aumenta → nome vai mais para esquerda Diminui → nome se aproxima do fluxo)
+  extraLeftPadding: 50 //Empurra TODO o fluxo para a direita
 };
 
 function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
