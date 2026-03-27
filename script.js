@@ -42,20 +42,36 @@ const EXCEL_EXPORT_SCALE = 0.72;
 // 0.72 = boa redução
 // 0.65 = redução forte
 
+const EXCEL_EXPORT_SCALE = 0.72;
+// 0.85 = redução leve
+// 0.72 = redução boa
+// 0.65 = redução forte
+
 function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
   const svg = svgOriginal.cloneNode(true);
 
   const larguraOriginal = Number(svg.getAttribute("width")) || 1000;
   const alturaOriginal = Number(svg.getAttribute("height")) || 800;
 
+  const filhos = Array.from(svg.childNodes);
+
+  const grupoEscalado = criarElementoSVG("g");
+  grupoEscalado.setAttribute("transform", `scale(${escala})`);
+
+  filhos.forEach((filho) => {
+    grupoEscalado.appendChild(filho);
+  });
+
+  svg.appendChild(grupoEscalado);
+
   const novaLargura = Math.round(larguraOriginal * escala);
   const novaAltura = Math.round(alturaOriginal * escala);
 
   svg.setAttribute("width", novaLargura);
   svg.setAttribute("height", novaAltura);
-  svg.setAttribute("viewBox", `0 0 ${larguraOriginal} ${alturaOriginal}`);
+  svg.setAttribute("viewBox", `0 0 ${novaLargura} ${novaAltura}`);
 
-  return svg;
+  return aplicarEscalaSVGExcel(svg, EXCEL_EXPORT_SCALE);
 }
 
 function limpar(txt) {
