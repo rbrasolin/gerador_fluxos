@@ -36,12 +36,6 @@ const CONFIG = {
   rectTextPaddingHorizontal: 16
 };
 
-const EXCEL_EXPORT_SCALE = 0.72; 
-// ajuste aqui:
-// 0.85 = redução leve
-// 0.72 = boa redução
-// 0.65 = redução forte
-
 const EXCEL_EXPORT_SCALE = 0.72;
 // 0.85 = redução leve
 // 0.72 = redução boa
@@ -71,7 +65,7 @@ function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
   svg.setAttribute("height", novaAltura);
   svg.setAttribute("viewBox", `0 0 ${novaLargura} ${novaAltura}`);
 
-  return aplicarEscalaSVGExcel(svg, EXCEL_EXPORT_SCALE);
+  return svg;
 }
 
 function limpar(txt) {
