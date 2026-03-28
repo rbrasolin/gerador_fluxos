@@ -2271,6 +2271,25 @@ function calcularLarguraFaixaRaiaExcel(lanesBase) {
   );
 }
 
+function ajustarViewBoxAoConteudo(svg, folga = 0) {
+  try {
+    const bbox = svg.getBBox();
+
+    const x = Math.max(0, bbox.x - folga);
+    const y = Math.max(0, bbox.y - folga);
+    const width = bbox.width + folga * 2;
+    const height = bbox.height + folga * 2;
+
+    svg.setAttribute("viewBox", `${x} ${y} ${width} ${height}`);
+    svg.setAttribute("width", width);
+    svg.setAttribute("height", height);
+  } catch (e) {
+    // fallback silencioso caso o navegador não consiga calcular o bbox
+  }
+
+  return svg;
+}
+
 function gerarFluxoExcel() {
   const texto = document.getElementById("entrada").value;
 
@@ -2365,8 +2384,8 @@ function gerarFluxoExcel() {
     maxColuna * colSlotWidth +
     (maxColuna - 1) * EXCEL_LAYOUT.colGap;
 
-  const laneLeft = CONFIG.marginX + EXCEL_LAYOUT.extraLeftPadding;
-  const laneTop = CONFIG.marginY;
+  const laneLeft = 0;
+  const laneTop = 0;
 
   let cursorY = laneTop;
   let rowOffsetGlobal = 0;
@@ -2420,17 +2439,13 @@ function gerarFluxoExcel() {
   labelLines: base.labelLines || [base.area]
 }));
 
-    const larguraSvg = Math.max(
-  CONFIG.marginX * 2 +
+    const larguraSvg =
   lanes[0].labelWidth +
   EXCEL_LAYOUT.laneEntryWidth +
   EXCEL_LAYOUT.laneTextOffsetLeft +
-  laneContentWidth +
-  100,
-  1000
-);
+  laneContentWidth;
 
-  const alturaSvg = Math.max(cursorY + CONFIG.marginY, 500);
+  const alturaSvg = cursorY;
 
   const svg = criarElementoSVG("svg");
   svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -2607,6 +2622,7 @@ function gerarFluxoExcel() {
     }
   });
 
+  ajustarViewBoxAoConteudo(svg, 0);
   return aplicarEscalaSVGExcel(svg, EXCEL_EXPORT_SCALE);
 }
 
