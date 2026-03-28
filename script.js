@@ -36,7 +36,7 @@ const CONFIG = {
   rectTextPaddingHorizontal: 16
 };
 
-const EXCEL_EXPORT_SCALE = 0.45;
+const EXCEL_EXPORT_SCALE = 0.30;
 // 0.85 = redução leve
 // 0.72 = redução boa
 // 0.65 = redução forte
