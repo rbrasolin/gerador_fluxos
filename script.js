@@ -2449,7 +2449,8 @@ function gerarFluxoExcel() {
   EXCEL_LAYOUT.laneTextOffsetLeft +
   laneContentWidth;
 
-  const alturaSvg = cursorY;
+  const ultimaLane = lanes[lanes.length - 1];
+  const alturaSvg = ultimaLane ? (ultimaLane.y + ultimaLane.height) : cursorY;
 
   const svg = criarElementoSVG("svg");
   svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -2626,8 +2627,11 @@ function gerarFluxoExcel() {
     }
   });
 
-  ajustarViewBoxAoConteudo(svg, 2);
-  return aplicarEscalaSVGExcel(svg, EXCEL_EXPORT_SCALE);
+    svg.setAttribute("viewBox", `0 0 ${larguraSvg} ${alturaSvg}`);
+    svg.setAttribute("width", larguraSvg);
+    svg.setAttribute("height", alturaSvg);
+
+    return aplicarEscalaSVGExcel(svg, EXCEL_EXPORT_SCALE);
 }
 
 /* =========================
