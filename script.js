@@ -1205,8 +1205,65 @@ function getMergePoint(end, side, gap = CONFIG.sharedMergeGap) {
   }
 }
 
+function tentarRotaDecisaoMesmaLinhaAcima(origem, destino, rotulo = "", ordemConexao = 0, posicoes = {}) {
+  const mesmoNivel = origem.gridRowGlobal === destino.gridRowGlobal;
+  const vaiParaDireita = destino.gridCol > origem.gridCol;
+
+  if (!origem.isDecision || !mesmoNivel || !vaiParaDireita) {
+    return null;
+  }
+
+  const rotuloNormalizado = String(rotulo || "").toLowerCase();
+  const ehSim = rotuloNormalizado.startsWith("sim");
+  const ehNao = rotuloNormalizado.startsWith("não") || rotuloNormalizado.startsWith("nao");
+
+  // regra:
+  // Sim usa um canal acima
+  // Não usa um canal ainda mais acima para não cruzar com o Sim
+  const nivelCanalBase = ehSim ? 1 : ehNao ? 2 : 3;
+  const nivelCanal = nivelCanalBase + ordemConexao;
+
+  const startSide = ehSim ? "right" : "top";
+  const endSide = "top";
+
+  const start = getAnchorPoint(origem, startSide);
+  const end = getAnchorPoint(destino, endSide);
+
+  const canalY = Math.min(origem.y, destino.y) - CONFIG.routeGap * (nivelCanal + 1);
+
+  const points = [{ x: start.x, y: start.y }];
+
+  if (startSide === "right") {
+    const escapeX = start.x + CONFIG.routeGap;
+    points.push({ x: escapeX, y: start.y });
+    points.push({ x: escapeX, y: canalY });
+  } else {
+    points.push({ x: start.x, y: canalY });
+  }
+
+  points.push({ x: end.x, y: canalY });
+  points.push({ x: end.x, y: end.y });
+
+  const rota = normalizarPontos(points);
+  const excludeIds = [origem.id, destino.id, "__INICIO__", "__FIM__"];
+  const safe = !pathCruzaCaixas(rota, posicoes, excludeIds);
+
+  if (!safe) return null;
+
+  return montarRotaOrtogonal(
+    rota,
+    {
+      x: (start.x + end.x) / 2,
+      y: canalY - 10
+    },
+    startSide,
+    endSide
+  );
+}
+
 function escolherRota(origem, destino, contexto = {}) {
   const rotulo = contexto.rotulo || "";
+  const ordemConexao = contexto.ordemConexao || 0;
   const posicoes = contexto.posicoes || {};
   const excludeIds = [origem.id, destino.id, "__INICIO__", "__FIM__"];
 
@@ -1232,6 +1289,20 @@ function escolherRota(origem, destino, contexto = {}) {
       rota.startSide,
       rota.endSide
     );
+  }
+
+  // NOVA REGRA:
+  // decisão com destinos à direita na mesma linha sobe por canais superiores
+  const rotaEspecialDecisao = tentarRotaDecisaoMesmaLinhaAcima(
+    origem,
+    destino,
+    rotulo,
+    ordemConexao,
+    posicoes
+  );
+
+  if (rotaEspecialDecisao) {
+    return rotaEspecialDecisao;
   }
 
   const pares = escolherParesCandidatos(origem, destino, rotulo);
