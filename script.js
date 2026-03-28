@@ -68,31 +68,20 @@ function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
   let vbH = alturaOriginal;
 
   if (viewBoxOriginal) {
-    const partes = viewBoxOriginal.split(/\s+/).map(Number);
+    const partes = viewBoxOriginal.trim().split(/\s+/).map(Number);
     if (partes.length === 4 && partes.every(n => !Number.isNaN(n))) {
       [vbX, vbY, vbW, vbH] = partes;
     }
   }
 
-  const filhos = Array.from(svg.childNodes);
+  const novaLargura = Math.max(1, Math.round(vbW * escala));
+  const novaAltura = Math.max(1, Math.round(vbH * escala));
 
-  const grupoEscalado = criarElementoSVG("g");
-  grupoEscalado.setAttribute("transform", `scale(${escala})`);
-
-  filhos.forEach((filho) => {
-    grupoEscalado.appendChild(filho);
-  });
-
-  svg.appendChild(grupoEscalado);
-
-  const novaLargura = Math.round(vbW * escala);
-  const novaAltura = Math.round(vbH * escala);
-
+  // não escala o conteúdo com <g>, apenas reduz o tamanho visual do svg
   svg.setAttribute("width", novaLargura);
   svg.setAttribute("height", novaAltura);
-
-  // mantém a origem real do conteúdo
   svg.setAttribute("viewBox", `${vbX} ${vbY} ${vbW} ${vbH}`);
+  svg.setAttribute("preserveAspectRatio", "xMinYMin meet");
 
   return svg;
 }
