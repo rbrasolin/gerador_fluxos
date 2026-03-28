@@ -667,13 +667,82 @@ function desenharRaias(svg, areasOrdenadas, lanes, svgWidth) {
 }
 
 function desenharRaiasExcel(svg, lanes) {
-  lanes.forEach((lane) => {
-    const textoArea = criarElementoSVG("text");
+  const strokeColor = "#111111";
+  const strokeWidth = 1.2;
+  const fillColor = "#f2f2f2";
 
-    const areaCenterX = Math.max(
-      14,
-      lane.x - EXCEL_LAYOUT.laneTextOffsetLeft
-    );
+  lanes.forEach((lane, index) => {
+    const g = criarElementoSVG("g");
+
+    const labelX = lane.x;
+    const labelRightX = lane.x + EXCEL_LAYOUT.laneLabelWidth;
+    const laneRightX = lane.x + lane.width;
+    const topY = lane.y;
+    const bottomY = lane.y + lane.height;
+
+    // fundo da raia
+    const fundo = criarElementoSVG("rect");
+    fundo.setAttribute("x", lane.x);
+    fundo.setAttribute("y", lane.y);
+    fundo.setAttribute("width", lane.width);
+    fundo.setAttribute("height", lane.height);
+    fundo.setAttribute("fill", fillColor);
+    fundo.setAttribute("stroke", "none");
+    g.appendChild(fundo);
+
+    // linha superior
+    const linhaTopo = criarElementoSVG("line");
+    linhaTopo.setAttribute("x1", lane.x);
+    linhaTopo.setAttribute("y1", topY);
+    linhaTopo.setAttribute("x2", laneRightX);
+    linhaTopo.setAttribute("y2", topY);
+    linhaTopo.setAttribute("stroke", strokeColor);
+    linhaTopo.setAttribute("stroke-width", strokeWidth);
+    g.appendChild(linhaTopo);
+
+    // linha inferior
+    const linhaBase = criarElementoSVG("line");
+    linhaBase.setAttribute("x1", lane.x);
+    linhaBase.setAttribute("y1", bottomY);
+    linhaBase.setAttribute("x2", laneRightX);
+    linhaBase.setAttribute("y2", bottomY);
+    linhaBase.setAttribute("stroke", strokeColor);
+    linhaBase.setAttribute("stroke-width", strokeWidth);
+    g.appendChild(linhaBase);
+
+    // linha esquerda
+    const linhaEsquerda = criarElementoSVG("line");
+    linhaEsquerda.setAttribute("x1", lane.x);
+    linhaEsquerda.setAttribute("y1", topY);
+    linhaEsquerda.setAttribute("x2", lane.x);
+    linhaEsquerda.setAttribute("y2", bottomY);
+    linhaEsquerda.setAttribute("stroke", strokeColor);
+    linhaEsquerda.setAttribute("stroke-width", strokeWidth);
+    g.appendChild(linhaEsquerda);
+
+    // linha direita
+    const linhaDireita = criarElementoSVG("line");
+    linhaDireita.setAttribute("x1", laneRightX);
+    linhaDireita.setAttribute("y1", topY);
+    linhaDireita.setAttribute("x2", laneRightX);
+    linhaDireita.setAttribute("y2", bottomY);
+    linhaDireita.setAttribute("stroke", strokeColor);
+    linhaDireita.setAttribute("stroke-width", strokeWidth);
+    g.appendChild(linhaDireita);
+
+    // separador vertical da área do nome da raia
+    const separador = criarElementoSVG("line");
+    separador.setAttribute("x1", labelRightX);
+    separador.setAttribute("y1", topY);
+    separador.setAttribute("x2", labelRightX);
+    separador.setAttribute("y2", bottomY);
+    separador.setAttribute("stroke", strokeColor);
+    separador.setAttribute("stroke-width", strokeWidth);
+    g.appendChild(separador);
+
+    // texto vertical dentro da faixa da raia
+    const textoArea = criarElementoSVG("text");
+    const areaCenterX = lane.x + EXCEL_LAYOUT.laneLabelWidth / 2;
     const areaCenterY = lane.y + lane.height / 2;
 
     textoArea.setAttribute(
@@ -685,12 +754,14 @@ function desenharRaiasExcel(svg, lanes) {
     textoArea.setAttribute("text-anchor", "middle");
     textoArea.setAttribute("dominant-baseline", "middle");
     textoArea.setAttribute("font-family", CONFIG.fontFamily);
-    textoArea.setAttribute("font-size", CONFIG.laneHeaderFontSize);
+    textoArea.setAttribute("font-size", String(CONFIG.laneHeaderFontSize));
     textoArea.setAttribute("font-weight", "bold");
-    textoArea.setAttribute("fill", "#333333");
+    textoArea.setAttribute("fill", "#111111");
     textoArea.textContent = lane.area;
 
-    svg.appendChild(textoArea);
+    g.appendChild(textoArea);
+
+    svg.appendChild(g);
   });
 }
 
