@@ -61,6 +61,19 @@ function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
   const larguraOriginal = Number(svg.getAttribute("width")) || 1000;
   const alturaOriginal = Number(svg.getAttribute("height")) || 800;
 
+  const viewBoxOriginal = svg.getAttribute("viewBox");
+  let vbX = 0;
+  let vbY = 0;
+  let vbW = larguraOriginal;
+  let vbH = alturaOriginal;
+
+  if (viewBoxOriginal) {
+    const partes = viewBoxOriginal.split(/\s+/).map(Number);
+    if (partes.length === 4 && partes.every(n => !Number.isNaN(n))) {
+      [vbX, vbY, vbW, vbH] = partes;
+    }
+  }
+
   const filhos = Array.from(svg.childNodes);
 
   const grupoEscalado = criarElementoSVG("g");
@@ -72,12 +85,14 @@ function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
 
   svg.appendChild(grupoEscalado);
 
-  const novaLargura = Math.round(larguraOriginal * escala);
-  const novaAltura = Math.round(alturaOriginal * escala);
+  const novaLargura = Math.round(vbW * escala);
+  const novaAltura = Math.round(vbH * escala);
 
   svg.setAttribute("width", novaLargura);
   svg.setAttribute("height", novaAltura);
-  svg.setAttribute("viewBox", `0 0 ${novaLargura} ${novaAltura}`);
+
+  // mantém a origem real do conteúdo
+  svg.setAttribute("viewBox", `${vbX} ${vbY} ${vbW} ${vbH}`);
 
   return svg;
 }
@@ -2622,7 +2637,7 @@ function gerarFluxoExcel() {
     }
   });
 
-  ajustarViewBoxAoConteudo(svg, 0);
+  ajustarViewBoxAoConteudo(svg, 2);
   return aplicarEscalaSVGExcel(svg, EXCEL_EXPORT_SCALE);
 }
 
