@@ -51,7 +51,7 @@ const EXCEL_LAYOUT = {
   laneEntryWidth: 12, //Espaço entre: área do nome da raia e início do fluxo (Muito pequeno → fluxo começa “em cima” da raia)
   startGap: 16, //Distância entre: o “Início” e a primeira atividade
   endGap: 26, //Distância entre: última atividade e o “Fim”
-  //laneTextOffsetLeft: 120, //Distância do nome da raia para a esquerda (Aumenta → nome vai mais para esquerda Diminui → nome se aproxima do fluxo)
+  laneTextOffsetLeft: 120, //Distância do nome da raia para a esquerda (Aumenta → nome vai mais para esquerda Diminui → nome se aproxima do fluxo)
   extraLeftPadding: 50 //Empurra TODO o fluxo para a direita
 };
 
