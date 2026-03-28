@@ -51,7 +51,7 @@ const EXCEL_LAYOUT = {
   laneEntryWidth: 12, //Espaço entre: área do nome da raia e início do fluxo (Muito pequeno → fluxo começa “em cima” da raia)
   startGap: 16, //Distância entre: o “Início” e a primeira atividade
   endGap: 26, //Distância entre: última atividade e o “Fim”
-  laneTextOffsetLeft: 120, //Distância do nome da raia para a esquerda (Aumenta → nome vai mais para esquerda Diminui → nome se aproxima do fluxo)
+  //laneTextOffsetLeft: 120, //Distância do nome da raia para a esquerda (Aumenta → nome vai mais para esquerda Diminui → nome se aproxima do fluxo)
   extraLeftPadding: 50 //Empurra TODO o fluxo para a direita
 };
 
@@ -669,99 +669,107 @@ function desenharRaias(svg, areasOrdenadas, lanes, svgWidth) {
 function desenharRaiasExcel(svg, lanes) {
   const strokeColor = "#111111";
   const strokeWidth = 1.2;
-  const fillColor = "#f2f2f2";
+  const lineHeight = CONFIG.laneHeaderFontSize + 4;
 
   lanes.forEach((lane, index) => {
-    const g = criarElementoSVG("g");
+    const prevLane = lanes[index - 1] || null;
+    const nextLane = lanes[index + 1] || null;
 
-    const labelX = lane.x;
-    const labelRightX = lane.x + EXCEL_LAYOUT.laneLabelWidth;
-    const laneRightX = lane.x + lane.width;
-    const topY = lane.y;
-    const bottomY = lane.y + lane.height;
+    // linha horizontal compartilhada entre raias:
+    // fim da raia anterior = início da próxima
+    const topLineY = prevLane
+      ? prevLane.y + prevLane.height + (EXCEL_LAYOUT.laneGap / 2)
+      : lane.y;
 
-    // fundo da raia
+    const bottomLineY = nextLane
+      ? lane.y + lane.height + (EXCEL_LAYOUT.laneGap / 2)
+      : lane.y + lane.height;
+
+    const visualHeight = bottomLineY - topLineY;
+    const labelCenterX = lane.x + lane.labelWidth / 2;
+    const labelCenterY = topLineY + visualHeight / 2;
+
+    // fundo branco
     const fundo = criarElementoSVG("rect");
     fundo.setAttribute("x", lane.x);
-    fundo.setAttribute("y", lane.y);
+    fundo.setAttribute("y", topLineY);
     fundo.setAttribute("width", lane.width);
-    fundo.setAttribute("height", lane.height);
-    fundo.setAttribute("fill", fillColor);
+    fundo.setAttribute("height", visualHeight);
+    fundo.setAttribute("fill", "#ffffff");
     fundo.setAttribute("stroke", "none");
-    g.appendChild(fundo);
+    svg.appendChild(fundo);
 
-    // linha superior
+    // linha horizontal superior
     const linhaTopo = criarElementoSVG("line");
     linhaTopo.setAttribute("x1", lane.x);
-    linhaTopo.setAttribute("y1", topY);
-    linhaTopo.setAttribute("x2", laneRightX);
-    linhaTopo.setAttribute("y2", topY);
+    linhaTopo.setAttribute("y1", topLineY);
+    linhaTopo.setAttribute("x2", lane.x + lane.width);
+    linhaTopo.setAttribute("y2", topLineY);
     linhaTopo.setAttribute("stroke", strokeColor);
     linhaTopo.setAttribute("stroke-width", strokeWidth);
-    g.appendChild(linhaTopo);
+    svg.appendChild(linhaTopo);
 
-    // linha inferior
+    // linha horizontal inferior
     const linhaBase = criarElementoSVG("line");
     linhaBase.setAttribute("x1", lane.x);
-    linhaBase.setAttribute("y1", bottomY);
-    linhaBase.setAttribute("x2", laneRightX);
-    linhaBase.setAttribute("y2", bottomY);
+    linhaBase.setAttribute("y1", bottomLineY);
+    linhaBase.setAttribute("x2", lane.x + lane.width);
+    linhaBase.setAttribute("y2", bottomLineY);
     linhaBase.setAttribute("stroke", strokeColor);
     linhaBase.setAttribute("stroke-width", strokeWidth);
-    g.appendChild(linhaBase);
+    svg.appendChild(linhaBase);
 
-    // linha esquerda
+    // linha vertical esquerda
     const linhaEsquerda = criarElementoSVG("line");
     linhaEsquerda.setAttribute("x1", lane.x);
-    linhaEsquerda.setAttribute("y1", topY);
+    linhaEsquerda.setAttribute("y1", topLineY);
     linhaEsquerda.setAttribute("x2", lane.x);
-    linhaEsquerda.setAttribute("y2", bottomY);
+    linhaEsquerda.setAttribute("y2", bottomLineY);
     linhaEsquerda.setAttribute("stroke", strokeColor);
     linhaEsquerda.setAttribute("stroke-width", strokeWidth);
-    g.appendChild(linhaEsquerda);
+    svg.appendChild(linhaEsquerda);
 
-    // linha direita
-    const linhaDireita = criarElementoSVG("line");
-    linhaDireita.setAttribute("x1", laneRightX);
-    linhaDireita.setAttribute("y1", topY);
-    linhaDireita.setAttribute("x2", laneRightX);
-    linhaDireita.setAttribute("y2", bottomY);
-    linhaDireita.setAttribute("stroke", strokeColor);
-    linhaDireita.setAttribute("stroke-width", strokeWidth);
-    g.appendChild(linhaDireita);
-
-    // separador vertical da área do nome da raia
+    // separador vertical do nome da raia
     const separador = criarElementoSVG("line");
-    separador.setAttribute("x1", labelRightX);
-    separador.setAttribute("y1", topY);
-    separador.setAttribute("x2", labelRightX);
-    separador.setAttribute("y2", bottomY);
+    separador.setAttribute("x1", lane.x + lane.labelWidth);
+    separador.setAttribute("y1", topLineY);
+    separador.setAttribute("x2", lane.x + lane.labelWidth);
+    separador.setAttribute("y2", bottomLineY);
     separador.setAttribute("stroke", strokeColor);
     separador.setAttribute("stroke-width", strokeWidth);
-    g.appendChild(separador);
+    svg.appendChild(separador);
 
-    // texto vertical dentro da faixa da raia
-    const textoArea = criarElementoSVG("text");
-    const areaCenterX = lane.x + EXCEL_LAYOUT.laneLabelWidth / 2;
-    const areaCenterY = lane.y + lane.height / 2;
+    // linha vertical direita
+    const linhaDireita = criarElementoSVG("line");
+    linhaDireita.setAttribute("x1", lane.x + lane.width);
+    linhaDireita.setAttribute("y1", topLineY);
+    linhaDireita.setAttribute("x2", lane.x + lane.width);
+    linhaDireita.setAttribute("y2", bottomLineY);
+    linhaDireita.setAttribute("stroke", strokeColor);
+    linhaDireita.setAttribute("stroke-width", strokeWidth);
+    svg.appendChild(linhaDireita);
 
-    textoArea.setAttribute(
-      "transform",
-      `rotate(-90 ${areaCenterX} ${areaCenterY})`
-    );
-    textoArea.setAttribute("x", areaCenterX);
-    textoArea.setAttribute("y", areaCenterY);
-    textoArea.setAttribute("text-anchor", "middle");
-    textoArea.setAttribute("dominant-baseline", "middle");
-    textoArea.setAttribute("font-family", CONFIG.fontFamily);
-    textoArea.setAttribute("font-size", String(CONFIG.laneHeaderFontSize));
-    textoArea.setAttribute("font-weight", "bold");
-    textoArea.setAttribute("fill", "#111111");
-    textoArea.textContent = lane.area;
+    // nome da raia: 1 ou 2 linhas, sempre centralizado
+    const linhas = lane.labelLines && lane.labelLines.length
+      ? lane.labelLines
+      : [lane.area];
 
-    g.appendChild(textoArea);
+    const totalAlturaTexto = (linhas.length - 1) * lineHeight;
 
-    svg.appendChild(g);
+    linhas.forEach((linha, i) => {
+      const texto = criarElementoSVG("text");
+      texto.setAttribute("x", labelCenterX);
+      texto.setAttribute("y", labelCenterY - totalAlturaTexto / 2 + i * lineHeight);
+      texto.setAttribute("text-anchor", "middle");
+      texto.setAttribute("dominant-baseline", "middle");
+      texto.setAttribute("font-family", CONFIG.fontFamily);
+      texto.setAttribute("font-size", String(CONFIG.laneHeaderFontSize));
+      texto.setAttribute("font-weight", "bold");
+      texto.setAttribute("fill", "#111111");
+      texto.setAttribute("transform", `rotate(-90 ${labelCenterX} ${labelCenterY})`);
+      texto.textContent = linha;
+      svg.appendChild(texto);
+    });
   });
 }
 
@@ -2189,6 +2197,81 @@ posicoes["__INICIO__"] = {
 
 }
 
+function quebrarNomeRaiaExcel(texto, alturaDisponivel) {
+  const nome = String(texto || "").trim();
+  if (!nome) return [""];
+
+  const fontSize = CONFIG.laneHeaderFontSize;
+  const fontWeight = "bold";
+  const margemVertical = 16;
+  const larguraUtil = Math.max(80, alturaDisponivel - margemVertical * 2);
+
+  // cabe em 1 linha
+  if (medirLarguraTexto(nome, fontSize, fontWeight) <= larguraUtil) {
+    return [nome];
+  }
+
+  const palavras = nome.split(/\s+/).filter(Boolean);
+
+  // tenta quebrar em 2 linhas equilibradas
+  if (palavras.length >= 2) {
+    let melhor = null;
+
+    for (let i = 1; i < palavras.length; i++) {
+      const linha1 = palavras.slice(0, i).join(" ");
+      const linha2 = palavras.slice(i).join(" ");
+
+      const w1 = medirLarguraTexto(linha1, fontSize, fontWeight);
+      const w2 = medirLarguraTexto(linha2, fontSize, fontWeight);
+      const maior = Math.max(w1, w2);
+      const diferenca = Math.abs(w1 - w2);
+      const cabe = maior <= larguraUtil;
+
+      const candidato = {
+        linhas: [linha1, linha2],
+        cabe,
+        score: (cabe ? 0 : 100000) + maior + diferenca * 0.3
+      };
+
+      if (!melhor || candidato.score < melhor.score) {
+        melhor = candidato;
+      }
+    }
+
+    if (melhor) return melhor.linhas;
+  }
+
+  // fallback: quebra automática e limita em 2 linhas
+  const linhasAuto = quebrarTextoPorLargura(nome, larguraUtil, fontSize, fontWeight);
+
+  if (linhasAuto.length <= 2) return linhasAuto;
+
+  const meio = Math.ceil(linhasAuto.length / 2);
+  return [
+    linhasAuto.slice(0, meio).join(" "),
+    linhasAuto.slice(meio).join(" ")
+  ];
+}
+
+function calcularLarguraFaixaRaiaExcel(lanesBase) {
+  const lineHeight = CONFIG.laneHeaderFontSize + 4;
+
+  let maxLinhas = 1;
+
+  lanesBase.forEach((lane) => {
+    const linhas = quebrarNomeRaiaExcel(lane.area, lane.height);
+    lane.labelLines = linhas;
+    maxLinhas = Math.max(maxLinhas, linhas.length);
+  });
+
+  // largura da faixa baseada na quantidade máxima de linhas
+  // com uma folga maior para não ficar apertado
+  return Math.max(
+    EXCEL_LAYOUT.laneLabelWidth,
+    maxLinhas * lineHeight + 24
+  );
+}
+
 function gerarFluxoExcel() {
   const texto = document.getElementById("entrada").value;
 
@@ -2287,8 +2370,10 @@ function gerarFluxoExcel() {
   const laneTop = CONFIG.marginY;
 
   let cursorY = laneTop;
-  const lanes = [];
   let rowOffsetGlobal = 0;
+
+  // 1) monta base das raias só com altura
+  const lanesBase = [];
 
   areasOrdenadas.forEach((nomeArea) => {
     const etapasArea = etapas.filter(e => (e.area || "Sem Área") === nomeArea);
@@ -2304,32 +2389,46 @@ function gerarFluxoExcel() {
       contentHeight +
       EXCEL_LAYOUT.lanePaddingBottom;
 
-  lanes.push({
-    area: nomeArea,
-    x: laneLeft,
-    y: cursorY,
-    width: EXCEL_LAYOUT.laneLabelWidth + EXCEL_LAYOUT.laneEntryWidth + laneContentWidth,
-    height: laneHeight,
-    contentX: laneLeft + EXCEL_LAYOUT.laneLabelWidth + EXCEL_LAYOUT.laneEntryWidth,
-    contentY: cursorY + EXCEL_LAYOUT.lanePaddingTop,
-    contentHeight,
-    rows: qtdLinhas,
-    rowOffsetGlobalStart: rowOffsetGlobal
-  });
+    lanesBase.push({
+      area: nomeArea,
+      y: cursorY,
+      height: laneHeight,
+      contentHeight,
+      rows: qtdLinhas,
+      rowOffsetGlobalStart: rowOffsetGlobal
+    });
 
     rowOffsetGlobal += qtdLinhas + 2;
-
     cursorY += laneHeight + EXCEL_LAYOUT.laneGap;
   });
 
-  const larguraSvg = Math.max(
-  CONFIG.marginX * 2 +
-    EXCEL_LAYOUT.laneLabelWidth +
+  // 2) calcula largura única da faixa do nome da raia
+  const laneLabelWidthExcel = calcularLarguraFaixaRaiaExcel(lanesBase);
+
+  // 3) monta lanes finais
+  const lanes = lanesBase.map((base) => ({
+    area: base.area,
+    x: laneLeft,
+    y: base.y,
+    width: laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth + laneContentWidth,
+    height: base.height,
+    contentX: laneLeft + laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth,
+    contentY: base.y + EXCEL_LAYOUT.lanePaddingTop,
+    contentHeight: base.contentHeight,
+    rows: base.rows,
+    rowOffsetGlobalStart: base.rowOffsetGlobalStart,
+    labelWidth: laneLabelWidthExcel,
+    labelLines: base.labelLines || [base.area]
+  }));
+
+    const larguraSvg = Math.max(
+    CONFIG.marginX * 2 +
+    lanes[0].labelWidth +
     EXCEL_LAYOUT.laneEntryWidth +
     laneContentWidth +
     100,
-  1000
-);
+    1000
+  );
 
   const alturaSvg = Math.max(cursorY + CONFIG.marginY, 500);
 
