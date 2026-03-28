@@ -685,17 +685,8 @@ function desenharRaiasExcel(svg, lanes) {
 
     const visualHeight = bottomLineY - topLineY;
 
-    // centro base da faixa do nome
-    const labelBaseCenterX = lane.x + lane.labelWidth / 2;
-
-    // desloca o nome da raia mais para a esquerda
-    // mas sem sair demais da área útil
-    const deslocamentoTexto = Math.max(
-      0,
-      Math.min(EXCEL_LAYOUT.laneTextOffsetLeft || 0, lane.labelWidth * 0.35) //Se o nome da raia tiver perto do inicio ajustar lane.labelWidth * 0.45) 
-    );
-
-    const labelCenterX = labelBaseCenterX - deslocamentoTexto;
+    // texto da raia centralizado de verdade na faixa
+    const labelCenterX = lane.x + lane.labelWidth / 2;
     const labelCenterY = topLineY + visualHeight / 2;
 
     // fundo branco
@@ -2415,28 +2406,29 @@ function gerarFluxoExcel() {
 
   // 3) monta lanes finais
   const lanes = lanesBase.map((base) => ({
-    area: base.area,
-    x: laneLeft,
-    y: base.y,
-    width: laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth + laneContentWidth,
-    height: base.height,
-    contentX: laneLeft + laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth,
-    contentY: base.y + EXCEL_LAYOUT.lanePaddingTop,
-    contentHeight: base.contentHeight,
-    rows: base.rows,
-    rowOffsetGlobalStart: base.rowOffsetGlobalStart,
-    labelWidth: laneLabelWidthExcel,
-    labelLines: base.labelLines || [base.area]
-  }));
+  area: base.area,
+  x: laneLeft,
+  y: base.y,
+  width: laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth + laneContentWidth,
+  height: base.height,
+  contentX: laneLeft + laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth + EXCEL_LAYOUT.laneTextOffsetLeft,
+  contentY: base.y + EXCEL_LAYOUT.lanePaddingTop,
+  contentHeight: base.contentHeight,
+  rows: base.rows,
+  rowOffsetGlobalStart: base.rowOffsetGlobalStart,
+  labelWidth: laneLabelWidthExcel,
+  labelLines: base.labelLines || [base.area]
+}));
 
     const larguraSvg = Math.max(
-    CONFIG.marginX * 2 +
-    lanes[0].labelWidth +
-    EXCEL_LAYOUT.laneEntryWidth +
-    laneContentWidth +
-    100,
-    1000
-  );
+  CONFIG.marginX * 2 +
+  lanes[0].labelWidth +
+  EXCEL_LAYOUT.laneEntryWidth +
+  EXCEL_LAYOUT.laneTextOffsetLeft +
+  laneContentWidth +
+  100,
+  1000
+);
 
   const alturaSvg = Math.max(cursorY + CONFIG.marginY, 500);
 
