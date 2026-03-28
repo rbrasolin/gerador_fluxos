@@ -675,8 +675,6 @@ function desenharRaiasExcel(svg, lanes) {
     const prevLane = lanes[index - 1] || null;
     const nextLane = lanes[index + 1] || null;
 
-    // linha horizontal compartilhada entre raias:
-    // fim da raia anterior = início da próxima
     const topLineY = prevLane
       ? prevLane.y + prevLane.height + (EXCEL_LAYOUT.laneGap / 2)
       : lane.y;
@@ -686,7 +684,18 @@ function desenharRaiasExcel(svg, lanes) {
       : lane.y + lane.height;
 
     const visualHeight = bottomLineY - topLineY;
-    const labelCenterX = lane.x + lane.labelWidth / 2;
+
+    // centro base da faixa do nome
+    const labelBaseCenterX = lane.x + lane.labelWidth / 2;
+
+    // desloca o nome da raia mais para a esquerda
+    // mas sem sair demais da área útil
+    const deslocamentoTexto = Math.max(
+      0,
+      Math.min(EXCEL_LAYOUT.laneTextOffsetLeft || 0, lane.labelWidth * 0.35) //Se o nome da raia tiver perto do inicio ajustar lane.labelWidth * 0.45) 
+    );
+
+    const labelCenterX = labelBaseCenterX - deslocamentoTexto;
     const labelCenterY = topLineY + visualHeight / 2;
 
     // fundo branco
@@ -749,7 +758,6 @@ function desenharRaiasExcel(svg, lanes) {
     linhaDireita.setAttribute("stroke-width", strokeWidth);
     svg.appendChild(linhaDireita);
 
-    // nome da raia: 1 ou 2 linhas, sempre centralizado
     const linhas = lane.labelLines && lane.labelLines.length
       ? lane.labelLines
       : [lane.area];
