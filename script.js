@@ -1481,18 +1481,21 @@ function tentarRotaDecisaoMesmaLinhaAcima(
   posicoes = {},
   rotasExistentes = []
 ) {
-  const mesmoNivel = origem.gridRowGlobal === destino.gridRowGlobal;
-  const deslocamentoHorizontal = destino.gridCol - origem.gridCol;
-
-  if (!origem.isDecision || !mesmoNivel || deslocamentoHorizontal === 0) {
+  if (!origem.isDecision) {
     return null;
   }
+
+  const dx = destino.gridCol - origem.gridCol;
+  const dy = destino.gridRowGlobal - origem.gridRowGlobal;
 
   const rotuloNormalizado = String(rotulo || "").toLowerCase();
   const ehSim = rotuloNormalizado.startsWith("sim");
   const ehNao = rotuloNormalizado.startsWith("não") || rotuloNormalizado.startsWith("nao");
-  const vaiParaDireita = deslocamentoHorizontal > 0;
-  const vaiParaEsquerda = deslocamentoHorizontal < 0;
+
+  const mesmoNivel = dy === 0;
+  const vaiParaDireita = dx > 0;
+  const vaiParaEsquerda = dx < 0;
+  const sobe = dy < 0;
 
   const excludeIds = [origem.id, destino.id, "__INICIO__", "__FIM__"];
   const ladosUsadosOrigem = obterLadosUsadosDoNo(origem.id, rotasExistentes);
@@ -1504,18 +1507,26 @@ function tentarRotaDecisaoMesmaLinhaAcima(
 
     if (ladosUsadosOrigem.has(startSide)) score += 1000;
 
-    // penalizações extras para empurrar para o lado mais limpo
-    if (vaiParaEsquerda && ehNao) {
-      if (startSide !== "bottom") score += 200;
-      if (endSide !== "bottom") score += 100;
+    // preferência forte para o caso J -> H:
+    // decisão voltando para cima/esquerda no "Não" deve sair por baixo
+    if (ehNao && vaiParaEsquerda && sobe) {
+      if (startSide !== "bottom") score += 400;
+      if (endSide !== "bottom") score += 220;
     }
 
-    if (vaiParaDireita && ehSim) {
+    // mesma linha à esquerda no "Não" também deve preferir por baixo
+    if (ehNao && vaiParaEsquerda && mesmoNivel) {
+      if (startSide !== "bottom") score += 260;
+      if (endSide !== "bottom") score += 140;
+    }
+
+    // mesma linha à direita
+    if (ehSim && vaiParaDireita && mesmoNivel) {
       if (startSide !== "right") score += 120;
       if (endSide !== "top") score += 80;
     }
 
-    if (vaiParaDireita && ehNao) {
+    if (ehNao && vaiParaDireita && mesmoNivel) {
       if (startSide !== "top") score += 120;
       if (endSide !== "top") score += 80;
     }
@@ -1523,7 +1534,33 @@ function tentarRotaDecisaoMesmaLinhaAcima(
     return score;
   }
 
-  function registrarCandidato(startSide, endSide, canalY) {
+  function registrarCandidato(startSide, endSide, pontosBase, labelPoint = null) {
+    const rota = normalizarPontos(pontosBase);
+    const cruzaCaixa = pathCruzaCaixas(rota, posicoes, excludeIds);
+
+    const rotasComparacao = (rotasExistentes || []).filter(r =>
+      !(r.origemId === origem.id && r.destinoId === destino.id)
+    );
+
+    const cruzaLinha = pathCruzaConexoes(rota, rotasComparacao);
+    const comprimento = calcularComprimento(rota);
+
+    candidatos.push({
+      points: rota,
+      startSide,
+      endSide,
+      cruzaCaixa,
+      cruzaLinha,
+      comprimento,
+      pesoLado: penalidadeLado(startSide, endSide),
+      label: labelPoint || {
+        x: rota[Math.floor(rota.length / 2)].x,
+        y: rota[Math.floor(rota.length / 2)].y - 10
+      }
+    });
+  }
+
+  function registrarCandidatoCanal(startSide, endSide, canalY) {
     const start = getAnchorPoint(origem, startSide);
     const end = getAnchorPoint(destino, endSide);
 
@@ -1544,59 +1581,46 @@ function tentarRotaDecisaoMesmaLinhaAcima(
     points.push({ x: end.x, y: canalY });
     points.push({ x: end.x, y: end.y });
 
-    const rota = normalizarPontos(points);
-    const cruzaCaixa = pathCruzaCaixas(rota, posicoes, excludeIds);
-
-    const rotasComparacao = (rotasExistentes || []).filter(r =>
-      !(r.origemId === origem.id && r.destinoId === destino.id)
-    );
-
-    const cruzaLinha = pathCruzaConexoes(rota, rotasComparacao);
-    const comprimento = calcularComprimento(rota);
-
-    candidatos.push({
-      points: rota,
+    registrarCandidato(
       startSide,
       endSide,
-      cruzaCaixa,
-      cruzaLinha,
-      comprimento,
-      canalY,
-      pesoLado: penalidadeLado(startSide, endSide),
-      label: {
+      points,
+      {
         x: (start.x + end.x) / 2,
         y: (startSide === "bottom" || endSide === "bottom") ? canalY + 14 : canalY - 10
       }
-    });
+    );
   }
 
-  // decisão -> direita na mesma linha
-  if (vaiParaDireita) {
+  // =========================
+  // 1) decisão -> direita na mesma linha
+  // =========================
+  if (mesmoNivel && vaiParaDireita) {
     for (let extra = 0; extra < 6; extra++) {
       if (ehSim) {
-        registrarCandidato(
+        registrarCandidatoCanal(
           "right",
           "top",
           calcularCanalSuperiorDentroRaia(origem, destino, 1 + ordemConexao + extra, posicoes)
         );
-        registrarCandidato(
+        registrarCandidatoCanal(
           "top",
           "top",
           calcularCanalSuperiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
         );
       } else if (ehNao) {
-        registrarCandidato(
+        registrarCandidatoCanal(
           "top",
           "top",
           calcularCanalSuperiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
         );
-        registrarCandidato(
+        registrarCandidatoCanal(
           "right",
           "top",
           calcularCanalSuperiorDentroRaia(origem, destino, 3 + ordemConexao + extra, posicoes)
         );
       } else {
-        registrarCandidato(
+        registrarCandidatoCanal(
           "right",
           "top",
           calcularCanalSuperiorDentroRaia(origem, destino, 3 + ordemConexao + extra, posicoes)
@@ -1605,48 +1629,99 @@ function tentarRotaDecisaoMesmaLinhaAcima(
     }
   }
 
-  // decisão -> esquerda na mesma linha
-  if (vaiParaEsquerda) {
+  // =========================
+  // 2) decisão -> esquerda na mesma linha
+  // =========================
+  if (mesmoNivel && vaiParaEsquerda) {
     for (let extra = 0; extra < 6; extra++) {
       if (ehNao) {
-        // prioridade: sair por baixo e entrar por baixo
-        registrarCandidato(
+        registrarCandidatoCanal(
           "bottom",
           "bottom",
           calcularCanalInferiorDentroRaia(origem, destino, 1 + ordemConexao + extra, posicoes)
         );
 
-        // segunda melhor: sair pela direita, mantendo chegada por baixo
-        registrarCandidato(
+        registrarCandidatoCanal(
           "right",
           "bottom",
           calcularCanalInferiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
         );
 
-        // fallback mais fraco
-        registrarCandidato(
+        registrarCandidatoCanal(
           "top",
           "top",
           calcularCanalSuperiorDentroRaia(origem, destino, 1 + ordemConexao + extra, posicoes)
         );
       } else if (ehSim) {
-        registrarCandidato(
+        registrarCandidatoCanal(
           "top",
           "top",
           calcularCanalSuperiorDentroRaia(origem, destino, 1 + ordemConexao + extra, posicoes)
         );
-        registrarCandidato(
+        registrarCandidatoCanal(
           "bottom",
           "bottom",
           calcularCanalInferiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
         );
       } else {
-        registrarCandidato(
+        registrarCandidatoCanal(
           "bottom",
           "bottom",
           calcularCanalInferiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
         );
       }
+    }
+  }
+
+  // =========================
+  // 3) decisão -> esquerda e acima  (CASO J -> H)
+  // =========================
+  if (ehNao && vaiParaEsquerda && sobe) {
+    const startBottom = getAnchorPoint(origem, "bottom");
+    const endBottom = getAnchorPoint(destino, "bottom");
+    const startRight = getAnchorPoint(origem, "right");
+
+    for (let extra = 0; extra < 6; extra++) {
+      const canalY = calcularCanalInferiorDentroRaia(
+        origem,
+        destino,
+        1 + ordemConexao + extra,
+        posicoes
+      );
+
+      // melhor rota: sai por baixo do losango, segue por baixo e sobe no destino
+      registrarCandidato(
+        "bottom",
+        "bottom",
+        [
+          { x: startBottom.x, y: startBottom.y },
+          { x: startBottom.x, y: canalY },
+          { x: endBottom.x, y: canalY },
+          { x: endBottom.x, y: endBottom.y }
+        ],
+        {
+          x: (startBottom.x + endBottom.x) / 2,
+          y: canalY + 14
+        }
+      );
+
+      // fallback: sai pela direita, desce, volta por baixo e sobe
+      const escapeX = startRight.x + CONFIG.routeGap;
+      registrarCandidato(
+        "right",
+        "bottom",
+        [
+          { x: startRight.x, y: startRight.y },
+          { x: escapeX, y: startRight.y },
+          { x: escapeX, y: canalY },
+          { x: endBottom.x, y: canalY },
+          { x: endBottom.x, y: endBottom.y }
+        ],
+        {
+          x: (escapeX + endBottom.x) / 2,
+          y: canalY + 14
+        }
+      );
     }
   }
 
