@@ -689,19 +689,8 @@ function desenharRaiasExcel(svg, lanes) {
 
     const visualHeight = bottomLineY - topLineY;
 
-    // texto da raia centralizado de verdade na faixa
     const labelCenterX = lane.x + lane.labelWidth / 2;
     const labelCenterY = topLineY + visualHeight / 2;
-
-    // fundo branco
-    const fundo = criarElementoSVG("rect");
-    fundo.setAttribute("x", lane.x);
-    fundo.setAttribute("y", topLineY);
-    fundo.setAttribute("width", lane.width);
-    fundo.setAttribute("height", visualHeight);
-    fundo.setAttribute("fill", "#ffffff");
-    fundo.setAttribute("stroke", "none");
-    svg.appendChild(fundo);
 
     // linha horizontal superior
     const linhaTopo = criarElementoSVG("line");
@@ -3180,7 +3169,7 @@ function gerarFluxoExcel() {
   svg.setAttribute("width", larguraSvg);
   svg.setAttribute("height", alturaSvg);
   svg.setAttribute("viewBox", `0 0 ${larguraSvg} ${alturaSvg}`);
-  svg.setAttribute("style", "background:#ffffff");
+  svg.setAttribute("style", "background:transparent");
 
   desenharRaiasExcel(svg, lanes);
 
