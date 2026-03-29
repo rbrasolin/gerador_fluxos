@@ -45,8 +45,8 @@ const EXCEL_LAYOUT = {
   colGap: 70, //Espaço horizontal entre as colunas (atividades)
   rowGap: 36, //Espaço vertical entre atividades dentro da mesma raia
   laneGap: 50, //Espaço entre uma raia e outra
-  lanePaddingTop: 25, //Espaço interno no topo da raia, Se estiver baixo → caixa “grudada” no topo
-  lanePaddingBottom: 25, //Espaço interno na parte de baixo da raia, Evita que última atividade fique colada na borda
+  lanePaddingTop: 40, //Espaço interno no topo da raia, Se estiver baixo → caixa “grudada” no topo
+  lanePaddingBottom: 40, //Espaço interno na parte de baixo da raia, Evita que última atividade fique colada na borda
   laneLabelWidth: 22, //“Reserva” horizontal para a área da raia (estrutura no desenho da raia, não aplica no excel)
   laneEntryWidth: 12, //Espaço entre: área do nome da raia e início do fluxo (Muito pequeno → fluxo começa “em cima” da raia)
   startGap: 16, //Distância entre: o “Início” e a primeira atividade
