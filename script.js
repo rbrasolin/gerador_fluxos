@@ -977,6 +977,24 @@ function pathCruzaConexoes(points, rotasExistentes = [], tolerancia = 2) {
   return false;
 }
 
+function obterLadosUsadosDoNo(noId, rotasExistentes = []) {
+  const usados = new Set();
+
+  (rotasExistentes || []).forEach((rota) => {
+    if (!rota || !rota.points || rota.points.length < 2) return;
+
+    if (rota.origemId === noId) {
+      usados.add(detectarLadoSaida(rota.points));
+    }
+
+    if (rota.destinoId === noId) {
+      usados.add(detectarLadoEntrada(rota.points));
+    }
+  });
+
+  return usados;
+}
+
 function obterLimitesRaiaDaArea(area, posicoes = {}) {
   const nosArea = Object.values(posicoes).filter(
     n => n && n.area === area && n.id !== "__INICIO__" && n.id !== "__FIM__"
@@ -1462,8 +1480,34 @@ function tentarRotaDecisaoMesmaLinhaAcima(
   const vaiParaDireita = deslocamentoHorizontal > 0;
   const vaiParaEsquerda = deslocamentoHorizontal < 0;
 
-  const candidatos = [];
   const excludeIds = [origem.id, destino.id, "__INICIO__", "__FIM__"];
+  const ladosUsadosOrigem = obterLadosUsadosDoNo(origem.id, rotasExistentes);
+
+  const candidatos = [];
+
+  function penalidadeLado(startSide, endSide) {
+    let score = 0;
+
+    if (ladosUsadosOrigem.has(startSide)) score += 1000;
+
+    // penalizações extras para empurrar para o lado mais limpo
+    if (vaiParaEsquerda && ehNao) {
+      if (startSide !== "bottom") score += 200;
+      if (endSide !== "bottom") score += 100;
+    }
+
+    if (vaiParaDireita && ehSim) {
+      if (startSide !== "right") score += 120;
+      if (endSide !== "top") score += 80;
+    }
+
+    if (vaiParaDireita && ehNao) {
+      if (startSide !== "top") score += 120;
+      if (endSide !== "top") score += 80;
+    }
+
+    return score;
+  }
 
   function registrarCandidato(startSide, endSide, canalY) {
     const start = getAnchorPoint(origem, startSide);
@@ -1487,7 +1531,6 @@ function tentarRotaDecisaoMesmaLinhaAcima(
     points.push({ x: end.x, y: end.y });
 
     const rota = normalizarPontos(points);
-
     const cruzaCaixa = pathCruzaCaixas(rota, posicoes, excludeIds);
 
     const rotasComparacao = (rotasExistentes || []).filter(r =>
@@ -1505,6 +1548,7 @@ function tentarRotaDecisaoMesmaLinhaAcima(
       cruzaLinha,
       comprimento,
       canalY,
+      pesoLado: penalidadeLado(startSide, endSide),
       label: {
         x: (start.x + end.x) / 2,
         y: (startSide === "bottom" || endSide === "bottom") ? canalY + 14 : canalY - 10
@@ -1512,7 +1556,7 @@ function tentarRotaDecisaoMesmaLinhaAcima(
     });
   }
 
-  // direita na mesma linha
+  // decisão -> direita na mesma linha
   if (vaiParaDireita) {
     for (let extra = 0; extra < 6; extra++) {
       if (ehSim) {
@@ -1521,11 +1565,21 @@ function tentarRotaDecisaoMesmaLinhaAcima(
           "top",
           calcularCanalSuperiorDentroRaia(origem, destino, 1 + ordemConexao + extra, posicoes)
         );
+        registrarCandidato(
+          "top",
+          "top",
+          calcularCanalSuperiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
+        );
       } else if (ehNao) {
         registrarCandidato(
           "top",
           "top",
           calcularCanalSuperiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
+        );
+        registrarCandidato(
+          "right",
+          "top",
+          calcularCanalSuperiorDentroRaia(origem, destino, 3 + ordemConexao + extra, posicoes)
         );
       } else {
         registrarCandidato(
@@ -1537,20 +1591,40 @@ function tentarRotaDecisaoMesmaLinhaAcima(
     }
   }
 
-  // esquerda na mesma linha
+  // decisão -> esquerda na mesma linha
   if (vaiParaEsquerda) {
     for (let extra = 0; extra < 6; extra++) {
       if (ehNao) {
+        // prioridade: sair por baixo e entrar por baixo
         registrarCandidato(
           "bottom",
           "bottom",
           calcularCanalInferiorDentroRaia(origem, destino, 1 + ordemConexao + extra, posicoes)
+        );
+
+        // segunda melhor: sair pela direita, mantendo chegada por baixo
+        registrarCandidato(
+          "right",
+          "bottom",
+          calcularCanalInferiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
+        );
+
+        // fallback mais fraco
+        registrarCandidato(
+          "top",
+          "top",
+          calcularCanalSuperiorDentroRaia(origem, destino, 1 + ordemConexao + extra, posicoes)
         );
       } else if (ehSim) {
         registrarCandidato(
           "top",
           "top",
           calcularCanalSuperiorDentroRaia(origem, destino, 1 + ordemConexao + extra, posicoes)
+        );
+        registrarCandidato(
+          "bottom",
+          "bottom",
+          calcularCanalInferiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
         );
       } else {
         registrarCandidato(
@@ -1567,6 +1641,7 @@ function tentarRotaDecisaoMesmaLinhaAcima(
   candidatos.sort((a, b) => {
     if (a.cruzaCaixa !== b.cruzaCaixa) return a.cruzaCaixa ? 1 : -1;
     if (a.cruzaLinha !== b.cruzaLinha) return a.cruzaLinha ? 1 : -1;
+    if (a.pesoLado !== b.pesoLado) return a.pesoLado - b.pesoLado;
     if (a.points.length !== b.points.length) return a.points.length - b.points.length;
     return a.comprimento - b.comprimento;
   });
@@ -1574,7 +1649,6 @@ function tentarRotaDecisaoMesmaLinhaAcima(
   const melhorSemCaixa = candidatos.find(c => !c.cruzaCaixa);
   const melhor = melhorSemCaixa || candidatos[0];
 
-  // se cruza caixa, melhor desistir da rota especial e deixar o roteador genérico tentar
   if (melhor.cruzaCaixa) {
     return null;
   }
