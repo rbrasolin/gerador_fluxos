@@ -1326,79 +1326,48 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
   const dx = destino.gridCol - origem.gridCol;
   const dy = destino.gridRowGlobal - origem.gridRowGlobal;
 
-  if (origem.isDecision) {
-    // decisão -> destino na mesma linha à direita
-    if (dy === 0 && dx > 0) {
-      if (rotulo === "Sim") {
-        return [
-          { startSide: "right", endSide: "top" },
-          { startSide: "right", endSide: "left" },
-          { startSide: "top", endSide: "top" }
-        ];
-      }
+  const rotuloNormalizado = String(rotulo || "").toLowerCase();
+  const ehSim = rotuloNormalizado.startsWith("sim");
+  const ehNao = rotuloNormalizado.startsWith("não") || rotuloNormalizado.startsWith("nao");
 
-      if (rotulo === "Não") {
-        return [
-          { startSide: "top", endSide: "top" },
-          { startSide: "bottom", endSide: "top" },
-          { startSide: "right", endSide: "top" }
-        ];
-      }
+  // =========================
+  // 🔥 PRIORIDADE 1 — MESMA LINHA (LINHA RETA SEMPRE)
+  // =========================
+  if (dy === 0) {
+    if (dx > 0) {
+      return [{ startSide: "right", endSide: "left" }];
+    }
+    if (dx < 0) {
+      return [{ startSide: "left", endSide: "right" }];
+    }
+  }
+
+  // =========================
+  // 🔥 PRIORIDADE 2 — DECISÃO COM RETORNO
+  // =========================
+  if (origem.isDecision && dx < 0) {
+
+    // retorno para cima (G -> E)
+    if (dy < 0 && ehNao) {
+      return [
+        { startSide: "top", endSide: "top" },     // PRIORIDADE
+        { startSide: "left", endSide: "bottom" }, // fallback
+        { startSide: "bottom", endSide: "bottom"} // fallback
+      ];
     }
 
-    // decisão -> retorno na mesma linha à esquerda
-    if (dy === 0 && dx < 0) {
-      if (rotulo === "Não") {
-        return [
-          { startSide: "bottom", endSide: "bottom" },
-          { startSide: "right", endSide: "bottom" },
-          { startSide: "bottom", endSide: "top" },
-          { startSide: "top", endSide: "top" },
-          { startSide: "left", endSide: "top" }
-        ];
-      }
-
-      if (rotulo === "Sim") {
-        return [
-          { startSide: "top", endSide: "top" },
-          { startSide: "left", endSide: "right" },
-          { startSide: "bottom", endSide: "bottom" }
-        ];
-      }
-    }
-
-    // decisão -> acima e à esquerda
-    // ESTE É O CASO DO J -> H NO DESENHO ATUAL
-    if (dx < 0 && dy < 0 && rotulo === "Não") {
+    // retorno na mesma linha (J -> H)
+    if (dy === 0 && ehNao) {
       return [
         { startSide: "bottom", endSide: "bottom" },
-        { startSide: "right", endSide: "bottom" },
-        { startSide: "left", endSide: "bottom" },
-        { startSide: "top", endSide: "bottom" },
-        { startSide: "left", endSide: "right" },
-        { startSide: "top", endSide: "right" }
-      ];
-    }
-
-    // decisão -> abaixo
-    if (dx === 0 && dy > 0) {
-      return [
-        { startSide: "bottom", endSide: "top" },
-        { startSide: "right", endSide: "top" },
-        { startSide: "left", endSide: "top" }
-      ];
-    }
-
-    // decisão -> acima
-    if (dx === 0 && dy < 0) {
-      return [
-        { startSide: "top", endSide: "bottom" },
-        { startSide: "right", endSide: "bottom" },
-        { startSide: "left", endSide: "bottom" }
+        { startSide: "right", endSide: "bottom" }
       ];
     }
   }
 
+  // =========================
+  // 🔥 MOVIMENTOS PADRÃO (mantém seu comportamento atual)
+  // =========================
   if (dx === 0 && dy > 0) {
     return [{ startSide: "bottom", endSide: "top" }];
   }
@@ -1407,19 +1376,9 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
     return [{ startSide: "top", endSide: "bottom" }];
   }
 
-  if (dy === 0 && dx > 0) {
-    return [{ startSide: "right", endSide: "left" }];
-  }
-
-  if (dy === 0 && dx < 0) {
-    return [{ startSide: "left", endSide: "right" }];
-  }
-
   if (dx > 0 && dy > 0) {
     return [
       { startSide: "right", endSide: "left" },
-      { startSide: "right", endSide: "top" },
-      { startSide: "bottom", endSide: "left" },
       { startSide: "bottom", endSide: "top" }
     ];
   }
@@ -1427,8 +1386,6 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
   if (dx > 0 && dy < 0) {
     return [
       { startSide: "right", endSide: "left" },
-      { startSide: "right", endSide: "bottom" },
-      { startSide: "top", endSide: "left" },
       { startSide: "top", endSide: "bottom" }
     ];
   }
@@ -1436,8 +1393,6 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
   if (dx < 0 && dy > 0) {
     return [
       { startSide: "left", endSide: "right" },
-      { startSide: "left", endSide: "top" },
-      { startSide: "bottom", endSide: "right" },
       { startSide: "bottom", endSide: "top" }
     ];
   }
@@ -1445,8 +1400,6 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
   if (dx < 0 && dy < 0) {
     return [
       { startSide: "left", endSide: "right" },
-      { startSide: "left", endSide: "bottom" },
-      { startSide: "top", endSide: "right" },
       { startSide: "top", endSide: "bottom" }
     ];
   }
