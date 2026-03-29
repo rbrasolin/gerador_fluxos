@@ -1332,8 +1332,9 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
     if (dy === 0 && dx < 0) {
       if (rotulo === "Não") {
         return [
-          { startSide: "top", endSide: "top" },
+          { startSide: "bottom", endSide: "bottom" },
           { startSide: "bottom", endSide: "top" },
+          { startSide: "top", endSide: "top" },
           { startSide: "left", endSide: "top" }
         ];
       }
