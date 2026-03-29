@@ -1351,6 +1351,7 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
       if (rotulo === "Não") {
         return [
           { startSide: "bottom", endSide: "bottom" },
+          { startSide: "right", endSide: "bottom" },
           { startSide: "bottom", endSide: "top" },
           { startSide: "top", endSide: "top" },
           { startSide: "left", endSide: "top" }
@@ -1366,7 +1367,6 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
       }
     }
 
-    // decisão -> abaixo
     if (dx === 0 && dy > 0) {
       return [
         { startSide: "bottom", endSide: "top" },
@@ -1375,7 +1375,6 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
       ];
     }
 
-    // decisão -> acima
     if (dx === 0 && dy < 0) {
       return [
         { startSide: "top", endSide: "bottom" },
