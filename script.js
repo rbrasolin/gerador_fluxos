@@ -879,6 +879,157 @@ function pathCruzaCaixas(points, posicoes = {}, excludeIds = []) {
   return false;
 }
 
+function segmentosDoPath(points) {
+  const segmentos = [];
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+
+    if (!p1 || !p2) continue;
+    if (p1.x === p2.x && p1.y === p2.y) continue;
+
+    segmentos.push({ p1, p2 });
+  }
+
+  return segmentos;
+}
+
+function intervaloSeSobrepoe(a1, a2, b1, b2, margem = 0) {
+  const minA = Math.min(a1, a2);
+  const maxA = Math.max(a1, a2);
+  const minB = Math.min(b1, b2);
+  const maxB = Math.max(b1, b2);
+
+  return Math.max(minA, minB) <= Math.min(maxA, maxB) + margem;
+}
+
+function segmentosOrtogonaisSeCruzam(segA, segB, margem = 2) {
+  const aVertical = segA.p1.x === segA.p2.x;
+  const aHorizontal = segA.p1.y === segA.p2.y;
+  const bVertical = segB.p1.x === segB.p2.x;
+  const bHorizontal = segB.p1.y === segB.p2.y;
+
+  if (!(aVertical || aHorizontal) || !(bVertical || bHorizontal)) {
+    return false;
+  }
+
+  // vertical x horizontal
+  if (aVertical && bHorizontal) {
+    const x = segA.p1.x;
+    const y = segB.p1.y;
+
+    return (
+      intervaloSeSobrepoe(segA.p1.y, segA.p2.y, y, y, margem) &&
+      intervaloSeSobrepoe(segB.p1.x, segB.p2.x, x, x, margem)
+    );
+  }
+
+  // horizontal x vertical
+  if (aHorizontal && bVertical) {
+    const x = segB.p1.x;
+    const y = segA.p1.y;
+
+    return (
+      intervaloSeSobrepoe(segA.p1.x, segA.p2.x, x, x, margem) &&
+      intervaloSeSobrepoe(segB.p1.y, segB.p2.y, y, y, margem)
+    );
+  }
+
+  // paralelos sobrepostos
+  if (aVertical && bVertical && Math.abs(segA.p1.x - segB.p1.x) <= margem) {
+    return intervaloSeSobrepoe(segA.p1.y, segA.p2.y, segB.p1.y, segB.p2.y, margem);
+  }
+
+  if (aHorizontal && bHorizontal && Math.abs(segA.p1.y - segB.p1.y) <= margem) {
+    return intervaloSeSobrepoe(segA.p1.x, segA.p2.x, segB.p1.x, segB.p2.x, margem);
+  }
+
+  return false;
+}
+
+function pathCruzaConexoes(points, rotasExistentes = [], tolerancia = 2) {
+  if (!rotasExistentes || !rotasExistentes.length) return false;
+
+  const segmentosNovos = segmentosDoPath(points);
+
+  for (const rotaExistente of rotasExistentes) {
+    const segmentosExistentes = segmentosDoPath(rotaExistente.points || []);
+
+    for (const segNovo of segmentosNovos) {
+      for (const segExistente of segmentosExistentes) {
+        // permite tocar na ponta exata
+        const compartilhaPonta =
+          (segNovo.p1.x === segExistente.p1.x && segNovo.p1.y === segExistente.p1.y) ||
+          (segNovo.p1.x === segExistente.p2.x && segNovo.p1.y === segExistente.p2.y) ||
+          (segNovo.p2.x === segExistente.p1.x && segNovo.p2.y === segExistente.p1.y) ||
+          (segNovo.p2.x === segExistente.p2.x && segNovo.p2.y === segExistente.p2.y);
+
+        if (compartilhaPonta) continue;
+
+        if (segmentosOrtogonaisSeCruzam(segNovo, segExistente, tolerancia)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+function obterLimitesRaiaDaArea(area, posicoes = {}) {
+  const nosArea = Object.values(posicoes).filter(
+    n => n && n.area === area && n.id !== "__INICIO__" && n.id !== "__FIM__"
+  );
+
+  if (!nosArea.length) {
+    return { top: 0, bottom: 999999 };
+  }
+
+  const top = Math.min(...nosArea.map(n => n.laneTop ?? n.y));
+  const bottom = Math.max(...nosArea.map(n => n.laneBottom ?? (n.y + n.h)));
+
+  return { top, bottom };
+}
+
+function calcularCanalSuperiorDentroRaia(origem, destino, nivelCanal = 1, posicoes = {}) {
+  const limites = obterLimitesRaiaDaArea(origem.area, posicoes);
+
+  const topoNos = Math.min(origem.y, destino.y);
+  const topoRaia = limites.top + 8;
+  const baseLivre = topoNos - 10;
+
+  // espaço livre acima dos nós
+  const espacoDisponivel = Math.max(12, baseLivre - topoRaia);
+
+  // divide o espaço livre em faixas para Sim / Não / extras
+  const totalFaixas = 4;
+  const passo = espacoDisponivel / totalFaixas;
+
+  let canalY = baseLivre - passo * nivelCanal;
+
+  if (canalY < topoRaia) canalY = topoRaia;
+  if (canalY > baseLivre) canalY = baseLivre;
+
+  return canalY;
+}
+
+function rotaUsaMesmoLadoConflitante(origem, destino, startSide, endSide) {
+  // regra principal:
+  // se o destino está à direita e depois retorna para a esquerda,
+  // preferimos entrar por cima em vez da esquerda
+  if (
+    origem.isDecision &&
+    destino.gridCol > origem.gridCol &&
+    origem.gridRowGlobal === destino.gridRowGlobal &&
+    endSide === "left"
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 function calcularComprimento(points) {
   let total = 0;
   for (let i = 0; i < points.length - 1; i++) {
@@ -1205,7 +1356,14 @@ function getMergePoint(end, side, gap = CONFIG.sharedMergeGap) {
   }
 }
 
-function tentarRotaDecisaoMesmaLinhaAcima(origem, destino, rotulo = "", ordemConexao = 0, posicoes = {}) {
+function tentarRotaDecisaoMesmaLinhaAcima(
+  origem,
+  destino,
+  rotulo = "",
+  ordemConexao = 0,
+  posicoes = {},
+  rotasExistentes = []
+) {
   const mesmoNivel = origem.gridRowGlobal === destino.gridRowGlobal;
   const vaiParaDireita = destino.gridCol > origem.gridCol;
 
@@ -1217,19 +1375,16 @@ function tentarRotaDecisaoMesmaLinhaAcima(origem, destino, rotulo = "", ordemCon
   const ehSim = rotuloNormalizado.startsWith("sim");
   const ehNao = rotuloNormalizado.startsWith("não") || rotuloNormalizado.startsWith("nao");
 
-  // regra:
-  // Sim usa um canal acima
-  // Não usa um canal ainda mais acima para não cruzar com o Sim
-  const nivelCanalBase = ehSim ? 1 : ehNao ? 2 : 3;
-  const nivelCanal = nivelCanalBase + ordemConexao;
-
   const startSide = ehSim ? "right" : "top";
   const endSide = "top";
 
   const start = getAnchorPoint(origem, startSide);
   const end = getAnchorPoint(destino, endSide);
 
-  const canalY = Math.min(origem.y, destino.y) - CONFIG.routeGap * (nivelCanal + 1);
+  const nivelCanalBase = ehSim ? 1 : ehNao ? 2 : 3;
+  const nivelCanal = nivelCanalBase + ordemConexao;
+
+  const canalY = calcularCanalSuperiorDentroRaia(origem, destino, nivelCanal, posicoes);
 
   const points = [{ x: start.x, y: start.y }];
 
@@ -1246,9 +1401,11 @@ function tentarRotaDecisaoMesmaLinhaAcima(origem, destino, rotulo = "", ordemCon
 
   const rota = normalizarPontos(points);
   const excludeIds = [origem.id, destino.id, "__INICIO__", "__FIM__"];
-  const safe = !pathCruzaCaixas(rota, posicoes, excludeIds);
 
-  if (!safe) return null;
+  const cruzaCaixa = pathCruzaCaixas(rota, posicoes, excludeIds);
+  const cruzaLinha = pathCruzaConexoes(rota, rotasExistentes);
+
+  if (cruzaCaixa || cruzaLinha) return null;
 
   return montarRotaOrtogonal(
     rota,
@@ -1265,12 +1422,14 @@ function escolherRota(origem, destino, contexto = {}) {
   const rotulo = contexto.rotulo || "";
   const ordemConexao = contexto.ordemConexao || 0;
   const posicoes = contexto.posicoes || {};
+  const rotasExistentes = contexto.rotasExistentes || [];
   const excludeIds = [origem.id, destino.id, "__INICIO__", "__FIM__"];
 
   if (origem.id === "__INICIO__") {
     const start = getAnchorPoint(origem, "right");
     const end = getAnchorPoint(destino, "left");
     const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, "left", "right", destino);
+
     return montarRotaOrtogonal(
       rota.points,
       { x: (start.x + end.x) / 2, y: start.y - 10 },
@@ -1283,6 +1442,7 @@ function escolherRota(origem, destino, contexto = {}) {
     const start = getAnchorPoint(origem, "right");
     const end = getAnchorPoint(destino, "left");
     const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, "left", "right", destino);
+
     return montarRotaOrtogonal(
       rota.points,
       { x: (start.x + end.x) / 2, y: start.y - 10 },
@@ -1291,14 +1451,13 @@ function escolherRota(origem, destino, contexto = {}) {
     );
   }
 
-  // NOVA REGRA:
-  // decisão com destinos à direita na mesma linha sobe por canais superiores
   const rotaEspecialDecisao = tentarRotaDecisaoMesmaLinhaAcima(
     origem,
     destino,
     rotulo,
     ordemConexao,
-    posicoes
+    posicoes,
+    rotasExistentes
   );
 
   if (rotaEspecialDecisao) {
@@ -1309,11 +1468,28 @@ function escolherRota(origem, destino, contexto = {}) {
   const tentativas = [];
 
   for (const par of pares) {
+    if (rotaUsaMesmoLadoConflitante(origem, destino, par.startSide, par.endSide)) {
+      continue;
+    }
+
     const start = getAnchorPoint(origem, par.startSide);
     const end = getAnchorPoint(destino, par.endSide);
-    const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, par.endSide, par.startSide, destino);
+
+    const rota = encontrarRotaSegura(
+      start,
+      end,
+      posicoes,
+      excludeIds,
+      par.endSide,
+      par.startSide,
+      destino
+    );
 
     const pontosRota = rota.points || [];
+
+    const cruzaLinha = pathCruzaConexoes(pontosRota, rotasExistentes);
+    const safe = rota.safe && !cruzaLinha;
+
     let comprimentoTotal = 0;
     const segmentos = [];
 
@@ -1364,8 +1540,22 @@ function escolherRota(origem, destino, contexto = {}) {
 
     tentativas.push({
       ...rota,
+      safe,
       label: labelPoint
     });
+  }
+
+  if (!tentativas.length) {
+    const start = getAnchorPoint(origem, "right");
+    const end = getAnchorPoint(destino, "left");
+    const rota = encontrarRotaSegura(start, end, posicoes, excludeIds, "left", "right", destino);
+
+    return montarRotaOrtogonal(
+      rota.points,
+      { x: (start.x + end.x) / 2, y: start.y - 10 },
+      rota.startSide,
+      rota.endSide
+    );
   }
 
   tentativas.sort((a, b) => {
@@ -1409,12 +1599,14 @@ function desenharConexao(
   rotulo = "",
   ordemConexao = 0,
   posicoes = {},
-  sharedRegistry = {}
+  sharedRegistry = {},
+  routeRegistry = []
 ) {
   let rota = escolherRota(origem, destino, {
     rotulo,
     ordemConexao,
-    posicoes
+    posicoes,
+    rotasExistentes: routeRegistry
   });
 
   const sharedKey = `${destino.id}__${rota.endSide || "auto"}`;
@@ -1458,6 +1650,11 @@ function desenharConexao(
   path.setAttribute("stroke-linejoin", "round");
   path.setAttribute("stroke-linecap", "round");
   svg.appendChild(path);
+  routeRegistry.push({
+    origemId: origem.id,
+    destinoId: destino.id,
+    points: rota.points
+  });
 
   if (rotulo) {
     const larguraTexto = medirLarguraTexto(rotulo, 12, "bold");
@@ -1498,12 +1695,14 @@ function desenharConexaoExcel(
   rotulo = "",
   ordemConexao = 0,
   posicoes = {},
-  sharedRegistry = {}
+  sharedRegistry = {},
+  routeRegistry = []
 ) {
   let rota = escolherRota(origem, destino, {
     rotulo,
     ordemConexao,
-    posicoes
+    posicoes,
+    rotasExistentes: routeRegistry
   });
 
   const sharedKey = `${destino.id}__${rota.endSide || "auto"}`;
@@ -1546,6 +1745,12 @@ function desenharConexaoExcel(
   path.setAttribute("stroke-linejoin", "round");
   path.setAttribute("stroke-linecap", "round");
   svg.appendChild(path);
+
+  routeRegistry.push({
+    origemId: origem.id,
+    destinoId: destino.id,
+    points: rota.points
+  });
 
   const p1 = rota.points[rota.points.length - 2];
   const p2 = rota.points[rota.points.length - 1];
@@ -1854,21 +2059,21 @@ function gerarFluxo() {
   const idsValidos = new Set();
 
   linhas.forEach((col) => {
-  while (col.length < 13) col.push("");
+    while (col.length < 13) col.push("");
 
-  const ordem = Number(limpar(col[0])) || 0;
-  const id = limpar(col[1]);
-  const areaEtapa = limpar(col[2]) || "Sem Área";
-  const atividade = limpar(col[3]);
-  const tipo = limpar(col[4]) || "Não informado";
-  const sistema = limpar(col[5]) || "Sem sistema informado";
-  const tempo = tempoParaSegundos(limpar(col[6]));
-  const proxSim = limpar(col[7]);
-  const proxNao = limpar(col[8]);
-  const conexoesExtras = limpar(col[9]);
-  const coluna = Number(limpar(col[10])) || 1;
-  const linha = Number(limpar(col[11])) || 1;
-  const cor = normalizarCor(col[12]);
+    const ordem = Number(limpar(col[0])) || 0;
+    const id = limpar(col[1]);
+    const areaEtapa = limpar(col[2]) || "Sem Área";
+    const atividade = limpar(col[3]);
+    const tipo = limpar(col[4]) || "Não informado";
+    const sistema = limpar(col[5]) || "Sem sistema informado";
+    const tempo = tempoParaSegundos(limpar(col[6]));
+    const proxSim = limpar(col[7]);
+    const proxNao = limpar(col[8]);
+    const conexoesExtras = limpar(col[9]);
+    const coluna = Number(limpar(col[10])) || 1;
+    const linha = Number(limpar(col[11])) || 1;
+    const cor = normalizarCor(col[12]);
 
     if (!id || !atividade) return;
 
@@ -1966,10 +2171,10 @@ function gerarFluxo() {
   });
 
   const svgWidth =
-  CONFIG.marginX * 2 +
-  CONFIG.laneLabelWidth +
-  CONFIG.laneEntryWidth +
-  laneContentWidth;
+    CONFIG.marginX * 2 +
+    CONFIG.laneLabelWidth +
+    CONFIG.laneEntryWidth +
+    laneContentWidth;
 
   const svgHeight = cursorY;
 
@@ -1981,30 +2186,30 @@ function gerarFluxo() {
   svg.setAttribute("style", "background:#ffffff");
 
   const style = criarElementoSVG("style");
-style.textContent = `
-  .box {
-    stroke: #111111;
-    stroke-width: 2;
-  }
+  style.textContent = `
+    .box {
+      stroke: #111111;
+      stroke-width: 2;
+    }
 
-  .green { fill: #95d5b2; }
-  .blue { fill: #8ecae6; }
-  .yellow { fill: #ffd166; }
-  .red { fill: #ef476f; }
-  .white { fill: #ffffff; }
+    .green { fill: #95d5b2; }
+    .blue { fill: #8ecae6; }
+    .yellow { fill: #ffd166; }
+    .red { fill: #ef476f; }
+    .white { fill: #ffffff; }
 
-  .system {
-    fill: #f5f5f5;
-    stroke: #111111;
-    stroke-width: 1.5;
-  }
+    .system {
+      fill: #f5f5f5;
+      stroke: #111111;
+      stroke-width: 1.5;
+    }
 
-  .text {
-    font-family: Arial, sans-serif;
-    fill: #111111;
-  }
-`;
-svg.appendChild(style);
+    .text {
+      font-family: Arial, sans-serif;
+      fill: #111111;
+    }
+  `;
+  svg.appendChild(style);
 
   const defs = criarElementoSVG("defs");
   const marker = criarElementoSVG("marker");
@@ -2049,7 +2254,9 @@ svg.appendChild(style);
       gridCol: e.coluna,
       gridRow: e.linha,
       gridRowGlobal: lane.rowOffsetGlobalStart + e.linha,
-      area: e.area || "Sem Área"
+      area: e.area || "Sem Área",
+      laneTop: lane.y + CONFIG.lanePaddingTop,
+      laneBottom: lane.y + lane.height - CONFIG.lanePaddingBottom
     };
   });
 
@@ -2060,18 +2267,18 @@ svg.appendChild(style);
 
   const primeiraLane = lanes[primeiraEtapa.area];
 
-posicoes["__INICIO__"] = {
-  id: "__INICIO__",
-  x: primeiraLane.x + CONFIG.laneLabelWidth + 20,
-  y: primeiraPos.y + (primeiraPos.h - 36) / 2,
-  w: 60,
-  h: 36,
-  isDecision: false,
-  gridCol: Math.max(0, primeiraPos.gridCol - 1),
-  gridRow: primeiraPos.gridRow,
-  gridRowGlobal: primeiraPos.gridRowGlobal,
-  area: primeiraPos.area
-};
+  posicoes["__INICIO__"] = {
+    id: "__INICIO__",
+    x: primeiraLane.x + CONFIG.laneLabelWidth + 20,
+    y: primeiraPos.y + (primeiraPos.h - 36) / 2,
+    w: 60,
+    h: 36,
+    isDecision: false,
+    gridCol: Math.max(0, primeiraPos.gridCol - 1),
+    gridRow: primeiraPos.gridRow,
+    gridRowGlobal: primeiraPos.gridRowGlobal,
+    area: primeiraPos.area
+  };
 
   posicoes["__FIM__"] = {
     id: "__FIM__",
@@ -2098,8 +2305,18 @@ posicoes["__INICIO__"] = {
   let conexoesExtrasCount = 0;
   const etapasImpactadasRetrabalho = new Set();
   const sharedRegistry = {};
+  const routeRegistry = [];
 
-  desenharConexao(svg, posicoes["__INICIO__"], posicoes[primeiraEtapa.id], "", 0, posicoes, sharedRegistry);
+  desenharConexao(
+    svg,
+    posicoes["__INICIO__"],
+    posicoes[primeiraEtapa.id],
+    "",
+    0,
+    posicoes,
+    sharedRegistry,
+    routeRegistry
+  );
 
   etapas.forEach((etapa) => {
     const origem = posicoes[etapa.id];
@@ -2124,7 +2341,8 @@ posicoes["__INICIO__"] = {
         pergunta ? (indice === 0 ? "Sim" : `Sim ${indice + 1}`) : "",
         indice,
         posicoes,
-        sharedRegistry
+        sharedRegistry,
+        routeRegistry
       );
     });
 
@@ -2142,7 +2360,8 @@ posicoes["__INICIO__"] = {
         pergunta ? (indice === 0 ? "Não" : `Não ${indice + 1}`) : (indice === 0 ? "Não" : `Não ${indice + 1}`),
         indice,
         posicoes,
-        sharedRegistry
+        sharedRegistry,
+        routeRegistry
       );
     });
 
@@ -2154,7 +2373,16 @@ posicoes["__INICIO__"] = {
       }
 
       conexoesExtrasCount++;
-      desenharConexao(svg, origem, posicoes[destinoId], "", indice + 1, posicoes, sharedRegistry);
+      desenharConexao(
+        svg,
+        origem,
+        posicoes[destinoId],
+        "",
+        indice + 1,
+        posicoes,
+        sharedRegistry,
+        routeRegistry
+      );
     });
   });
 
@@ -2164,7 +2392,16 @@ posicoes["__INICIO__"] = {
     const destinosExtras = quebrarListaIds(etapa.conexoesExtras).filter(destino => destinoEhValido(destino, idsValidos));
 
     if (destinosSim.length === 0 && destinosNao.length === 0 && destinosExtras.length === 0) {
-      desenharConexao(svg, posicoes[etapa.id], posicoes["__FIM__"], "", 0, posicoes, sharedRegistry);
+      desenharConexao(
+        svg,
+        posicoes[etapa.id],
+        posicoes["__FIM__"],
+        "",
+        0,
+        posicoes,
+        sharedRegistry,
+        routeRegistry
+      );
     }
   });
 
@@ -2264,11 +2501,8 @@ posicoes["__INICIO__"] = {
     })()
   };
 
-  
-
   document.getElementById("metricas").innerHTML =
     renderizarAnaliseExecutiva(dadosAnalise);
-
 }
 
 function quebrarNomeRaiaExcel(texto, alturaDisponivel) {
@@ -2465,7 +2699,6 @@ function gerarFluxoExcel() {
   let cursorY = laneTop;
   let rowOffsetGlobal = 0;
 
-  // 1) monta base das raias só com altura
   const lanesBase = [];
 
   areasOrdenadas.forEach((nomeArea) => {
@@ -2495,30 +2728,28 @@ function gerarFluxoExcel() {
     cursorY += laneHeight + EXCEL_LAYOUT.laneGap;
   });
 
-  // 2) calcula largura única da faixa do nome da raia
   const laneLabelWidthExcel = calcularLarguraFaixaRaiaExcel(lanesBase);
 
-  // 3) monta lanes finais
   const lanes = lanesBase.map((base) => ({
-  area: base.area,
-  x: laneLeft,
-  y: base.y,
-  width: laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth + laneContentWidth,
-  height: base.height,
-  contentX: laneLeft + laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth + EXCEL_LAYOUT.laneTextOffsetLeft,
-  contentY: base.y + EXCEL_LAYOUT.lanePaddingTop,
-  contentHeight: base.contentHeight,
-  rows: base.rows,
-  rowOffsetGlobalStart: base.rowOffsetGlobalStart,
-  labelWidth: laneLabelWidthExcel,
-  labelLines: base.labelLines || [base.area]
-}));
+    area: base.area,
+    x: laneLeft,
+    y: base.y,
+    width: laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth + laneContentWidth,
+    height: base.height,
+    contentX: laneLeft + laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth + EXCEL_LAYOUT.laneTextOffsetLeft,
+    contentY: base.y + EXCEL_LAYOUT.lanePaddingTop,
+    contentHeight: base.contentHeight,
+    rows: base.rows,
+    rowOffsetGlobalStart: base.rowOffsetGlobalStart,
+    labelWidth: laneLabelWidthExcel,
+    labelLines: base.labelLines || [base.area]
+  }));
 
-    const larguraSvg =
-  lanes[0].labelWidth +
-  EXCEL_LAYOUT.laneEntryWidth +
-  EXCEL_LAYOUT.laneTextOffsetLeft +
-  laneContentWidth;
+  const larguraSvg =
+    lanes[0].labelWidth +
+    EXCEL_LAYOUT.laneEntryWidth +
+    EXCEL_LAYOUT.laneTextOffsetLeft +
+    laneContentWidth;
 
   const ultimaLane = lanes[lanes.length - 1];
   const alturaSvg = ultimaLane ? (ultimaLane.y + ultimaLane.height) : cursorY;
@@ -2553,7 +2784,7 @@ function gerarFluxoExcel() {
     const x = slotX + (colSlotWidth - w) / 2;
     const y = slotY + (rowSlotHeight - h) / 2;
 
-        posicoes[e.id] = {
+    posicoes[e.id] = {
       id: e.id,
       x,
       y,
@@ -2569,7 +2800,9 @@ function gerarFluxoExcel() {
       gridCol: e.coluna,
       gridRow: e.linha,
       gridRowGlobal: lane.rowOffsetGlobalStart + e.linha,
-      area: e.area || "Sem Área"
+      area: e.area || "Sem Área",
+      laneTop: lane.y + EXCEL_LAYOUT.lanePaddingTop,
+      laneBottom: lane.y + lane.height - EXCEL_LAYOUT.lanePaddingBottom
     };
   });
 
@@ -2580,42 +2813,42 @@ function gerarFluxoExcel() {
   const laneUltima = laneByArea[ultimaEtapa.area || "Sem Área"];
 
   posicoes["__INICIO__"] = {
-  id: "__INICIO__",
-  x: posicoes[primeiraEtapa.id].x - 60 - EXCEL_LAYOUT.startGap,
-  y: posicoes[primeiraEtapa.id].cy - 18,
-  w: 60,
-  h: 36,
-  cx: posicoes[primeiraEtapa.id].x - EXCEL_LAYOUT.startGap - 30,
-  cy: posicoes[primeiraEtapa.id].cy,
-  top: posicoes[primeiraEtapa.id].cy - 18,
-  bottom: posicoes[primeiraEtapa.id].cy + 18,
-  left: posicoes[primeiraEtapa.id].x - 60 - EXCEL_LAYOUT.startGap,
-  right: posicoes[primeiraEtapa.id].x - EXCEL_LAYOUT.startGap,
-  isDecision: false,
-  gridCol: 0,
-  gridRow: primeiraEtapa.linha,
-  gridRowGlobal: lanePrimeira.rowOffsetGlobalStart + primeiraEtapa.linha,
-  area: primeiraEtapa.area || "Sem Área"
-};
+    id: "__INICIO__",
+    x: posicoes[primeiraEtapa.id].x - 60 - EXCEL_LAYOUT.startGap,
+    y: posicoes[primeiraEtapa.id].cy - 18,
+    w: 60,
+    h: 36,
+    cx: posicoes[primeiraEtapa.id].x - EXCEL_LAYOUT.startGap - 30,
+    cy: posicoes[primeiraEtapa.id].cy,
+    top: posicoes[primeiraEtapa.id].cy - 18,
+    bottom: posicoes[primeiraEtapa.id].cy + 18,
+    left: posicoes[primeiraEtapa.id].x - 60 - EXCEL_LAYOUT.startGap,
+    right: posicoes[primeiraEtapa.id].x - EXCEL_LAYOUT.startGap,
+    isDecision: false,
+    gridCol: 0,
+    gridRow: primeiraEtapa.linha,
+    gridRowGlobal: lanePrimeira.rowOffsetGlobalStart + primeiraEtapa.linha,
+    area: primeiraEtapa.area || "Sem Área"
+  };
 
   posicoes["__FIM__"] = {
-  id: "__FIM__",
-  x: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap,
-  y: posicoes[ultimaEtapa.id].cy - 18,
-  w: 60,
-  h: 36,
-  cx: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap + 30,
-  cy: posicoes[ultimaEtapa.id].cy,
-  top: posicoes[ultimaEtapa.id].cy - 18,
-  bottom: posicoes[ultimaEtapa.id].cy + 18,
-  left: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap,
-  right: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap + 60,
-  isDecision: false,
-  gridCol: ultimaEtapa.coluna + 1,
-  gridRow: ultimaEtapa.linha,
-  gridRowGlobal: laneUltima.rowOffsetGlobalStart + ultimaEtapa.linha,
-  area: ultimaEtapa.area || "Sem Área"
-};
+    id: "__FIM__",
+    x: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap,
+    y: posicoes[ultimaEtapa.id].cy - 18,
+    w: 60,
+    h: 36,
+    cx: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap + 30,
+    cy: posicoes[ultimaEtapa.id].cy,
+    top: posicoes[ultimaEtapa.id].cy - 18,
+    bottom: posicoes[ultimaEtapa.id].cy + 18,
+    left: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap,
+    right: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap + 60,
+    isDecision: false,
+    gridCol: ultimaEtapa.coluna + 1,
+    gridRow: ultimaEtapa.linha,
+    gridRowGlobal: laneUltima.rowOffsetGlobalStart + ultimaEtapa.linha,
+    area: ultimaEtapa.area || "Sem Área"
+  };
 
   desenharCapsula(svg, "Início", posicoes["__INICIO__"].x, posicoes["__INICIO__"].y, 60, 36);
   desenharCapsula(svg, "Fim", posicoes["__FIM__"].x, posicoes["__FIM__"].y, 60, 36);
@@ -2625,6 +2858,8 @@ function gerarFluxoExcel() {
   });
 
   const sharedRegistry = {};
+  const routeRegistry = [];
+
   desenharConexaoExcel(
     svg,
     posicoes["__INICIO__"],
@@ -2632,7 +2867,8 @@ function gerarFluxoExcel() {
     "",
     0,
     posicoes,
-    sharedRegistry
+    sharedRegistry,
+    routeRegistry
   );
 
   etapas.forEach((etapa) => {
@@ -2651,7 +2887,8 @@ function gerarFluxoExcel() {
         pergunta ? (indice === 0 ? "Sim" : `Sim ${indice + 1}`) : "",
         indice,
         posicoes,
-        sharedRegistry
+        sharedRegistry,
+        routeRegistry
       );
     });
 
@@ -2663,7 +2900,8 @@ function gerarFluxoExcel() {
         pergunta ? (indice === 0 ? "Não" : `Não ${indice + 1}`) : (indice === 0 ? "Não" : `Não ${indice + 1}`),
         indice,
         posicoes,
-        sharedRegistry
+        sharedRegistry,
+        routeRegistry
       );
     });
 
@@ -2675,7 +2913,8 @@ function gerarFluxoExcel() {
         "",
         indice + 1,
         posicoes,
-        sharedRegistry
+        sharedRegistry,
+        routeRegistry
       );
     });
   });
@@ -2693,16 +2932,17 @@ function gerarFluxoExcel() {
         "",
         0,
         posicoes,
-        sharedRegistry
+        sharedRegistry,
+        routeRegistry
       );
     }
   });
 
-    svg.setAttribute("viewBox", `0 0 ${larguraSvg} ${alturaSvg}`);
-    svg.setAttribute("width", larguraSvg);
-    svg.setAttribute("height", alturaSvg);
+  svg.setAttribute("viewBox", `0 0 ${larguraSvg} ${alturaSvg}`);
+  svg.setAttribute("width", larguraSvg);
+  svg.setAttribute("height", alturaSvg);
 
-    return aplicarEscalaSVGExcel(svg, EXCEL_EXPORT_SCALE);
+  return aplicarEscalaSVGExcel(svg, EXCEL_EXPORT_SCALE);
 }
 
 /* =========================
