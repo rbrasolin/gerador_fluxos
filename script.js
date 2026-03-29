@@ -45,8 +45,8 @@ const EXCEL_LAYOUT = {
   colGap: 70, //Espaço horizontal entre as colunas (atividades)
   rowGap: 36, //Espaço vertical entre atividades dentro da mesma raia
   laneGap: 50, //Espaço entre uma raia e outra
-  lanePaddingTop: 40, //Espaço interno no topo da raia, Se estiver baixo → caixa “grudada” no topo
-  lanePaddingBottom: 40, //Espaço interno na parte de baixo da raia, Evita que última atividade fique colada na borda
+  lanePaddingTop: 25, //Espaço interno no topo da raia, Se estiver baixo → caixa “grudada” no topo
+  lanePaddingBottom: 25, //Espaço interno na parte de baixo da raia, Evita que última atividade fique colada na borda
   laneLabelWidth: 22, //“Reserva” horizontal para a área da raia (estrutura no desenho da raia, não aplica no excel)
   laneEntryWidth: 12, //Espaço entre: área do nome da raia e início do fluxo (Muito pequeno → fluxo começa “em cima” da raia)
   startGap: 16, //Distância entre: o “Início” e a primeira atividade
@@ -1014,6 +1014,28 @@ function calcularCanalSuperiorDentroRaia(origem, destino, nivelCanal = 1, posico
   return canalY;
 }
 
+function calcularCanalInferiorDentroRaia(origem, destino, nivelCanal = 1, posicoes = {}) {
+  const limites = obterLimitesRaiaDaArea(origem.area, posicoes);
+
+  const baseNos = Math.max(origem.y + origem.h, destino.y + destino.h);
+  const fundoRaia = limites.bottom - 8;
+  const baseLivre = baseNos + 10;
+
+  // espaço livre abaixo dos nós
+  const espacoDisponivel = Math.max(12, fundoRaia - baseLivre);
+
+  // divide o espaço livre em faixas para retornos/rotas extras
+  const totalFaixas = 4;
+  const passo = espacoDisponivel / totalFaixas;
+
+  let canalY = baseLivre + passo * nivelCanal;
+
+  if (canalY > fundoRaia) canalY = fundoRaia;
+  if (canalY < baseLivre) canalY = baseLivre;
+
+  return canalY;
+}
+
 function rotaUsaMesmoLadoConflitante(origem, destino, startSide, endSide) {
   const dx = destino.gridCol - origem.gridCol;
   const dy = destino.gridRowGlobal - origem.gridRowGlobal;
@@ -1439,28 +1461,52 @@ function tentarRotaDecisaoMesmaLinhaAcima(
 
   let startSide = "top";
   let endSide = "top";
+  let canalY = null;
 
-  // F -> G
-  if (vaiParaDireita && ehSim) {
-    startSide = "right";
+  // CASO 1: decisão -> direita na mesma linha
+  // ex.: F -> G / H
+  if (vaiParaDireita) {
+    if (ehSim) {
+      startSide = "right";
+      endSide = "top";
+      const nivelBase = 1 + ordemConexao;
+      canalY = calcularCanalSuperiorDentroRaia(origem, destino, nivelBase, posicoes);
+    } else if (ehNao) {
+      startSide = "top";
+      endSide = "top";
+      const nivelBase = 2 + ordemConexao;
+      canalY = calcularCanalSuperiorDentroRaia(origem, destino, nivelBase, posicoes);
+    } else {
+      startSide = "right";
+      endSide = "top";
+      const nivelBase = 3 + ordemConexao;
+      canalY = calcularCanalSuperiorDentroRaia(origem, destino, nivelBase, posicoes);
+    }
   }
 
-  // F -> H (quando quiser desviar por cima) e J -> H
-  if ((vaiParaDireita && ehNao) || (vaiParaEsquerda && ehNao)) {
-    startSide = "top";
-  }
-
-  // fallback para qualquer decisão na mesma linha
-  if (!ehSim && !ehNao) {
-    startSide = vaiParaDireita ? "right" : "top";
+  // CASO 2: decisão -> esquerda na mesma linha
+  // ex.: J -> H (Não)
+  if (vaiParaEsquerda) {
+    if (ehNao) {
+      startSide = "bottom";
+      endSide = "bottom";
+      const nivelBase = 1 + ordemConexao;
+      canalY = calcularCanalInferiorDentroRaia(origem, destino, nivelBase, posicoes);
+    } else if (ehSim) {
+      startSide = "top";
+      endSide = "top";
+      const nivelBase = 1 + ordemConexao;
+      canalY = calcularCanalSuperiorDentroRaia(origem, destino, nivelBase, posicoes);
+    } else {
+      startSide = "bottom";
+      endSide = "bottom";
+      const nivelBase = 2 + ordemConexao;
+      canalY = calcularCanalInferiorDentroRaia(origem, destino, nivelBase, posicoes);
+    }
   }
 
   const start = getAnchorPoint(origem, startSide);
   const end = getAnchorPoint(destino, endSide);
-
-  const nivelBase = ehSim ? 1 : ehNao ? 2 : 3;
-  const nivelCanal = nivelBase + ordemConexao;
-  const canalY = calcularCanalSuperiorDentroRaia(origem, destino, nivelCanal, posicoes);
 
   const points = [{ x: start.x, y: start.y }];
 
@@ -1484,8 +1530,6 @@ function tentarRotaDecisaoMesmaLinhaAcima(
 
   const cruzaCaixa = pathCruzaCaixas(rota, posicoes, excludeIds);
 
-  // ignora apenas rotas da mesma origem/destino ao checar cruzamento,
-  // para não derrubar justamente a rota especial que queremos preservar
   const rotasComparacao = (rotasExistentes || []).filter(r =>
     !(r.origemId === origem.id && r.destinoId === destino.id)
   );
@@ -1498,7 +1542,7 @@ function tentarRotaDecisaoMesmaLinhaAcima(
     rota,
     {
       x: (start.x + end.x) / 2,
-      y: canalY - 10
+      y: (startSide === "bottom" || endSide === "bottom") ? canalY + 14 : canalY - 10
     },
     startSide,
     endSide
