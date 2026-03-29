@@ -1876,6 +1876,28 @@ function construirRotaCompartilhada(start, sharedInfo, posicoes = {}, excludeIds
   };
 }
 
+function validarRotaCompartilhada(
+  rota,
+  origem,
+  destino,
+  posicoes = {},
+  routeRegistry = []
+) {
+  if (!rota || !rota.points || rota.points.length < 2) return false;
+
+  const excludeIds = [origem.id, destino.id, "__INICIO__", "__FIM__"];
+
+  const cruzaCaixa = pathCruzaCaixas(rota.points, posicoes, excludeIds);
+
+  const rotasComparacao = (routeRegistry || []).filter(r =>
+    !(r.origemId === origem.id && r.destinoId === destino.id)
+  );
+
+  const cruzaLinha = pathCruzaConexoes(rota.points, rotasComparacao);
+
+  return !cruzaCaixa && !cruzaLinha;
+}
+
 function podeCompartilharDestino(origem, sharedInfo) {
   if (!sharedInfo) return false;
   return origem.gridCol === sharedInfo.sourceGridCol;
@@ -1898,6 +1920,13 @@ function desenharConexao(
     rotasExistentes: routeRegistry
   });
 
+  const rotaOriginal = {
+    points: [...rota.points],
+    label: rota.label,
+    startSide: rota.startSide,
+    endSide: rota.endSide
+  };
+
   const sharedKey = `${destino.id}__${rota.endSide || "auto"}`;
   const sharedInfo = sharedRegistry[sharedKey];
 
@@ -1908,16 +1937,28 @@ function desenharConexao(
     origem.id !== sharedInfo.origemId &&
     podeCompartilharDestino(origem, sharedInfo)
   ) {
-    const parPreferido = escolherParesCandidatos(origem, destino, origem.isDecision ? rotulo : "")[0];
+    const parPreferido = escolherParesCandidatos(
+      origem,
+      destino,
+      origem.isDecision ? rotulo : ""
+    )[0];
+
     const startReal = getAnchorPoint(origem, parPreferido.startSide);
 
-    rota = construirRotaCompartilhada(
+    const rotaCompartilhada = construirRotaCompartilhada(
       startReal,
       sharedInfo,
       posicoes,
       [origem.id, destino.id, "__INICIO__", "__FIM__"],
       parPreferido.startSide
     );
+
+    // só aceita a rota compartilhada se ela continuar válida
+    if (validarRotaCompartilhada(rotaCompartilhada, origem, destino, posicoes, routeRegistry)) {
+      rota = rotaCompartilhada;
+    } else {
+      rota = rotaOriginal;
+    }
   } else if (destino.id !== "__FIM__" && destino.id !== "__INICIO__") {
     const end = rota.points[rota.points.length - 1];
     sharedRegistry[sharedKey] = {
@@ -1939,6 +1980,7 @@ function desenharConexao(
   path.setAttribute("stroke-linejoin", "round");
   path.setAttribute("stroke-linecap", "round");
   svg.appendChild(path);
+
   routeRegistry.push({
     origemId: origem.id,
     destinoId: destino.id,
@@ -1994,6 +2036,13 @@ function desenharConexaoExcel(
     rotasExistentes: routeRegistry
   });
 
+  const rotaOriginal = {
+    points: [...rota.points],
+    label: rota.label,
+    startSide: rota.startSide,
+    endSide: rota.endSide
+  };
+
   const sharedKey = `${destino.id}__${rota.endSide || "auto"}`;
   const sharedInfo = sharedRegistry[sharedKey];
 
@@ -2004,16 +2053,28 @@ function desenharConexaoExcel(
     origem.id !== sharedInfo.origemId &&
     podeCompartilharDestino(origem, sharedInfo)
   ) {
-    const parPreferido = escolherParesCandidatos(origem, destino, origem.isDecision ? rotulo : "")[0];
+    const parPreferido = escolherParesCandidatos(
+      origem,
+      destino,
+      origem.isDecision ? rotulo : ""
+    )[0];
+
     const startReal = getAnchorPoint(origem, parPreferido.startSide);
 
-    rota = construirRotaCompartilhada(
+    const rotaCompartilhada = construirRotaCompartilhada(
       startReal,
       sharedInfo,
       posicoes,
       [origem.id, destino.id, "__INICIO__", "__FIM__"],
       parPreferido.startSide
     );
+
+    // só aceita a rota compartilhada se ela continuar válida
+    if (validarRotaCompartilhada(rotaCompartilhada, origem, destino, posicoes, routeRegistry)) {
+      rota = rotaCompartilhada;
+    } else {
+      rota = rotaOriginal;
+    }
   } else if (destino.id !== "__FIM__" && destino.id !== "__INICIO__") {
     const end = rota.points[rota.points.length - 1];
     sharedRegistry[sharedKey] = {
