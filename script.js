@@ -1060,19 +1060,8 @@ function rotaUsaMesmoLadoConflitante(origem, destino, startSide, endSide) {
   const dx = destino.gridCol - origem.gridCol;
   const dy = destino.gridRowGlobal - origem.gridRowGlobal;
 
-  // decisão na mesma linha para a direita:
-  // preferir entrada por cima, evitando confusão no destino
-  if (
-    origem.isDecision &&
-    dy === 0 &&
-    dx > 0 &&
-    endSide === "left"
-  ) {
-    return true;
-  }
-
-  // decisão na mesma linha para a esquerda:
-  // não bloquear entrada por baixo, porque J -> H deve poder usar bottom -> bottom
+  // mantém apenas a proteção do retorno horizontal para esquerda
+  // evitando entrada pelo lado direito quando queremos preservar top/bottom
   if (
     origem.isDecision &&
     dy === 0 &&
@@ -1326,48 +1315,73 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
   const dx = destino.gridCol - origem.gridCol;
   const dy = destino.gridRowGlobal - origem.gridRowGlobal;
 
-  const rotuloNormalizado = String(rotulo || "").toLowerCase();
-  const ehSim = rotuloNormalizado.startsWith("sim");
-  const ehNao = rotuloNormalizado.startsWith("não") || rotuloNormalizado.startsWith("nao");
+  if (origem.isDecision) {
+    // decisão -> mesma linha à direita
+    if (dy === 0 && dx > 0) {
+      if (rotulo === "Sim") {
+        return [
+          { startSide: "right", endSide: "left" }, // prioridade: reto
+          { startSide: "right", endSide: "top" },
+          { startSide: "top", endSide: "top" }
+        ];
+      }
 
-  // =========================
-  // 🔥 PRIORIDADE 1 — MESMA LINHA (LINHA RETA SEMPRE)
-  // =========================
-  if (dy === 0) {
-    if (dx > 0) {
-      return [{ startSide: "right", endSide: "left" }];
-    }
-    if (dx < 0) {
-      return [{ startSide: "left", endSide: "right" }];
-    }
-  }
-
-  // =========================
-  // 🔥 PRIORIDADE 2 — DECISÃO COM RETORNO
-  // =========================
-  if (origem.isDecision && dx < 0) {
-
-    // retorno para cima (G -> E)
-    if (dy < 0 && ehNao) {
-      return [
-        { startSide: "top", endSide: "top" },     // PRIORIDADE
-        { startSide: "left", endSide: "bottom" }, // fallback
-        { startSide: "bottom", endSide: "bottom"} // fallback
-      ];
+      if (rotulo === "Não") {
+        return [
+          { startSide: "top", endSide: "top" },
+          { startSide: "right", endSide: "top" }
+        ];
+      }
     }
 
-    // retorno na mesma linha (J -> H)
-    if (dy === 0 && ehNao) {
+    // decisão -> mesma linha à esquerda
+    if (dy === 0 && dx < 0) {
+      if (rotulo === "Não") {
+        return [
+          { startSide: "bottom", endSide: "bottom" },
+          { startSide: "top", endSide: "top" },
+          { startSide: "right", endSide: "bottom" }
+        ];
+      }
+
+      if (rotulo === "Sim") {
+        return [
+          { startSide: "top", endSide: "top" },
+          { startSide: "bottom", endSide: "bottom" },
+          { startSide: "left", endSide: "right" }
+        ];
+      }
+    }
+
+    // decisão -> acima e à esquerda
+    if (dx < 0 && dy < 0 && rotulo === "Não") {
       return [
         { startSide: "bottom", endSide: "bottom" },
-        { startSide: "right", endSide: "bottom" }
+        { startSide: "top", endSide: "top" },
+        { startSide: "right", endSide: "bottom" },
+        { startSide: "left", endSide: "bottom" }
+      ];
+    }
+
+    // decisão -> abaixo
+    if (dx === 0 && dy > 0) {
+      return [
+        { startSide: "bottom", endSide: "top" },
+        { startSide: "right", endSide: "top" },
+        { startSide: "left", endSide: "top" }
+      ];
+    }
+
+    // decisão -> acima
+    if (dx === 0 && dy < 0) {
+      return [
+        { startSide: "top", endSide: "bottom" },
+        { startSide: "right", endSide: "bottom" },
+        { startSide: "left", endSide: "bottom" }
       ];
     }
   }
 
-  // =========================
-  // 🔥 MOVIMENTOS PADRÃO (mantém seu comportamento atual)
-  // =========================
   if (dx === 0 && dy > 0) {
     return [{ startSide: "bottom", endSide: "top" }];
   }
@@ -1376,9 +1390,19 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
     return [{ startSide: "top", endSide: "bottom" }];
   }
 
+  if (dy === 0 && dx > 0) {
+    return [{ startSide: "right", endSide: "left" }];
+  }
+
+  if (dy === 0 && dx < 0) {
+    return [{ startSide: "left", endSide: "right" }];
+  }
+
   if (dx > 0 && dy > 0) {
     return [
       { startSide: "right", endSide: "left" },
+      { startSide: "right", endSide: "top" },
+      { startSide: "bottom", endSide: "left" },
       { startSide: "bottom", endSide: "top" }
     ];
   }
@@ -1386,6 +1410,8 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
   if (dx > 0 && dy < 0) {
     return [
       { startSide: "right", endSide: "left" },
+      { startSide: "right", endSide: "bottom" },
+      { startSide: "top", endSide: "left" },
       { startSide: "top", endSide: "bottom" }
     ];
   }
@@ -1393,6 +1419,8 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
   if (dx < 0 && dy > 0) {
     return [
       { startSide: "left", endSide: "right" },
+      { startSide: "left", endSide: "top" },
+      { startSide: "bottom", endSide: "right" },
       { startSide: "bottom", endSide: "top" }
     ];
   }
@@ -1400,6 +1428,8 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
   if (dx < 0 && dy < 0) {
     return [
       { startSide: "left", endSide: "right" },
+      { startSide: "left", endSide: "bottom" },
+      { startSide: "top", endSide: "right" },
       { startSide: "top", endSide: "bottom" }
     ];
   }
@@ -1460,28 +1490,31 @@ function tentarRotaDecisaoMesmaLinhaAcima(
 
     if (ladosUsadosOrigem.has(startSide)) score += 1000;
 
-    // preferência forte para o caso J -> H:
-    // decisão voltando para cima/esquerda no "Não" deve sair por baixo
-    if (ehNao && vaiParaEsquerda && sobe) {
-      if (startSide !== "bottom") score += 400;
-      if (endSide !== "bottom") score += 220;
-    }
-
-    // mesma linha à esquerda no "Não" também deve preferir por baixo
-    if (ehNao && vaiParaEsquerda && mesmoNivel) {
-      if (startSide !== "bottom") score += 260;
-      if (endSide !== "bottom") score += 140;
-    }
-
-    // mesma linha à direita
+    // mesma linha à direita com "Sim" -> reto deve ganhar
     if (ehSim && vaiParaDireita && mesmoNivel) {
-      if (startSide !== "right") score += 120;
-      if (endSide !== "top") score += 80;
+      if (startSide !== "right") score += 300;
+      if (endSide !== "left") score += 220;
     }
 
-    if (ehNao && vaiParaDireita && mesmoNivel) {
-      if (startSide !== "top") score += 120;
-      if (endSide !== "top") score += 80;
+    // mesma linha à esquerda com "Não"
+    // se o lado direito já foi usado (normalmente pelo Sim),
+    // prioriza por cima; senão, prioriza por baixo.
+    if (ehNao && vaiParaEsquerda && mesmoNivel) {
+      const simJaSaiuPelaDireita = ladosUsadosOrigem.has("right");
+
+      if (simJaSaiuPelaDireita) {
+        if (startSide !== "top") score += 260;
+        if (endSide !== "top") score += 160;
+      } else {
+        if (startSide !== "bottom") score += 260;
+        if (endSide !== "bottom") score += 160;
+      }
+    }
+
+    // esquerda e acima com "Não"
+    if (ehNao && vaiParaEsquerda && sobe) {
+      if (startSide !== "bottom") score += 220;
+      if (endSide !== "bottom") score += 140;
     }
 
     return score;
@@ -1549,7 +1582,26 @@ function tentarRotaDecisaoMesmaLinhaAcima(
   // 1) decisão -> direita na mesma linha
   // =========================
   if (mesmoNivel && vaiParaDireita) {
-    for (let extra = 0; extra < 6; extra++) {
+    const startRight = getAnchorPoint(origem, "right");
+    const endLeft = getAnchorPoint(destino, "left");
+
+    if (ehSim) {
+      // prioridade máxima: linha reta
+      registrarCandidato(
+        "right",
+        "left",
+        [
+          { x: startRight.x, y: startRight.y },
+          { x: endLeft.x, y: endLeft.y }
+        ],
+        {
+          x: (startRight.x + endLeft.x) / 2,
+          y: startRight.y - 10
+        }
+      );
+    }
+
+    for (let extra = 0; extra < 4; extra++) {
       if (ehSim) {
         registrarCandidatoCanal(
           "right",
@@ -1565,18 +1617,12 @@ function tentarRotaDecisaoMesmaLinhaAcima(
         registrarCandidatoCanal(
           "top",
           "top",
+          calcularCanalSuperiorDentroRaia(origem, destino, 1 + ordemConexao + extra, posicoes)
+        );
+        registrarCandidatoCanal(
+          "right",
+          "top",
           calcularCanalSuperiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
-        );
-        registrarCandidatoCanal(
-          "right",
-          "top",
-          calcularCanalSuperiorDentroRaia(origem, destino, 3 + ordemConexao + extra, posicoes)
-        );
-      } else {
-        registrarCandidatoCanal(
-          "right",
-          "top",
-          calcularCanalSuperiorDentroRaia(origem, destino, 3 + ordemConexao + extra, posicoes)
         );
       }
     }
@@ -1585,9 +1631,25 @@ function tentarRotaDecisaoMesmaLinhaAcima(
   // =========================
   // 2) decisão -> esquerda na mesma linha
   // =========================
-  if (mesmoNivel && vaiParaEsquerda) {
-    for (let extra = 0; extra < 6; extra++) {
-      if (ehNao) {
+  if (mesmoNivel && vaiParaEsquerda && ehNao) {
+    const simJaSaiuPelaDireita = ladosUsadosOrigem.has("right");
+
+    for (let extra = 0; extra < 5; extra++) {
+      if (simJaSaiuPelaDireita) {
+        // caso tipo G -> E no novofluxo: usa topo
+        registrarCandidatoCanal(
+          "top",
+          "top",
+          calcularCanalSuperiorDentroRaia(origem, destino, 1 + ordemConexao + extra, posicoes)
+        );
+
+        registrarCandidatoCanal(
+          "bottom",
+          "bottom",
+          calcularCanalInferiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
+        );
+      } else {
+        // caso tipo J -> H: usa baixo
         registrarCandidatoCanal(
           "bottom",
           "bottom",
@@ -1595,39 +1657,22 @@ function tentarRotaDecisaoMesmaLinhaAcima(
         );
 
         registrarCandidatoCanal(
-          "right",
-          "bottom",
-          calcularCanalInferiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
-        );
-
-        registrarCandidatoCanal(
           "top",
           "top",
-          calcularCanalSuperiorDentroRaia(origem, destino, 1 + ordemConexao + extra, posicoes)
-        );
-      } else if (ehSim) {
-        registrarCandidatoCanal(
-          "top",
-          "top",
-          calcularCanalSuperiorDentroRaia(origem, destino, 1 + ordemConexao + extra, posicoes)
-        );
-        registrarCandidatoCanal(
-          "bottom",
-          "bottom",
-          calcularCanalInferiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
-        );
-      } else {
-        registrarCandidatoCanal(
-          "bottom",
-          "bottom",
-          calcularCanalInferiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
+          calcularCanalSuperiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
         );
       }
+
+      registrarCandidatoCanal(
+        "right",
+        "bottom",
+        calcularCanalInferiorDentroRaia(origem, destino, 3 + ordemConexao + extra, posicoes)
+      );
     }
   }
 
   // =========================
-  // 3) decisão -> esquerda e acima  (CASO J -> H)
+  // 3) decisão -> esquerda e acima
   // =========================
   if (ehNao && vaiParaEsquerda && sobe) {
     const startBottom = getAnchorPoint(origem, "bottom");
@@ -1642,7 +1687,6 @@ function tentarRotaDecisaoMesmaLinhaAcima(
         posicoes
       );
 
-      // melhor rota: sai por baixo do losango, segue por baixo e sobe no destino
       registrarCandidato(
         "bottom",
         "bottom",
@@ -1658,7 +1702,6 @@ function tentarRotaDecisaoMesmaLinhaAcima(
         }
       );
 
-      // fallback: sai pela direita, desce, volta por baixo e sobe
       const escapeX = startRight.x + CONFIG.routeGap;
       registrarCandidato(
         "right",
