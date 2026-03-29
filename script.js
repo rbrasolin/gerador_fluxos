@@ -1462,93 +1462,128 @@ function tentarRotaDecisaoMesmaLinhaAcima(
   const vaiParaDireita = deslocamentoHorizontal > 0;
   const vaiParaEsquerda = deslocamentoHorizontal < 0;
 
-  let startSide = "top";
-  let endSide = "top";
-  let canalY = null;
-
-  // CASO 1: decisão -> direita na mesma linha
-  // ex.: F -> G / H
-  if (vaiParaDireita) {
-    if (ehSim) {
-      startSide = "right";
-      endSide = "top";
-      const nivelBase = 1 + ordemConexao;
-      canalY = calcularCanalSuperiorDentroRaia(origem, destino, nivelBase, posicoes);
-    } else if (ehNao) {
-      startSide = "top";
-      endSide = "top";
-      const nivelBase = 2 + ordemConexao;
-      canalY = calcularCanalSuperiorDentroRaia(origem, destino, nivelBase, posicoes);
-    } else {
-      startSide = "right";
-      endSide = "top";
-      const nivelBase = 3 + ordemConexao;
-      canalY = calcularCanalSuperiorDentroRaia(origem, destino, nivelBase, posicoes);
-    }
-  }
-
-  // CASO 2: decisão -> esquerda na mesma linha
-  // ex.: J -> H (Não)
-  if (vaiParaEsquerda) {
-    if (ehNao) {
-      startSide = "bottom";
-      endSide = "bottom";
-      const nivelBase = 1 + ordemConexao;
-      canalY = calcularCanalInferiorDentroRaia(origem, destino, nivelBase, posicoes);
-    } else if (ehSim) {
-      startSide = "top";
-      endSide = "top";
-      const nivelBase = 1 + ordemConexao;
-      canalY = calcularCanalSuperiorDentroRaia(origem, destino, nivelBase, posicoes);
-    } else {
-      startSide = "bottom";
-      endSide = "bottom";
-      const nivelBase = 2 + ordemConexao;
-      canalY = calcularCanalInferiorDentroRaia(origem, destino, nivelBase, posicoes);
-    }
-  }
-
-  const start = getAnchorPoint(origem, startSide);
-  const end = getAnchorPoint(destino, endSide);
-
-  const points = [{ x: start.x, y: start.y }];
-
-  if (startSide === "right") {
-    const escapeX = start.x + CONFIG.routeGap;
-    points.push({ x: escapeX, y: start.y });
-    points.push({ x: escapeX, y: canalY });
-  } else if (startSide === "left") {
-    const escapeX = start.x - CONFIG.routeGap;
-    points.push({ x: escapeX, y: start.y });
-    points.push({ x: escapeX, y: canalY });
-  } else {
-    points.push({ x: start.x, y: canalY });
-  }
-
-  points.push({ x: end.x, y: canalY });
-  points.push({ x: end.x, y: end.y });
-
-  const rota = normalizarPontos(points);
+  const candidatos = [];
   const excludeIds = [origem.id, destino.id, "__INICIO__", "__FIM__"];
 
-  const cruzaCaixa = pathCruzaCaixas(rota, posicoes, excludeIds);
+  function registrarCandidato(startSide, endSide, canalY) {
+    const start = getAnchorPoint(origem, startSide);
+    const end = getAnchorPoint(destino, endSide);
 
-  const rotasComparacao = (rotasExistentes || []).filter(r =>
-    !(r.origemId === origem.id && r.destinoId === destino.id)
-  );
+    const points = [{ x: start.x, y: start.y }];
 
-  const cruzaLinha = pathCruzaConexoes(rota, rotasComparacao);
+    if (startSide === "right") {
+      const escapeX = start.x + CONFIG.routeGap;
+      points.push({ x: escapeX, y: start.y });
+      points.push({ x: escapeX, y: canalY });
+    } else if (startSide === "left") {
+      const escapeX = start.x - CONFIG.routeGap;
+      points.push({ x: escapeX, y: start.y });
+      points.push({ x: escapeX, y: canalY });
+    } else {
+      points.push({ x: start.x, y: canalY });
+    }
 
-  if (cruzaCaixa || cruzaLinha) return null;
+    points.push({ x: end.x, y: canalY });
+    points.push({ x: end.x, y: end.y });
+
+    const rota = normalizarPontos(points);
+
+    const cruzaCaixa = pathCruzaCaixas(rota, posicoes, excludeIds);
+
+    const rotasComparacao = (rotasExistentes || []).filter(r =>
+      !(r.origemId === origem.id && r.destinoId === destino.id)
+    );
+
+    const cruzaLinha = pathCruzaConexoes(rota, rotasComparacao);
+    const comprimento = calcularComprimento(rota);
+
+    candidatos.push({
+      points: rota,
+      startSide,
+      endSide,
+      cruzaCaixa,
+      cruzaLinha,
+      comprimento,
+      canalY,
+      label: {
+        x: (start.x + end.x) / 2,
+        y: (startSide === "bottom" || endSide === "bottom") ? canalY + 14 : canalY - 10
+      }
+    });
+  }
+
+  // direita na mesma linha
+  if (vaiParaDireita) {
+    for (let extra = 0; extra < 6; extra++) {
+      if (ehSim) {
+        registrarCandidato(
+          "right",
+          "top",
+          calcularCanalSuperiorDentroRaia(origem, destino, 1 + ordemConexao + extra, posicoes)
+        );
+      } else if (ehNao) {
+        registrarCandidato(
+          "top",
+          "top",
+          calcularCanalSuperiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
+        );
+      } else {
+        registrarCandidato(
+          "right",
+          "top",
+          calcularCanalSuperiorDentroRaia(origem, destino, 3 + ordemConexao + extra, posicoes)
+        );
+      }
+    }
+  }
+
+  // esquerda na mesma linha
+  if (vaiParaEsquerda) {
+    for (let extra = 0; extra < 6; extra++) {
+      if (ehNao) {
+        registrarCandidato(
+          "bottom",
+          "bottom",
+          calcularCanalInferiorDentroRaia(origem, destino, 1 + ordemConexao + extra, posicoes)
+        );
+      } else if (ehSim) {
+        registrarCandidato(
+          "top",
+          "top",
+          calcularCanalSuperiorDentroRaia(origem, destino, 1 + ordemConexao + extra, posicoes)
+        );
+      } else {
+        registrarCandidato(
+          "bottom",
+          "bottom",
+          calcularCanalInferiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
+        );
+      }
+    }
+  }
+
+  if (!candidatos.length) return null;
+
+  candidatos.sort((a, b) => {
+    if (a.cruzaCaixa !== b.cruzaCaixa) return a.cruzaCaixa ? 1 : -1;
+    if (a.cruzaLinha !== b.cruzaLinha) return a.cruzaLinha ? 1 : -1;
+    if (a.points.length !== b.points.length) return a.points.length - b.points.length;
+    return a.comprimento - b.comprimento;
+  });
+
+  const melhorSemCaixa = candidatos.find(c => !c.cruzaCaixa);
+  const melhor = melhorSemCaixa || candidatos[0];
+
+  // se cruza caixa, melhor desistir da rota especial e deixar o roteador genérico tentar
+  if (melhor.cruzaCaixa) {
+    return null;
+  }
 
   return montarRotaOrtogonal(
-    rota,
-    {
-      x: (start.x + end.x) / 2,
-      y: (startSide === "bottom" || endSide === "bottom") ? canalY + 14 : canalY - 10
-    },
-    startSide,
-    endSide
+    melhor.points,
+    melhor.label,
+    melhor.startSide,
+    melhor.endSide
   );
 }
 
@@ -1585,7 +1620,6 @@ function escolherRota(origem, destino, contexto = {}) {
     );
   }
 
-  // prioridade máxima para decisão na mesma linha
   const rotaEspecialDecisao = tentarRotaDecisaoMesmaLinhaAcima(
     origem,
     destino,
@@ -1621,8 +1655,10 @@ function escolherRota(origem, destino, contexto = {}) {
     );
 
     const pontosRota = rota.points || [];
+    const cruzaCaixa = pathCruzaCaixas(pontosRota, posicoes, excludeIds);
     const cruzaLinha = pathCruzaConexoes(pontosRota, rotasExistentes);
-    const safe = rota.safe && !cruzaLinha;
+    const comprimento = calcularComprimento(pontosRota);
+    const safe = !cruzaCaixa && !cruzaLinha;
 
     let comprimentoTotal = 0;
     const segmentos = [];
@@ -1630,17 +1666,17 @@ function escolherRota(origem, destino, contexto = {}) {
     for (let i = 0; i < pontosRota.length - 1; i++) {
       const p1 = pontosRota[i];
       const p2 = pontosRota[i + 1];
-      const comprimento = Math.abs(p2.x - p1.x) + Math.abs(p2.y - p1.y);
+      const comprimentoSeg = Math.abs(p2.x - p1.x) + Math.abs(p2.y - p1.y);
 
-      if (comprimento > 0) {
+      if (comprimentoSeg > 0) {
         segmentos.push({
           p1,
           p2,
-          comprimento,
+          comprimento: comprimentoSeg,
           inicio: comprimentoTotal,
-          fim: comprimentoTotal + comprimento
+          fim: comprimentoTotal + comprimentoSeg
         });
-        comprimentoTotal += comprimento;
+        comprimentoTotal += comprimentoSeg;
       }
     }
 
@@ -1675,6 +1711,9 @@ function escolherRota(origem, destino, contexto = {}) {
     tentativas.push({
       ...rota,
       safe,
+      cruzaCaixa,
+      cruzaLinha,
+      comprimento,
       label: labelPoint
     });
   }
@@ -1693,12 +1732,14 @@ function escolherRota(origem, destino, contexto = {}) {
   }
 
   tentativas.sort((a, b) => {
-    if (a.safe !== b.safe) return a.safe ? -1 : 1;
+    if (a.cruzaCaixa !== b.cruzaCaixa) return a.cruzaCaixa ? 1 : -1;
+    if (a.cruzaLinha !== b.cruzaLinha) return a.cruzaLinha ? 1 : -1;
     if (a.points.length !== b.points.length) return a.points.length - b.points.length;
-    return calcularComprimento(a.points) - calcularComprimento(b.points);
+    return a.comprimento - b.comprimento;
   });
 
-  const melhor = tentativas[0];
+  const melhorSemCaixa = tentativas.find(t => !t.cruzaCaixa);
+  const melhor = melhorSemCaixa || tentativas[0];
 
   return montarRotaOrtogonal(
     melhor.points,
