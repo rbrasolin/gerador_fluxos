@@ -671,7 +671,7 @@ function desenharRaias(svg, areasOrdenadas, lanes, svgWidth) {
 }
 
 function desenharRaiasExcel(svg, lanes) {
-  const strokeColor = "#bdbdbd",;
+  const strokeColor = "#bdbdbd";
   const strokeWidth = 1.2;
   const lineHeight = CONFIG.laneHeaderFontSize + 4;
 
