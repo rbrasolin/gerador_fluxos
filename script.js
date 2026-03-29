@@ -1367,6 +1367,20 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
       }
     }
 
+    // decisão -> acima e à esquerda
+    // ESTE É O CASO DO J -> H NO DESENHO ATUAL
+    if (dx < 0 && dy < 0 && rotulo === "Não") {
+      return [
+        { startSide: "bottom", endSide: "bottom" },
+        { startSide: "right", endSide: "bottom" },
+        { startSide: "left", endSide: "bottom" },
+        { startSide: "top", endSide: "bottom" },
+        { startSide: "left", endSide: "right" },
+        { startSide: "top", endSide: "right" }
+      ];
+    }
+
+    // decisão -> abaixo
     if (dx === 0 && dy > 0) {
       return [
         { startSide: "bottom", endSide: "top" },
@@ -1375,6 +1389,7 @@ function escolherParesCandidatos(origem, destino, rotulo = "") {
       ];
     }
 
+    // decisão -> acima
     if (dx === 0 && dy < 0) {
       return [
         { startSide: "top", endSide: "bottom" },
@@ -1706,6 +1721,31 @@ function escolherRota(origem, destino, contexto = {}) {
     return rotaEspecialDecisao;
   }
 
+  const ladosUsadosOrigem = obterLadosUsadosDoNo(origem.id, rotasExistentes);
+  const dx = destino.gridCol - origem.gridCol;
+  const dy = destino.gridRowGlobal - origem.gridRowGlobal;
+
+  function penalidadeLadoFallback(startSide, endSide) {
+    let score = 0;
+
+    if (ladosUsadosOrigem.has(startSide)) score += 1000;
+
+    // decisão voltando à esquerda na mesma linha com "Não"
+    if (origem.isDecision && dy === 0 && dx < 0 && rotulo === "Não") {
+      if (startSide !== "bottom") score += 250;
+      if (endSide !== "bottom") score += 120;
+    }
+
+    // decisão subindo e voltando à esquerda com "Não"
+    // ESTE É O CASO DO J -> H NO DESENHO ATUAL
+    if (origem.isDecision && dy < 0 && dx < 0 && rotulo === "Não") {
+      if (startSide !== "bottom") score += 300;
+      if (endSide !== "bottom") score += 180;
+    }
+
+    return score;
+  }
+
   const pares = escolherParesCandidatos(origem, destino, rotulo);
   const tentativas = [];
 
@@ -1731,7 +1771,7 @@ function escolherRota(origem, destino, contexto = {}) {
     const cruzaCaixa = pathCruzaCaixas(pontosRota, posicoes, excludeIds);
     const cruzaLinha = pathCruzaConexoes(pontosRota, rotasExistentes);
     const comprimento = calcularComprimento(pontosRota);
-    const safe = !cruzaCaixa && !cruzaLinha;
+    const pesoLado = penalidadeLadoFallback(par.startSide, par.endSide);
 
     let comprimentoTotal = 0;
     const segmentos = [];
@@ -1783,10 +1823,10 @@ function escolherRota(origem, destino, contexto = {}) {
 
     tentativas.push({
       ...rota,
-      safe,
       cruzaCaixa,
       cruzaLinha,
       comprimento,
+      pesoLado,
       label: labelPoint
     });
   }
@@ -1807,6 +1847,7 @@ function escolherRota(origem, destino, contexto = {}) {
   tentativas.sort((a, b) => {
     if (a.cruzaCaixa !== b.cruzaCaixa) return a.cruzaCaixa ? 1 : -1;
     if (a.cruzaLinha !== b.cruzaLinha) return a.cruzaLinha ? 1 : -1;
+    if (a.pesoLado !== b.pesoLado) return a.pesoLado - b.pesoLado;
     if (a.points.length !== b.points.length) return a.points.length - b.points.length;
     return a.comprimento - b.comprimento;
   });
