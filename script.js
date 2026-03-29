@@ -45,8 +45,8 @@ const EXCEL_LAYOUT = {
   colGap: 70, //Espaço horizontal entre as colunas (atividades)
   rowGap: 36, //Espaço vertical entre atividades dentro da mesma raia
   laneGap: 50, //Espaço entre uma raia e outra
-  lanePaddingTop: 18, //Espaço interno no topo da raia, Se estiver baixo → caixa “grudada” no topo
-  lanePaddingBottom: 18, //Espaço interno na parte de baixo da raia, Evita que última atividade fique colada na borda
+  lanePaddingTop: 25, //Espaço interno no topo da raia, Se estiver baixo → caixa “grudada” no topo
+  lanePaddingBottom: 25, //Espaço interno na parte de baixo da raia, Evita que última atividade fique colada na borda
   laneLabelWidth: 22, //“Reserva” horizontal para a área da raia (estrutura no desenho da raia, não aplica no excel)
   laneEntryWidth: 12, //Espaço entre: área do nome da raia e início do fluxo (Muito pequeno → fluxo começa “em cima” da raia)
   startGap: 16, //Distância entre: o “Início” e a primeira atividade
@@ -1015,14 +1015,27 @@ function calcularCanalSuperiorDentroRaia(origem, destino, nivelCanal = 1, posico
 }
 
 function rotaUsaMesmoLadoConflitante(origem, destino, startSide, endSide) {
-  // regra principal:
-  // se o destino está à direita e depois retorna para a esquerda,
-  // preferimos entrar por cima em vez da esquerda
+  const dx = destino.gridCol - origem.gridCol;
+  const dy = destino.gridRowGlobal - origem.gridRowGlobal;
+
+  // decisão na mesma linha para a direita:
+  // preferir entrada por cima, evitando confusão no destino
   if (
     origem.isDecision &&
-    destino.gridCol > origem.gridCol &&
-    origem.gridRowGlobal === destino.gridRowGlobal &&
+    dy === 0 &&
+    dx > 0 &&
     endSide === "left"
+  ) {
+    return true;
+  }
+
+  // decisão na mesma linha para a esquerda:
+  // também preferir entrada por cima para evitar cruzar o losango/origem
+  if (
+    origem.isDecision &&
+    dy === 0 &&
+    dx < 0 &&
+    endSide !== "top"
   ) {
     return true;
   }
@@ -1268,19 +1281,66 @@ function buildOrthogonalToMerge(start, mergePoint, end, endSide, posicoes = {}, 
 }
 
 function escolherParesCandidatos(origem, destino, rotulo = "") {
-  if (origem.isDecision && rotulo === "Sim") {
-    return [{ startSide: "right", endSide: "left" }];
-  }
-
-  if (origem.isDecision && rotulo === "Não") {
-    if (destino.gridRow <= origem.gridRow) {
-      return [{ startSide: "bottom", endSide: "bottom" }];
-    }
-    return [{ startSide: "bottom", endSide: "top" }];
-  }
-
   const dx = destino.gridCol - origem.gridCol;
   const dy = destino.gridRowGlobal - origem.gridRowGlobal;
+
+  if (origem.isDecision) {
+    // decisão -> destino na mesma linha à direita
+    if (dy === 0 && dx > 0) {
+      if (rotulo === "Sim") {
+        return [
+          { startSide: "right", endSide: "top" },
+          { startSide: "right", endSide: "left" },
+          { startSide: "top", endSide: "top" }
+        ];
+      }
+
+      if (rotulo === "Não") {
+        return [
+          { startSide: "top", endSide: "top" },
+          { startSide: "bottom", endSide: "top" },
+          { startSide: "right", endSide: "top" }
+        ];
+      }
+    }
+
+    // decisão -> retorno na mesma linha à esquerda
+    if (dy === 0 && dx < 0) {
+      if (rotulo === "Não") {
+        return [
+          { startSide: "top", endSide: "top" },
+          { startSide: "bottom", endSide: "top" },
+          { startSide: "left", endSide: "top" }
+        ];
+      }
+
+      if (rotulo === "Sim") {
+        return [
+          { startSide: "top", endSide: "top" },
+          { startSide: "left", endSide: "right" },
+          { startSide: "bottom", endSide: "bottom" }
+        ];
+      }
+    }
+
+    // decisão -> abaixo
+    if (dx === 0 && dy > 0) {
+      return [
+        { startSide: "bottom", endSide: "top" },
+        { startSide: "right", endSide: "top" },
+        { startSide: "left", endSide: "top" }
+      ];
+    }
+
+    // decisão -> acima
+    if (dx === 0 && dy < 0) {
+      return [
+        { startSide: "top", endSide: "bottom" },
+        { startSide: "right", endSide: "bottom" },
+        { startSide: "left", endSide: "bottom" }
+      ];
+    }
+  }
 
   if (dx === 0 && dy > 0) {
     return [{ startSide: "bottom", endSide: "top" }];
@@ -1365,31 +1425,51 @@ function tentarRotaDecisaoMesmaLinhaAcima(
   rotasExistentes = []
 ) {
   const mesmoNivel = origem.gridRowGlobal === destino.gridRowGlobal;
-  const vaiParaDireita = destino.gridCol > origem.gridCol;
+  const deslocamentoHorizontal = destino.gridCol - origem.gridCol;
 
-  if (!origem.isDecision || !mesmoNivel || !vaiParaDireita) {
+  if (!origem.isDecision || !mesmoNivel || deslocamentoHorizontal === 0) {
     return null;
   }
 
   const rotuloNormalizado = String(rotulo || "").toLowerCase();
   const ehSim = rotuloNormalizado.startsWith("sim");
   const ehNao = rotuloNormalizado.startsWith("não") || rotuloNormalizado.startsWith("nao");
+  const vaiParaDireita = deslocamentoHorizontal > 0;
+  const vaiParaEsquerda = deslocamentoHorizontal < 0;
 
-  const startSide = ehSim ? "right" : "top";
-  const endSide = "top";
+  let startSide = "top";
+  let endSide = "top";
+
+  // F -> G
+  if (vaiParaDireita && ehSim) {
+    startSide = "right";
+  }
+
+  // F -> H (quando quiser desviar por cima) e J -> H
+  if ((vaiParaDireita && ehNao) || (vaiParaEsquerda && ehNao)) {
+    startSide = "top";
+  }
+
+  // fallback para qualquer decisão na mesma linha
+  if (!ehSim && !ehNao) {
+    startSide = vaiParaDireita ? "right" : "top";
+  }
 
   const start = getAnchorPoint(origem, startSide);
   const end = getAnchorPoint(destino, endSide);
 
-  const nivelCanalBase = ehSim ? 1 : ehNao ? 2 : 3;
-  const nivelCanal = nivelCanalBase + ordemConexao;
-
+  const nivelBase = ehSim ? 1 : ehNao ? 2 : 3;
+  const nivelCanal = nivelBase + ordemConexao;
   const canalY = calcularCanalSuperiorDentroRaia(origem, destino, nivelCanal, posicoes);
 
   const points = [{ x: start.x, y: start.y }];
 
   if (startSide === "right") {
     const escapeX = start.x + CONFIG.routeGap;
+    points.push({ x: escapeX, y: start.y });
+    points.push({ x: escapeX, y: canalY });
+  } else if (startSide === "left") {
+    const escapeX = start.x - CONFIG.routeGap;
     points.push({ x: escapeX, y: start.y });
     points.push({ x: escapeX, y: canalY });
   } else {
@@ -1403,7 +1483,14 @@ function tentarRotaDecisaoMesmaLinhaAcima(
   const excludeIds = [origem.id, destino.id, "__INICIO__", "__FIM__"];
 
   const cruzaCaixa = pathCruzaCaixas(rota, posicoes, excludeIds);
-  const cruzaLinha = pathCruzaConexoes(rota, rotasExistentes);
+
+  // ignora apenas rotas da mesma origem/destino ao checar cruzamento,
+  // para não derrubar justamente a rota especial que queremos preservar
+  const rotasComparacao = (rotasExistentes || []).filter(r =>
+    !(r.origemId === origem.id && r.destinoId === destino.id)
+  );
+
+  const cruzaLinha = pathCruzaConexoes(rota, rotasComparacao);
 
   if (cruzaCaixa || cruzaLinha) return null;
 
@@ -1451,6 +1538,7 @@ function escolherRota(origem, destino, contexto = {}) {
     );
   }
 
+  // prioridade máxima para decisão na mesma linha
   const rotaEspecialDecisao = tentarRotaDecisaoMesmaLinhaAcima(
     origem,
     destino,
@@ -1486,7 +1574,6 @@ function escolherRota(origem, destino, contexto = {}) {
     );
 
     const pontosRota = rota.points || [];
-
     const cruzaLinha = pathCruzaConexoes(pontosRota, rotasExistentes);
     const safe = rota.safe && !cruzaLinha;
 
