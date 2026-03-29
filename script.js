@@ -1018,20 +1018,22 @@ function calcularCanalInferiorDentroRaia(origem, destino, nivelCanal = 1, posico
   const limites = obterLimitesRaiaDaArea(origem.area, posicoes);
 
   const baseNos = Math.max(origem.y + origem.h, destino.y + destino.h);
+  const topoLivre = baseNos + 10;
   const fundoRaia = limites.bottom - 8;
-  const baseLivre = baseNos + 10;
 
-  // espaço livre abaixo dos nós
-  const espacoDisponivel = Math.max(12, fundoRaia - baseLivre);
+  // se não existir espaço real abaixo, encosta no limite mais baixo possível
+  if (topoLivre >= fundoRaia) {
+    return topoLivre;
+  }
 
-  // divide o espaço livre em faixas para retornos/rotas extras
+  const espacoDisponivel = fundoRaia - topoLivre;
   const totalFaixas = 4;
   const passo = espacoDisponivel / totalFaixas;
 
-  let canalY = baseLivre + passo * nivelCanal;
+  let canalY = topoLivre + passo * nivelCanal;
 
+  if (canalY < topoLivre) canalY = topoLivre;
   if (canalY > fundoRaia) canalY = fundoRaia;
-  if (canalY < baseLivre) canalY = baseLivre;
 
   return canalY;
 }
@@ -1052,12 +1054,12 @@ function rotaUsaMesmoLadoConflitante(origem, destino, startSide, endSide) {
   }
 
   // decisão na mesma linha para a esquerda:
-  // também preferir entrada por cima para evitar cruzar o losango/origem
+  // não bloquear entrada por baixo, porque J -> H deve poder usar bottom -> bottom
   if (
     origem.isDecision &&
     dy === 0 &&
     dx < 0 &&
-    endSide !== "top"
+    endSide === "right"
   ) {
     return true;
   }
