@@ -712,16 +712,6 @@ function desenharRaiasExcel(svg, lanes) {
     linhaBase.setAttribute("stroke-width", strokeWidth);
     svg.appendChild(linhaBase);
 
-    // linha vertical esquerda
-    const linhaEsquerda = criarElementoSVG("line");
-    linhaEsquerda.setAttribute("x1", lane.x);
-    linhaEsquerda.setAttribute("y1", topLineY);
-    linhaEsquerda.setAttribute("x2", lane.x);
-    linhaEsquerda.setAttribute("y2", bottomLineY);
-    linhaEsquerda.setAttribute("stroke", strokeColor);
-    linhaEsquerda.setAttribute("stroke-width", strokeWidth);
-    svg.appendChild(linhaEsquerda);
-
     // separador vertical do nome da raia
     const separador = criarElementoSVG("line");
     separador.setAttribute("x1", lane.x + lane.labelWidth);
@@ -731,16 +721,6 @@ function desenharRaiasExcel(svg, lanes) {
     separador.setAttribute("stroke", strokeColor);
     separador.setAttribute("stroke-width", strokeWidth);
     svg.appendChild(separador);
-
-    // linha vertical direita
-    const linhaDireita = criarElementoSVG("line");
-    linhaDireita.setAttribute("x1", lane.x + lane.width);
-    linhaDireita.setAttribute("y1", topLineY);
-    linhaDireita.setAttribute("x2", lane.x + lane.width);
-    linhaDireita.setAttribute("y2", bottomLineY);
-    linhaDireita.setAttribute("stroke", strokeColor);
-    linhaDireita.setAttribute("stroke-width", strokeWidth);
-    svg.appendChild(linhaDireita);
 
     const linhas = lane.labelLines && lane.labelLines.length
       ? lane.labelLines
