@@ -1931,6 +1931,80 @@ function gerarNomeArquivo() {
     .toLowerCase() || "fluxograma_processo";
 }
 
+function baixarTemplateExcel() {
+  if (!fluxoData.length) {
+    alert("Não há etapas para exportar.");
+    return;
+  }
+
+  // Cabeçalho igual ao importador
+  const cabecalho = [
+    "Ordem",
+    "ID",
+    "Área",
+    "Atividade",
+    "Tipo",
+    "Sistema",
+    "Tempo",
+    "Próx Sim",
+    "Próx Não",
+    "Conexões Extras",
+    "Coluna",
+    "Linha",
+    "Cor"
+  ];
+
+  const linhas = [cabecalho.join("\t")];
+
+  // mapa UID -> ID visual (A, B, C...)
+  const mapaUidParaId = {};
+  fluxoData.forEach(l => {
+    mapaUidParaId[l.uid] = l.id;
+  });
+
+  fluxoData.forEach(linha => {
+    const proxSim = mapaUidParaId[linha.proxSim] || "";
+    const proxNao = mapaUidParaId[linha.proxNao] || "";
+
+    const extras = (linha.extras || [])
+      .map(uid => mapaUidParaId[uid] || "")
+      .filter(Boolean)
+      .join(",");
+
+    const row = [
+      linha.ordem || "",
+      linha.id || "",
+      linha.area || "",
+      linha.atividade || "",
+      linha.tipo || "",
+      linha.sistema || "",
+      linha.tempo || "",
+      proxSim,
+      proxNao,
+      extras,
+      linha.coluna || 1,
+      linha.linha || 1,
+      linha.cor || "white"
+    ];
+
+    linhas.push(row.join("\t"));
+  });
+
+  const conteudo = linhas.join("\n");
+
+  const blob = new Blob([conteudo], { type: "text/tab-separated-values;charset=utf-8;" });
+
+  const link = document.createElement("a");
+  const nomeArquivo = (ultimoNomeArquivo || "template_fluxo") + ".xls";
+
+  link.href = URL.createObjectURL(blob);
+  link.download = nomeArquivo;
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 function limparTudo() {
   const temDadosTopo =
     obterValorCampo("desenho") ||
