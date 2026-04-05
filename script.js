@@ -144,9 +144,10 @@ function restaurarEstadoLocal() {
       fluxoData = [];
     }
 
+    // Mantém apenas as sugestões de posição
     reaplicarSugestoesPosicao();
-    reaplicarSugestoesConexao();
 
+    // NÃO recalcula conexões ao restaurar
     return true;
   } catch (erro) {
     console.error("Erro ao restaurar estado local:", erro);
@@ -283,66 +284,24 @@ function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
   return svg;
 }
 
-function reaplicarSugestoesPosicao() {
-  let areaAnterior = "";
-  let colunaAnterior = 1;
-
+function reaplicarSugestoesConexao(forcarTudo = false) {
   fluxoData.forEach((linha, index) => {
-    const areaAtual = normalizarEspacos(linha.area || "");
-    const colunaAtual = Math.max(1, Number(linha.coluna) || 1);
-    const linhaAtual = Math.max(1, Number(linha.linha) || 1);
+    const proximaLinha = fluxoData[index + 1] || null;
+    const sugestaoUid = proximaLinha ? proximaLinha.uid : "";
 
-    // linha automática sempre 1
-    const linhaEfetiva = linha.linhaManual ? linhaAtual : 1;
-    linha.linha = linhaEfetiva;
-
-    // se a coluna foi definida manualmente, respeita
-    if (linha.colunaManual) {
-      linha.coluna = colunaAtual;
-
-      if (areaAtual) {
-        areaAnterior = areaAtual;
-        colunaAnterior = linha.coluna;
-      }
-
+    // Quando for mudança estrutural (inserção/exclusão),
+    // recalcula tudo, inclusive as que tinham sido alteradas manualmente
+    if (forcarTudo) {
+      linha.proxSim = sugestaoUid;
+      linha.proxSimAuto = !!sugestaoUid;
       return;
     }
 
-    let colunaBase = 1;
-
-    // primeira linha
-    if (index === 0) {
-      colunaBase = 1;
-    }
-    // sem área preenchida ainda -> mantém a coluna anterior
-    else if (!areaAtual) {
-      colunaBase = Math.max(1, colunaAnterior || 1);
-    }
-    // mesma raia da linha anterior -> avança coluna
-    else if (areaAtual === areaAnterior) {
-      colunaBase = Math.max(1, colunaAnterior + 1);
-    }
-    // trocou de raia -> mantém a coluna da origem
-    else {
-      colunaBase = Math.max(1, colunaAnterior || 1);
-    }
-
-    const colunaLivre = areaAtual
-      ? obterProximaColunaLivreNaRaia(
-          linha.uid,
-          areaAtual,
-          linhaEfetiva,
-          colunaBase
-        )
-      : colunaBase;
-
-    linha.coluna = colunaLivre;
-
-    if (areaAtual) {
-      areaAnterior = areaAtual;
-      colunaAnterior = colunaLivre;
-    } else {
-      colunaAnterior = colunaLivre;
+    // Fora de mudança estrutural:
+    // só atualiza se o campo ainda estiver automático
+    if (linha.proxSimAuto) {
+      linha.proxSim = sugestaoUid;
+      linha.proxSimAuto = !!sugestaoUid;
     }
   });
 }
@@ -417,7 +376,7 @@ function adicionarLinha(posicao = fluxoData.length) {
   fluxoData.splice(posicao, 0, nova);
 
   reaplicarSugestoesPosicao();
-  reaplicarSugestoesConexao();
+  reaplicarSugestoesConexao(true);
   atualizarTabela();
   salvarEstadoLocal();
 }
@@ -450,7 +409,7 @@ function excluirLinha(uid) {
   });
 
   reaplicarSugestoesPosicao();
-  reaplicarSugestoesConexao();
+  reaplicarSugestoesConexao(true);
   atualizarTabela();
   salvarEstadoLocal();
 }
@@ -1494,13 +1453,15 @@ function importarExcel() {
       .map(id => mapaIdVisualParaUid[id] || "")
       .filter(Boolean);
 
+    // mantém exatamente o que veio do Excel:
+    // se houver proxSim preenchido, considera manual;
+    // se vier vazio, deixa vazio sem autoajuste
+    linha.proxSimAuto = false;
+
     delete linha.proxSimOriginal;
     delete linha.proxNaoOriginal;
     delete linha.conexoesExtrasOriginal;
   });
-
-  // estratégia 2: em importação, recalcula automaticamente toda a sequência principal
-  reaplicarSugestoesConexao();
 
   atualizarTabela();
   salvarEstadoLocal(true);
