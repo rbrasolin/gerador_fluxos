@@ -39,6 +39,7 @@ function obterEstadoAtual() {
           linhaManual: !!item.linhaManual,
           cor: normalizarCor(item.cor || "white"),
           proxSim: item.proxSim || "",
+          proxSimAuto: !!item.proxSimAuto,
           proxNao: item.proxNao || "",
           extras: Array.isArray(item.extras) ? [...item.extras] : []
         }))
@@ -126,6 +127,7 @@ function restaurarEstadoLocal() {
           linhaManual: !!item.linhaManual,
           cor: normalizarCor(item.cor || "white"),
           proxSim: item.proxSim || "",
+          proxSimAuto: !!item.proxSimAuto,
           proxNao: item.proxNao || "",
           extras: Array.isArray(item.extras) ? [...item.extras] : []
         }))
@@ -143,6 +145,7 @@ function restaurarEstadoLocal() {
     }
 
     reaplicarSugestoesPosicao();
+    reaplicarSugestoesConexao();
 
     return true;
   } catch (erro) {
@@ -376,6 +379,20 @@ function obterProximaColunaLivreNaRaia(uidIgnorar, area, linha, colunaInicial = 
   return coluna;
 }
 
+function reaplicarSugestoesConexao() {
+  fluxoData.forEach((linha, index) => {
+    const proximaLinha = fluxoData[index + 1] || null;
+
+    if (proximaLinha) {
+      linha.proxSim = proximaLinha.uid;
+      linha.proxSimAuto = true;
+    } else {
+      linha.proxSim = "";
+      linha.proxSimAuto = false;
+    }
+  });
+}
+
 function adicionarLinha(posicao = fluxoData.length) {
   const nova = {
     uid: gerarUID(),
@@ -392,6 +409,7 @@ function adicionarLinha(posicao = fluxoData.length) {
     linhaManual: false,
     cor: "white",
     proxSim: "",
+    proxSimAuto: false,
     proxNao: "",
     extras: []
   };
@@ -399,6 +417,7 @@ function adicionarLinha(posicao = fluxoData.length) {
   fluxoData.splice(posicao, 0, nova);
 
   reaplicarSugestoesPosicao();
+  reaplicarSugestoesConexao();
   atualizarTabela();
   salvarEstadoLocal();
 }
@@ -418,14 +437,20 @@ function excluirLinha(uid) {
   fluxoData = fluxoData.filter(l => l.uid !== uid);
 
   fluxoData.forEach(l => {
-    if (l.proxSim === uid) l.proxSim = "";
+    if (l.proxSim === uid) {
+      l.proxSim = "";
+      l.proxSimAuto = false;
+    }
+
     if (l.proxNao === uid) l.proxNao = "";
+
     if (Array.isArray(l.extras)) {
       l.extras = l.extras.filter(dest => dest !== uid);
     }
   });
 
   reaplicarSugestoesPosicao();
+  reaplicarSugestoesConexao();
   atualizarTabela();
   salvarEstadoLocal();
 }
@@ -1078,6 +1103,9 @@ function atualizarTabela() {
 }
 
 function criarSelectConexao(uidAtual, valorSelecionado, campo) {
+  const linhaAtual = fluxoData.find(l => l.uid === uidAtual);
+  const ehAuto = campo === "proxSim" && linhaAtual && linhaAtual.proxSimAuto;
+
   let options = `<option value="">-</option>`;
 
   fluxoData.forEach(l => {
@@ -1096,13 +1124,23 @@ function criarSelectConexao(uidAtual, valorSelecionado, campo) {
       ? `onkeydown="tratarTabCampo(event,'${uidAtual}','${campo}')"`
       : "";
 
+  const estiloAuto = ehAuto
+    ? `style="background:#eef6ff;border:1px solid #7aa7e0;"`
+    : "";
+
+  const tituloAuto = ehAuto
+    ? `title="Preenchido automaticamente com a próxima atividade"`
+    : "";
+
   return `
     <select
-      class="flow-input conexao-select"
+      class="flow-input conexao-select ${ehAuto ? "conexao-auto" : ""}"
       data-uid="${uidAtual}"
       data-campo="${campo}"
       onchange="updateCampo('${uidAtual}','${campo}',this.value)"
       ${onKeydownExtra}
+      ${estiloAuto}
+      ${tituloAuto}
     >
       ${options}
     </select>
@@ -1245,6 +1283,14 @@ function updateCampo(uid, campo, valor, reRender = false) {
 
   if (campo === "area" || campo === "tipo" || campo === "sistema") {
     linha[campo] = valor;
+    salvarEstadoLocal();
+    return;
+  }
+
+  if (campo === "proxSim") {
+    linha.proxSim = valor || "";
+    linha.proxSimAuto = false;
+    atualizarTabela();
     salvarEstadoLocal();
     return;
   }
@@ -1428,6 +1474,7 @@ function importarExcel() {
       proxNaoOriginal,
       conexoesExtrasOriginal,
       proxSim: "",
+      proxSimAuto: false,
       proxNao: "",
       extras: []
     });
@@ -1451,6 +1498,9 @@ function importarExcel() {
     delete linha.proxNaoOriginal;
     delete linha.conexoesExtrasOriginal;
   });
+
+  // estratégia 2: em importação, recalcula automaticamente toda a sequência principal
+  reaplicarSugestoesConexao();
 
   atualizarTabela();
   salvarEstadoLocal(true);
