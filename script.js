@@ -287,35 +287,74 @@ function reaplicarSugestoesPosicao() {
     const colunaAtual = Math.max(1, Number(linha.coluna) || 1);
     const linhaAtual = Math.max(1, Number(linha.linha) || 1);
 
-    // LINHA: sugestão padrão sempre 1
-    if (!linha.linhaManual) {
-      linha.linha = 1;
-    } else {
-      linha.linha = linhaAtual;
-    }
+    // Linha automática sempre 1
+    const linhaEfetiva = linha.linhaManual ? linhaAtual : 1;
+    linha.linha = linhaEfetiva;
 
-    // COLUNA: mantém sua lógica por área
+    // Sem área ainda preenchida
     if (!areaNormalizada) {
-      if (!linha.colunaManual) {
-        linha.coluna = Math.max(1, colunaAnterior || 1);
-      } else {
-        linha.coluna = colunaAtual;
-      }
+      const baseSemArea = linha.colunaManual ? colunaAtual : Math.max(1, colunaAnterior || 1);
+      linha.coluna = Math.max(1, baseSemArea);
       colunaAnterior = linha.coluna;
       return;
     }
 
-    const colunaSugerida = ultimaColunaPorArea.has(areaNormalizada)
-      ? (ultimaColunaPorArea.get(areaNormalizada) + 1)
-      : (colunaAnterior || 1);
+    let colunaBase;
 
-    const colunaEfetiva = linha.colunaManual ? colunaAtual : colunaSugerida;
+    if (linha.colunaManual) {
+      colunaBase = colunaAtual;
+    } else if (ultimaColunaPorArea.has(areaNormalizada)) {
+      // mesma área já apareceu antes -> próxima coluna daquela área
+      colunaBase = ultimaColunaPorArea.get(areaNormalizada) + 1;
+    } else {
+      // área nova -> mantém a coluna anterior
+      colunaBase = Math.max(1, colunaAnterior || 1);
+    }
 
-    linha.coluna = colunaEfetiva;
+    const colunaLivre = obterProximaColunaLivreNaRaia(
+      linha.uid,
+      areaNormalizada,
+      linhaEfetiva,
+      colunaBase
+    );
 
-    ultimaColunaPorArea.set(areaNormalizada, colunaEfetiva);
-    colunaAnterior = colunaEfetiva;
+    linha.coluna = colunaLivre;
+
+    ultimaColunaPorArea.set(areaNormalizada, colunaLivre);
+    colunaAnterior = colunaLivre;
   });
+}
+
+function existePosicaoOcupadaNaRaia(uidIgnorar, area, linha, coluna) {
+  const areaNormalizada = normalizarEspacos(area || "");
+  const linhaNormalizada = Math.max(1, Number(linha) || 1);
+  const colunaNormalizada = Math.max(1, Number(coluna) || 1);
+
+  if (!areaNormalizada) return false;
+
+  return fluxoData.some(item => {
+    if (!item || item.uid === uidIgnorar) return false;
+
+    const areaItem = normalizarEspacos(item.area || "");
+    const linhaItem = Math.max(1, Number(item.linha) || 1);
+    const colunaItem = Math.max(1, Number(item.coluna) || 1);
+
+    return (
+      areaItem === areaNormalizada &&
+      linhaItem === linhaNormalizada &&
+      colunaItem === colunaNormalizada
+    );
+  });
+}
+
+function obterProximaColunaLivreNaRaia(uidIgnorar, area, linha, colunaInicial = 1) {
+  let coluna = Math.max(1, Number(colunaInicial) || 1);
+
+  while (existePosicaoOcupadaNaRaia(uidIgnorar, area, linha, coluna)) {
+    coluna++;
+  }
+
+  return coluna;
 }
 
 function adicionarLinha(posicao = fluxoData.length) {
@@ -1020,9 +1059,37 @@ function updateCampo(uid, campo, valor, reRender = false) {
 
     if (valor === "" || valor === null || valor === undefined) {
       linha[flagManual] = false;
-    } else {
-      linha[campo] = Math.max(1, Number(valor) || 1);
-      linha[flagManual] = true;
+      reaplicarSugestoesPosicao();
+      atualizarTabela();
+      salvarEstadoLocal();
+      return;
+    }
+
+    linha[campo] = Math.max(1, Number(valor) || 1);
+    linha[flagManual] = true;
+
+    const areaNormalizada = normalizarEspacos(linha.area || "");
+    const linhaEfetiva = Math.max(1, Number(linha.linha) || 1);
+    const colunaEfetiva = Math.max(1, Number(linha.coluna) || 1);
+
+    if (
+      areaNormalizada &&
+      existePosicaoOcupadaNaRaia(uid, areaNormalizada, linhaEfetiva, colunaEfetiva)
+    ) {
+      const proximaLivre = obterProximaColunaLivreNaRaia(
+        uid,
+        areaNormalizada,
+        linhaEfetiva,
+        colunaEfetiva
+      );
+
+      alert(
+        `Já existe uma atividade na área "${areaNormalizada}" na linha ${linhaEfetiva} e coluna ${colunaEfetiva}. ` +
+        `A coluna foi ajustada automaticamente para ${proximaLivre}.`
+      );
+
+      linha.coluna = proximaLivre;
+      linha.colunaManual = true;
     }
 
     reaplicarSugestoesPosicao();
@@ -1037,6 +1104,33 @@ function updateCampo(uid, campo, valor, reRender = false) {
     linha[campo] = valor;
   }
 
+  if (campo === "area") {
+    reaplicarSugestoesPosicao();
+
+    const areaNormalizada = normalizarEspacos(linha.area || "");
+    const linhaEfetiva = Math.max(1, Number(linha.linha) || 1);
+    const colunaEfetiva = Math.max(1, Number(linha.coluna) || 1);
+
+    if (
+      areaNormalizada &&
+      existePosicaoOcupadaNaRaia(uid, areaNormalizada, linhaEfetiva, colunaEfetiva)
+    ) {
+      const proximaLivre = obterProximaColunaLivreNaRaia(
+        uid,
+        areaNormalizada,
+        linhaEfetiva,
+        colunaEfetiva
+      );
+
+      linha.coluna = proximaLivre;
+    }
+
+    atualizarTabela();
+    atualizarOpcoesDeConexao();
+    salvarEstadoLocal();
+    return;
+  }
+
   if (reRender) {
     atualizarTabela();
     salvarEstadoLocal();
@@ -1044,12 +1138,6 @@ function updateCampo(uid, campo, valor, reRender = false) {
   }
 
   if (campo === "atividade") {
-    atualizarOpcoesDeConexao();
-    salvarEstadoLocal();
-    return;
-  }
-
-  if (campo === "area") {
     atualizarOpcoesDeConexao();
     salvarEstadoLocal();
     return;
