@@ -279,49 +279,66 @@ function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
 }
 
 function reaplicarSugestoesPosicao() {
-  const ultimaColunaPorArea = new Map();
-  let colunaAnterior = 0;
+  let areaAnterior = "";
+  let colunaAnterior = 1;
 
-  fluxoData.forEach((linha) => {
-    const areaNormalizada = normalizarEspacos(linha.area || "");
+  fluxoData.forEach((linha, index) => {
+    const areaAtual = normalizarEspacos(linha.area || "");
     const colunaAtual = Math.max(1, Number(linha.coluna) || 1);
     const linhaAtual = Math.max(1, Number(linha.linha) || 1);
 
-    // Linha automática sempre 1
+    // linha automática sempre 1
     const linhaEfetiva = linha.linhaManual ? linhaAtual : 1;
     linha.linha = linhaEfetiva;
 
-    // Sem área ainda preenchida
-    if (!areaNormalizada) {
-      const baseSemArea = linha.colunaManual ? colunaAtual : Math.max(1, colunaAnterior || 1);
-      linha.coluna = Math.max(1, baseSemArea);
-      colunaAnterior = linha.coluna;
+    // se a coluna foi definida manualmente, respeita
+    if (linha.colunaManual) {
+      linha.coluna = colunaAtual;
+
+      if (areaAtual) {
+        areaAnterior = areaAtual;
+        colunaAnterior = linha.coluna;
+      }
+
       return;
     }
 
-    let colunaBase;
+    let colunaBase = 1;
 
-    if (linha.colunaManual) {
-      colunaBase = colunaAtual;
-    } else if (ultimaColunaPorArea.has(areaNormalizada)) {
-      // mesma área já apareceu antes -> próxima coluna daquela área
-      colunaBase = ultimaColunaPorArea.get(areaNormalizada) + 1;
-    } else {
-      // área nova -> mantém a coluna anterior
+    // primeira linha
+    if (index === 0) {
+      colunaBase = 1;
+    }
+    // sem área preenchida ainda -> mantém a coluna anterior
+    else if (!areaAtual) {
+      colunaBase = Math.max(1, colunaAnterior || 1);
+    }
+    // mesma raia da linha anterior -> avança coluna
+    else if (areaAtual === areaAnterior) {
+      colunaBase = Math.max(1, colunaAnterior + 1);
+    }
+    // trocou de raia -> mantém a coluna da origem
+    else {
       colunaBase = Math.max(1, colunaAnterior || 1);
     }
 
-    const colunaLivre = obterProximaColunaLivreNaRaia(
-      linha.uid,
-      areaNormalizada,
-      linhaEfetiva,
-      colunaBase
-    );
+    const colunaLivre = areaAtual
+      ? obterProximaColunaLivreNaRaia(
+          linha.uid,
+          areaAtual,
+          linhaEfetiva,
+          colunaBase
+        )
+      : colunaBase;
 
     linha.coluna = colunaLivre;
 
-    ultimaColunaPorArea.set(areaNormalizada, colunaLivre);
-    colunaAnterior = colunaLivre;
+    if (areaAtual) {
+      areaAnterior = areaAtual;
+      colunaAnterior = colunaLivre;
+    } else {
+      colunaAnterior = colunaLivre;
+    }
   });
 }
 
@@ -745,10 +762,8 @@ function tratarAutocompleteKeydown(event, uid, campo) {
     return;
   }
 
-  if (event.key === "Tab" && !event.shiftKey) {
+  if (event.key === "Tab") {
     event.preventDefault();
-
-    const proximo = obterProximoCampoSequencial(uid, campo, false);
 
     const inputAtual = document.querySelector(
       `.flow-input[data-uid="${uid}"][data-campo="${campo}"]`
@@ -765,25 +780,9 @@ function tratarAutocompleteKeydown(event, uid, campo) {
       selecionarSugestaoAutocomplete(uid, campo, inputAtual.value || "", false);
     }
 
-    if (proximo) {
-      requestAnimationFrame(() => {
-        const destino = document.querySelector(
-          `.flow-input[data-uid="${proximo.uid}"][data-campo="${proximo.campo}"]`
-        );
-
-        if (destino) {
-          destino.focus();
-
-          if (
-            typeof destino.select === "function" &&
-            destino.tagName === "INPUT" &&
-            destino.type !== "number"
-          ) {
-            destino.select();
-          }
-        }
-      });
-    }
+    requestAnimationFrame(() => {
+      focarProximoCampoTabela(uid, campo, event.shiftKey);
+    });
 
     return;
   }
