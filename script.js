@@ -2436,6 +2436,33 @@ function obterLadosUsadosDoNo(noId, rotasExistentes = []) {
   return usados;
 }
 
+function obterUsoDetalhadoLadosDoNo(noId, rotasExistentes = []) {
+  const uso = {
+    origem: { left: 0, right: 0, top: 0, bottom: 0 },
+    destino: { left: 0, right: 0, top: 0, bottom: 0 }
+  };
+
+  (rotasExistentes || []).forEach((rota) => {
+    if (!rota || !rota.points || rota.points.length < 2) return;
+
+    if (rota.origemId === noId) {
+      const ladoSaida = detectarLadoSaida(rota.points);
+      if (uso.origem[ladoSaida] !== undefined) {
+        uso.origem[ladoSaida]++;
+      }
+    }
+
+    if (rota.destinoId === noId) {
+      const ladoEntrada = detectarLadoEntrada(rota.points);
+      if (uso.destino[ladoEntrada] !== undefined) {
+        uso.destino[ladoEntrada]++;
+      }
+    }
+  });
+
+  return uso;
+}
+
 function obterLimitesRaiaDaArea(area, posicoes = {}) {
   const nosArea = Object.values(posicoes).filter(
     n => n && n.area === area && n.id !== "__INICIO__" && n.id !== "__FIM__"
@@ -2923,23 +2950,26 @@ function tentarRotaDecisaoMesmaLinhaAcima(
 
   const excludeIds = [origem.id, destino.id, "__INICIO__", "__FIM__"];
   const ladosUsadosOrigem = obterLadosUsadosDoNo(origem.id, rotasExistentes);
+  const usoDetalhadoOrigem = obterUsoDetalhadoLadosDoNo(origem.id, rotasExistentes);
+  const usoDetalhadoDestino = obterUsoDetalhadoLadosDoNo(destino.id, rotasExistentes);
 
   const candidatos = [];
 
   function penalidadeLado(startSide, endSide) {
     let score = 0;
 
-    if (ladosUsadosOrigem.has(startSide)) score += 1000;
+    const usoOrigem = usoDetalhadoOrigem.origem[startSide] || 0;
+    const usoDestino = usoDetalhadoDestino.destino[endSide] || 0;
 
-    // mesma linha à direita com "Sim" -> reto deve ganhar
+    if (ladosUsadosOrigem.has(startSide)) score += 1000;
+    if (usoOrigem > 0) score += usoOrigem * 1000;
+    if (usoDestino > 0) score += usoDestino * 900;
+
     if (ehSim && vaiParaDireita && mesmoNivel) {
       if (startSide !== "right") score += 300;
       if (endSide !== "left") score += 220;
     }
 
-    // mesma linha à esquerda com "Não"
-    // se o lado direito já foi usado (normalmente pelo Sim),
-    // prioriza por cima; senão, prioriza por baixo.
     if (ehNao && vaiParaEsquerda && mesmoNivel) {
       const simJaSaiuPelaDireita = ladosUsadosOrigem.has("right");
 
@@ -2952,7 +2982,6 @@ function tentarRotaDecisaoMesmaLinhaAcima(
       }
     }
 
-    // esquerda e acima com "Não"
     if (ehNao && vaiParaEsquerda && sobe) {
       if (startSide !== "bottom") score += 220;
       if (endSide !== "bottom") score += 140;
@@ -2972,6 +3001,9 @@ function tentarRotaDecisaoMesmaLinhaAcima(
     const cruzaLinha = pathCruzaConexoes(rota, rotasComparacao);
     const comprimento = calcularComprimento(rota);
 
+    const reusaSaidaOrigem = (usoDetalhadoOrigem.origem[startSide] || 0) > 0;
+    const reusaEntradaDestino = (usoDetalhadoDestino.destino[endSide] || 0) > 0;
+
     candidatos.push({
       points: rota,
       startSide,
@@ -2979,6 +3011,8 @@ function tentarRotaDecisaoMesmaLinhaAcima(
       cruzaCaixa,
       cruzaLinha,
       comprimento,
+      reusaSaidaOrigem,
+      reusaEntradaDestino,
       pesoLado: penalidadeLado(startSide, endSide),
       label: labelPoint || {
         x: rota[Math.floor(rota.length / 2)].x,
@@ -3019,15 +3053,11 @@ function tentarRotaDecisaoMesmaLinhaAcima(
     );
   }
 
-  // =========================
-  // 1) decisão -> direita na mesma linha
-  // =========================
   if (mesmoNivel && vaiParaDireita) {
     const startRight = getAnchorPoint(origem, "right");
     const endLeft = getAnchorPoint(destino, "left");
 
     if (ehSim) {
-      // prioridade máxima: linha reta
       registrarCandidato(
         "right",
         "left",
@@ -3069,15 +3099,11 @@ function tentarRotaDecisaoMesmaLinhaAcima(
     }
   }
 
-  // =========================
-  // 2) decisão -> esquerda na mesma linha
-  // =========================
   if (mesmoNivel && vaiParaEsquerda && ehNao) {
     const simJaSaiuPelaDireita = ladosUsadosOrigem.has("right");
 
     for (let extra = 0; extra < 5; extra++) {
       if (simJaSaiuPelaDireita) {
-        // caso tipo G -> E no novofluxo: usa topo
         registrarCandidatoCanal(
           "top",
           "top",
@@ -3090,7 +3116,6 @@ function tentarRotaDecisaoMesmaLinhaAcima(
           calcularCanalInferiorDentroRaia(origem, destino, 2 + ordemConexao + extra, posicoes)
         );
       } else {
-        // caso tipo J -> H: usa baixo
         registrarCandidatoCanal(
           "bottom",
           "bottom",
@@ -3112,9 +3137,6 @@ function tentarRotaDecisaoMesmaLinhaAcima(
     }
   }
 
-  // =========================
-  // 3) decisão -> esquerda e acima
-  // =========================
   if (ehNao && vaiParaEsquerda && sobe) {
     const startBottom = getAnchorPoint(origem, "bottom");
     const endBottom = getAnchorPoint(destino, "bottom");
@@ -3167,13 +3189,27 @@ function tentarRotaDecisaoMesmaLinhaAcima(
   candidatos.sort((a, b) => {
     if (a.cruzaCaixa !== b.cruzaCaixa) return a.cruzaCaixa ? 1 : -1;
     if (a.cruzaLinha !== b.cruzaLinha) return a.cruzaLinha ? 1 : -1;
+    if (a.reusaSaidaOrigem !== b.reusaSaidaOrigem) return a.reusaSaidaOrigem ? 1 : -1;
+    if (a.reusaEntradaDestino !== b.reusaEntradaDestino) return a.reusaEntradaDestino ? 1 : -1;
     if (a.pesoLado !== b.pesoLado) return a.pesoLado - b.pesoLado;
     if (a.points.length !== b.points.length) return a.points.length - b.points.length;
     return a.comprimento - b.comprimento;
   });
 
+  const melhorSemConflitoForte = candidatos.find(c =>
+    !c.cruzaCaixa &&
+    !c.cruzaLinha &&
+    !c.reusaSaidaOrigem &&
+    !c.reusaEntradaDestino
+  );
+
+  const melhorSemCruzar = candidatos.find(c =>
+    !c.cruzaCaixa &&
+    !c.cruzaLinha
+  );
+
   const melhorSemCaixa = candidatos.find(c => !c.cruzaCaixa);
-  const melhor = melhorSemCaixa || candidatos[0];
+  const melhor = melhorSemConflitoForte || melhorSemCruzar || melhorSemCaixa || candidatos[0];
 
   if (melhor.cruzaCaixa) {
     return null;
@@ -3234,22 +3270,27 @@ function escolherRota(origem, destino, contexto = {}) {
   }
 
   const ladosUsadosOrigem = obterLadosUsadosDoNo(origem.id, rotasExistentes);
+  const usoDetalhadoOrigem = obterUsoDetalhadoLadosDoNo(origem.id, rotasExistentes);
+  const usoDetalhadoDestino = obterUsoDetalhadoLadosDoNo(destino.id, rotasExistentes);
+
   const dx = destino.gridCol - origem.gridCol;
   const dy = destino.gridRowGlobal - origem.gridRowGlobal;
 
   function penalidadeLadoFallback(startSide, endSide) {
     let score = 0;
 
-    if (ladosUsadosOrigem.has(startSide)) score += 1000;
+    const usoOrigem = usoDetalhadoOrigem.origem[startSide] || 0;
+    const usoDestino = usoDetalhadoDestino.destino[endSide] || 0;
 
-    // decisão voltando à esquerda na mesma linha com "Não"
+    if (ladosUsadosOrigem.has(startSide)) score += 1000;
+    if (usoOrigem > 0) score += usoOrigem * 1000;
+    if (usoDestino > 0) score += usoDestino * 900;
+
     if (origem.isDecision && dy === 0 && dx < 0 && rotulo === "Não") {
       if (startSide !== "bottom") score += 250;
       if (endSide !== "bottom") score += 120;
     }
 
-    // decisão subindo e voltando à esquerda com "Não"
-    // ESTE É O CASO DO J -> H NO DESENHO ATUAL
     if (origem.isDecision && dy < 0 && dx < 0 && rotulo === "Não") {
       if (startSide !== "bottom") score += 300;
       if (endSide !== "bottom") score += 180;
@@ -3284,6 +3325,9 @@ function escolherRota(origem, destino, contexto = {}) {
     const cruzaLinha = pathCruzaConexoes(pontosRota, rotasExistentes);
     const comprimento = calcularComprimento(pontosRota);
     const pesoLado = penalidadeLadoFallback(par.startSide, par.endSide);
+
+    const reusaSaidaOrigem = (usoDetalhadoOrigem.origem[par.startSide] || 0) > 0;
+    const reusaEntradaDestino = (usoDetalhadoDestino.destino[par.endSide] || 0) > 0;
 
     let comprimentoTotal = 0;
     const segmentos = [];
@@ -3339,6 +3383,8 @@ function escolherRota(origem, destino, contexto = {}) {
       cruzaLinha,
       comprimento,
       pesoLado,
+      reusaSaidaOrigem,
+      reusaEntradaDestino,
       label: labelPoint
     });
   }
@@ -3359,13 +3405,27 @@ function escolherRota(origem, destino, contexto = {}) {
   tentativas.sort((a, b) => {
     if (a.cruzaCaixa !== b.cruzaCaixa) return a.cruzaCaixa ? 1 : -1;
     if (a.cruzaLinha !== b.cruzaLinha) return a.cruzaLinha ? 1 : -1;
+    if (a.reusaSaidaOrigem !== b.reusaSaidaOrigem) return a.reusaSaidaOrigem ? 1 : -1;
+    if (a.reusaEntradaDestino !== b.reusaEntradaDestino) return a.reusaEntradaDestino ? 1 : -1;
     if (a.pesoLado !== b.pesoLado) return a.pesoLado - b.pesoLado;
     if (a.points.length !== b.points.length) return a.points.length - b.points.length;
     return a.comprimento - b.comprimento;
   });
 
+  const melhorSemConflitoForte = tentativas.find(t =>
+    !t.cruzaCaixa &&
+    !t.cruzaLinha &&
+    !t.reusaSaidaOrigem &&
+    !t.reusaEntradaDestino
+  );
+
+  const melhorSemCruzar = tentativas.find(t =>
+    !t.cruzaCaixa &&
+    !t.cruzaLinha
+  );
+
   const melhorSemCaixa = tentativas.find(t => !t.cruzaCaixa);
-  const melhor = melhorSemCaixa || tentativas[0];
+  const melhor = melhorSemConflitoForte || melhorSemCruzar || melhorSemCaixa || tentativas[0];
 
   return montarRotaOrtogonal(
     melhor.points,
