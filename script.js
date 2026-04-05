@@ -94,13 +94,26 @@ function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
     }
   }
 
+  const filhos = Array.from(svg.childNodes);
+  while (svg.firstChild) {
+    svg.removeChild(svg.firstChild);
+  }
+
+  const grupoEscalado = criarElementoSVG("g");
+  grupoEscalado.setAttribute(
+    "transform",
+    `translate(${-vbX},${-vbY}) scale(${escala})`
+  );
+
+  filhos.forEach(no => grupoEscalado.appendChild(no));
+  svg.appendChild(grupoEscalado);
+
   const novaLargura = Math.max(1, Math.round(vbW * escala));
   const novaAltura = Math.max(1, Math.round(vbH * escala));
 
-  // não escala o conteúdo com <g>, apenas reduz o tamanho visual do svg
   svg.setAttribute("width", novaLargura);
   svg.setAttribute("height", novaAltura);
-  svg.setAttribute("viewBox", `${vbX} ${vbY} ${vbW} ${vbH}`);
+  svg.setAttribute("viewBox", `0 0 ${novaLargura} ${novaAltura}`);
   svg.setAttribute("preserveAspectRatio", "xMinYMin meet");
 
   return svg;
@@ -512,9 +525,11 @@ function formatarTempo(seg) {
 }
 
 function formatarTempoEtapa(etapa) {
-  const tempoBruto = limpar(etapa?.tempoTexto ?? etapa?.tempo ?? "");
-  if (!tempoBruto) return "";
-  return segundosParaTempo(tempoParaSegundos(tempoBruto));
+  const tempoTexto = limpar(etapa?.tempoTexto ?? "");
+
+  if (!tempoTexto) return "";
+
+  return segundosParaTempo(tempoParaSegundos(tempoTexto));
 }
 
 function formatarPercentual(valor) {
@@ -2818,24 +2833,29 @@ function obterEtapasDaTabela() {
     uidParaId[linha.uid] = gerarIdVisual(index);
   });
 
-  return etapasValidas.map((linha, index) => ({
-    ordem: index + 1,
-    id: uidParaId[linha.uid],
-    atividade: limpar(linha.atividade || ""),
-    area: limpar(linha.area || "") || "Sem Área",
-    tipo: limpar(linha.tipo || "") || "Não informado",
-    sistema: limpar(linha.sistema || "") || "Sem sistema informado",
-    tempo: tempoParaSegundos(limpar(linha.tempo || "")),
-    proxSim: uidParaId[linha.proxSim] || "",
-    proxNao: uidParaId[linha.proxNao] || "",
-    conexoesExtras: (Array.isArray(linha.extras) ? linha.extras : [])
-      .map(uid => uidParaId[uid] || "")
-      .filter(Boolean)
-      .join(","),
-    coluna: Math.max(1, Number(linha.coluna) || 1),
-    linha: Math.max(1, Number(linha.linha) || 1),
-    cor: normalizarCor(linha.cor || "white")
-  }));
+  return etapasValidas.map((linha, index) => {
+    const tempoTexto = limpar(linha.tempo || "");
+
+    return {
+      ordem: index + 1,
+      id: uidParaId[linha.uid],
+      atividade: limpar(linha.atividade || ""),
+      area: limpar(linha.area || "") || "Sem Área",
+      tipo: limpar(linha.tipo || "") || "Não informado",
+      sistema: limpar(linha.sistema || "") || "Sem sistema informado",
+      tempoTexto,
+      tempo: tempoTexto ? tempoParaSegundos(tempoTexto) : 0,
+      proxSim: uidParaId[linha.proxSim] || "",
+      proxNao: uidParaId[linha.proxNao] || "",
+      conexoesExtras: (Array.isArray(linha.extras) ? linha.extras : [])
+        .map(uid => uidParaId[uid] || "")
+        .filter(Boolean)
+        .join(","),
+      coluna: Math.max(1, Number(linha.coluna) || 1),
+      linha: Math.max(1, Number(linha.linha) || 1),
+      cor: normalizarCor(linha.cor || "white")
+    };
+  });
 }
 
 function gerarFluxo() {
