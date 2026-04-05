@@ -33,6 +33,8 @@ function obterEstadoAtual() {
           tempo: item.tempo || "",
           coluna: Math.max(1, Number(item.coluna) || 1),
           linha: Math.max(1, Number(item.linha) || 1),
+          colunaManual: !!item.colunaManual,
+          linhaManual: !!item.linhaManual,
           cor: normalizarCor(item.cor || "white"),
           proxSim: item.proxSim || "",
           proxNao: item.proxNao || "",
@@ -118,6 +120,8 @@ function restaurarEstadoLocal() {
           tempo: item.tempo || "",
           coluna: Math.max(1, Number(item.coluna) || 1),
           linha: Math.max(1, Number(item.linha) || 1),
+          colunaManual: !!item.colunaManual,
+          linhaManual: !!item.linhaManual,
           cor: normalizarCor(item.cor || "white"),
           proxSim: item.proxSim || "",
           proxNao: item.proxNao || "",
@@ -135,6 +139,8 @@ function restaurarEstadoLocal() {
     if (!fluxoData.length) {
       fluxoData = [];
     }
+
+    reaplicarSugestoesPosicao();
 
     return true;
   } catch (erro) {
@@ -272,6 +278,52 @@ function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
   return svg;
 }
 
+function reaplicarSugestoesPosicao() {
+  const mapaLinhaPorArea = new Map();
+  const ultimaColunaPorArea = new Map();
+
+  let colunaAnterior = 0;
+  let maiorLinhaUsada = 0;
+
+  fluxoData.forEach((linha) => {
+    const areaNormalizada = normalizarEspacos(linha.area || "");
+    const colunaAtual = Math.max(1, Number(linha.coluna) || 1);
+    const linhaAtual = Math.max(1, Number(linha.linha) || 1);
+
+    if (!areaNormalizada) {
+      if (!linha.colunaManual) linha.coluna = colunaAtual;
+      if (!linha.linhaManual) linha.linha = linhaAtual;
+      return;
+    }
+
+    let linhaSugerida;
+
+    if (mapaLinhaPorArea.has(areaNormalizada)) {
+      linhaSugerida = mapaLinhaPorArea.get(areaNormalizada);
+    } else {
+      linhaSugerida = linha.linhaManual ? linhaAtual : (maiorLinhaUsada + 1 || 1);
+      mapaLinhaPorArea.set(areaNormalizada, linhaSugerida);
+      maiorLinhaUsada = Math.max(maiorLinhaUsada, linhaSugerida);
+    }
+
+    const colunaSugerida = ultimaColunaPorArea.has(areaNormalizada)
+      ? (ultimaColunaPorArea.get(areaNormalizada) + 1)
+      : (colunaAnterior || 1);
+
+    const colunaEfetiva = linha.colunaManual ? colunaAtual : colunaSugerida;
+    const linhaEfetiva = linha.linhaManual ? linhaAtual : linhaSugerida;
+
+    linha.coluna = colunaEfetiva;
+    linha.linha = linhaEfetiva;
+
+    mapaLinhaPorArea.set(areaNormalizada, linhaEfetiva);
+    ultimaColunaPorArea.set(areaNormalizada, colunaEfetiva);
+
+    colunaAnterior = colunaEfetiva;
+    maiorLinhaUsada = Math.max(maiorLinhaUsada, linhaEfetiva);
+  });
+}
+
 function adicionarLinha(posicao = fluxoData.length) {
   const nova = {
     uid: gerarUID(),
@@ -284,6 +336,8 @@ function adicionarLinha(posicao = fluxoData.length) {
     tempo: "",
     coluna: 1,
     linha: 1,
+    colunaManual: false,
+    linhaManual: false,
     cor: "white",
     proxSim: "",
     proxNao: "",
@@ -291,6 +345,8 @@ function adicionarLinha(posicao = fluxoData.length) {
   };
 
   fluxoData.splice(posicao, 0, nova);
+
+  reaplicarSugestoesPosicao();
   atualizarTabela();
   salvarEstadoLocal();
 }
@@ -317,6 +373,7 @@ function excluirLinha(uid) {
     }
   });
 
+  reaplicarSugestoesPosicao();
   atualizarTabela();
   salvarEstadoLocal();
 }
@@ -539,21 +596,31 @@ function selecionarSugestaoAutocomplete(uid, campo, valor) {
   const valorNormalizado = normalizarTextoCampo(campo, valor);
   linha[campo] = valorNormalizado;
 
+  if (campo === "area") {
+    reaplicarSugestoesPosicao();
+  }
+
   const input = document.querySelector(
     `.flow-input[data-uid="${uid}"][data-campo="${campo}"]`
   );
 
-  if (input) {
-    input.value = valorNormalizado;
-    input.focus();
-    if (typeof input.setSelectionRange === "function") {
-      const fim = valorNormalizado.length;
-      input.setSelectionRange(fim, fim);
+  atualizarTabela();
+
+  const novoInput = document.querySelector(
+    `.flow-input[data-uid="${uid}"][data-campo="${campo}"]`
+  );
+
+  if (novoInput) {
+    novoInput.focus();
+    if (typeof novoInput.setSelectionRange === "function") {
+      const fim = novoInput.value.length;
+      novoInput.setSelectionRange(fim, fim);
     }
   }
 
   fecharAutocomplete();
   atualizarOpcoesDeConexao();
+  salvarEstadoLocal();
 }
 
 function tratarAutocompleteKeydown(event, uid, campo) {
@@ -627,11 +694,20 @@ function onBlurAutocomplete(uid, campo, elemento) {
   setTimeout(() => {
     const valorNormalizado = normalizarTextoCampo(campo, elemento.value);
     const linha = fluxoData.find(l => l.uid === uid);
-    if (linha) {
-      linha[campo] = valorNormalizado;
+    if (!linha) return;
+
+    linha[campo] = valorNormalizado;
+
+    if (campo === "area") {
+      reaplicarSugestoesPosicao();
+      atualizarTabela();
+    } else {
+      elemento.value = valorNormalizado;
     }
-    elemento.value = valorNormalizado;
+
     fecharAutocomplete();
+    atualizarOpcoesDeConexao();
+    salvarEstadoLocal();
   }, 120);
 }
 
@@ -901,8 +977,22 @@ function updateCampo(uid, campo, valor, reRender = false) {
   if (!linha) return;
 
   if (campo === "coluna" || campo === "linha") {
-    linha[campo] = Math.max(1, Number(valor) || 1);
-  } else if (campo === "area" || campo === "tipo" || campo === "sistema") {
+    const flagManual = campo === "coluna" ? "colunaManual" : "linhaManual";
+
+    if (valor === "" || valor === null || valor === undefined) {
+      linha[flagManual] = false;
+    } else {
+      linha[campo] = Math.max(1, Number(valor) || 1);
+      linha[flagManual] = true;
+    }
+
+    reaplicarSugestoesPosicao();
+    atualizarTabela();
+    salvarEstadoLocal();
+    return;
+  }
+
+  if (campo === "area" || campo === "tipo" || campo === "sistema") {
     linha[campo] = normalizarEspacos(valor);
   } else {
     linha[campo] = valor;
@@ -922,6 +1012,8 @@ function updateCampo(uid, campo, valor, reRender = false) {
 
   if (campo === "area") {
     atualizarOpcoesDeConexao();
+    salvarEstadoLocal();
+    return;
   }
 
   salvarEstadoLocal();
@@ -1074,6 +1166,8 @@ function importarExcel() {
       tempo,
       coluna,
       linha,
+      colunaManual: true,
+      linhaManual: true,
       cor,
       proxSimOriginal,
       proxNaoOriginal,
