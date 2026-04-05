@@ -7,6 +7,155 @@ let autocompleteState = {
   indiceAtivo: -1
 };
 
+const STORAGE_KEY = "gerador_fluxograma_estado_v1";
+let saveStateTimeout = null;
+
+function obterEstadoAtual() {
+  return {
+    topo: {
+      desenho: obterValorCampo("desenho"),
+      processo: obterValorCampo("processo"),
+      analista: obterValorCampo("analista"),
+      negocio: obterValorCampo("negocio"),
+      area: obterValorCampo("area"),
+      gestor: obterValorCampo("gestor"),
+      entrada: obterValorCampo("entrada")
+    },
+    fluxoData: Array.isArray(fluxoData)
+      ? fluxoData.map(item => ({
+          uid: item.uid || gerarUID(),
+          ordem: Number(item.ordem) || 0,
+          id: item.id || "",
+          area: item.area || "",
+          atividade: item.atividade || "",
+          tipo: item.tipo || "",
+          sistema: item.sistema || "",
+          tempo: item.tempo || "",
+          coluna: Math.max(1, Number(item.coluna) || 1),
+          linha: Math.max(1, Number(item.linha) || 1),
+          cor: normalizarCor(item.cor || "white"),
+          proxSim: item.proxSim || "",
+          proxNao: item.proxNao || "",
+          extras: Array.isArray(item.extras) ? [...item.extras] : []
+        }))
+      : [],
+    uidCounter: Number(uidCounter) || 1,
+    ultimoNomeArquivo: ultimoNomeArquivo || "fluxograma_processo"
+  };
+}
+
+function salvarEstadoLocal(imediato = false) {
+  const executar = () => {
+    try {
+      const estado = obterEstadoAtual();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
+    } catch (erro) {
+      console.error("Erro ao salvar estado local:", erro);
+    }
+  };
+
+  if (imediato) {
+    if (saveStateTimeout) {
+      clearTimeout(saveStateTimeout);
+      saveStateTimeout = null;
+    }
+    executar();
+    return;
+  }
+
+  if (saveStateTimeout) {
+    clearTimeout(saveStateTimeout);
+  }
+
+  saveStateTimeout = setTimeout(() => {
+    saveStateTimeout = null;
+    executar();
+  }, 250);
+}
+
+function limparEstadoLocal() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (erro) {
+    console.error("Erro ao limpar estado local:", erro);
+  }
+}
+
+function preencherCampoSeExistir(id, valor) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.value = valor || "";
+  }
+}
+
+function restaurarEstadoLocal() {
+  try {
+    const bruto = localStorage.getItem(STORAGE_KEY);
+    if (!bruto) return false;
+
+    const estado = JSON.parse(bruto);
+    if (!estado || typeof estado !== "object") return false;
+
+    const topo = estado.topo || {};
+
+    preencherCampoSeExistir("desenho", topo.desenho || "");
+    preencherCampoSeExistir("processo", topo.processo || "");
+    preencherCampoSeExistir("analista", topo.analista || "");
+    preencherCampoSeExistir("negocio", topo.negocio || "");
+    preencherCampoSeExistir("area", topo.area || "");
+    preencherCampoSeExistir("gestor", topo.gestor || "");
+    preencherCampoSeExistir("entrada", topo.entrada || "");
+
+    fluxoData = Array.isArray(estado.fluxoData)
+      ? estado.fluxoData.map(item => ({
+          uid: item.uid || gerarUID(),
+          ordem: Number(item.ordem) || 0,
+          id: item.id || "",
+          area: item.area || "",
+          atividade: item.atividade || "",
+          tipo: item.tipo || "",
+          sistema: item.sistema || "",
+          tempo: item.tempo || "",
+          coluna: Math.max(1, Number(item.coluna) || 1),
+          linha: Math.max(1, Number(item.linha) || 1),
+          cor: normalizarCor(item.cor || "white"),
+          proxSim: item.proxSim || "",
+          proxNao: item.proxNao || "",
+          extras: Array.isArray(item.extras) ? [...item.extras] : []
+        }))
+      : [];
+
+    uidCounter = Math.max(
+      Number(estado.uidCounter) || 1,
+      fluxoData.length + 1
+    );
+
+    ultimoNomeArquivo = estado.ultimoNomeArquivo || "fluxograma_processo";
+
+    if (!fluxoData.length) {
+      fluxoData = [];
+    }
+
+    return true;
+  } catch (erro) {
+    console.error("Erro ao restaurar estado local:", erro);
+    return false;
+  }
+}
+
+function configurarAutoSaveCamposFixos() {
+  const ids = ["desenho", "processo", "analista", "negocio", "area", "gestor", "entrada"];
+
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el || el.dataset.autosaveConfigurado === "1") return;
+
+    el.dataset.autosaveConfigurado = "1";
+    el.addEventListener("input", () => salvarEstadoLocal());
+    el.addEventListener("change", () => salvarEstadoLocal());
+  });
+}
+
 function gerarUID() {
   return "uid_" + uidCounter++;
 }
@@ -143,6 +292,7 @@ function adicionarLinha(posicao = fluxoData.length) {
 
   fluxoData.splice(posicao, 0, nova);
   atualizarTabela();
+  salvarEstadoLocal();
 }
 
 function excluirLinha(uid) {
@@ -168,53 +318,24 @@ function excluirLinha(uid) {
   });
 
   atualizarTabela();
+  salvarEstadoLocal();
 }
 
-function obterValoresUnicosCampo(campo) {
-  const valores = fluxoData
-    .map(l => limpar(l[campo] || ""))
-    .filter(Boolean);
+function gerarDatalistHTML(campo) {
+  const valores = coletarValoresUnicos(campo);
 
-  return [...new Set(valores)].sort((a, b) => a.localeCompare(b, "pt-BR"));
-}
+  if (!valores.length) return "";
 
-function gerarDatalistHTML(id, valores) {
+  const id = `dl-${campo}`;
+
   return `
     <datalist id="${id}">
-      ${valores.map(valor => `<option value="${escaparHTML(valor)}"></option>`).join("")}
+      ${valores.map(v => `<option value="${v}"></option>`).join("")}
     </datalist>
   `;
 }
 
-function normalizarEspacos(texto) {
-  return String(texto || "")
-    .replace(/"/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function normalizarTextoCampo(campo, valor) {
-  let texto = normalizarEspacos(valor);
-
-  if (!texto) return "";
-
-  if (campo === "area" || campo === "tipo" || campo === "sistema") {
-    const textoLower = texto.toLocaleLowerCase("pt-BR");
-
-    const existente = fluxoData.find(l => {
-      const atual = normalizarEspacos(l[campo] || "");
-      return atual && atual.toLocaleLowerCase("pt-BR") === textoLower;
-    });
-
-    if (existente) {
-      return normalizarEspacos(existente[campo] || "");
-    }
-  }
-
-  return texto;
-}
-
-function obterValoresUnicosCampo(campo) {
+function coletarValoresUnicos(campo) {
   const mapa = new Map();
 
   fluxoData.forEach(l => {
@@ -228,8 +349,11 @@ function obterValoresUnicosCampo(campo) {
     }
   });
 
-  return Array.from(mapa.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  return Array.from(mapa.values()).sort((a, b) =>
+    a.localeCompare(b, "pt-BR")
+  );
 }
+
 
 function garantirContainerDatalists() {
   let container = document.getElementById("flowDatalists");
@@ -728,6 +852,7 @@ function addExtra(uid) {
 
   linha.extras.push("");
   atualizarTabela();
+  salvarEstadoLocal();
 }
 
 function renderExtras(linha) {
@@ -768,6 +893,7 @@ function removeExtra(uid, index) {
 
   linha.extras.splice(index, 1);
   atualizarTabela();
+  salvarEstadoLocal();
 }
 
 function updateCampo(uid, campo, valor, reRender = false) {
@@ -784,17 +910,21 @@ function updateCampo(uid, campo, valor, reRender = false) {
 
   if (reRender) {
     atualizarTabela();
+    salvarEstadoLocal();
     return;
   }
 
   if (campo === "atividade") {
     atualizarOpcoesDeConexao();
+    salvarEstadoLocal();
     return;
   }
 
   if (campo === "area") {
     atualizarOpcoesDeConexao();
   }
+
+  salvarEstadoLocal();
 }
 
 function finalizarCampoNormalizado(uid, campo, elemento) {
@@ -974,6 +1104,7 @@ function importarExcel() {
   });
 
   atualizarTabela();
+  salvarEstadoLocal(true);
 }
 
 function limpar(txt) {
@@ -1453,6 +1584,7 @@ function limparTudo() {
 
   ultimoNomeArquivo = "fluxograma_processo";
 
+  limparEstadoLocal();
   adicionarLinha();
 }
 
@@ -4813,9 +4945,17 @@ function baixarFluxo() {
 
 function inicializarAplicacao() {
   configurarNavegacaoTabTabela();
+  configurarAutoSaveCamposFixos();
+
+  const restaurou = restaurarEstadoLocal();
+
   atualizarTabela();
 
-  if (!fluxoData.length) {
+  if (!restaurou && !fluxoData.length) {
+    adicionarLinha();
+  }
+
+  if (restaurou && !fluxoData.length) {
     adicionarLinha();
   }
 }
@@ -4831,6 +4971,10 @@ document.addEventListener("click", (event) => {
   if (!clicouNoInputAutocomplete) {
     fecharAutocomplete();
   }
+});
+
+window.addEventListener("beforeunload", () => {
+  salvarEstadoLocal(true);
 });
 
 window.addEventListener("DOMContentLoaded", inicializarAplicacao);
