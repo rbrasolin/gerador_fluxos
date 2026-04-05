@@ -34,7 +34,7 @@
 
       <div class="field">
         <label for="negocio">Negócio</label>
-        <input id="negocio" type="text" placeholder="Ex.: Raizen / Comgás / Rumo" />
+        <input id="negocio" type="text" placeholder="Ex.: Raízen / Comgás / Rumo" />
       </div>
 
       <div class="field">
@@ -48,24 +48,57 @@
       </div>
     </div>
 
-    <h3>Cole a tabela do Excel</h3>
+    <h3>Monte o fluxo na tabela</h3>
+
+    <div class="actions">
+      <button type="button" onclick="adicionarLinha()">+ Nova etapa</button>
+      <button type="button" onclick="gerarFluxo()">GERAR FLUXO</button>
+      <button type="button" class="secondary" onclick="limparTudo()">LIMPAR</button>
+    </div>
+
+    <div class="tabela-wrap">
+      <table id="tabelaFluxo">
+        <thead>
+          <tr>
+            <th>Ordem</th>
+            <th>ID</th>
+            <th>Área</th>
+            <th>Atividade</th>
+            <th>Tipo</th>
+            <th>Sistema</th>
+            <th>Tempo</th>
+            <th>Col</th>
+            <th>Linha</th>
+            <th>Cor</th>
+            <th>Sim</th>
+            <th>Não</th>
+            <th>Extras</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyFluxo"></tbody>
+      </table>
+    </div>
+
+    <hr>
+
+    <h3>Ou cole a tabela do Excel</h3>
     <textarea id="entrada" placeholder="Cole aqui a tabela copiada do Excel"></textarea>
 
     <div class="actions">
-      <button type="button" onclick="gerarFluxo()">GERAR FLUXO</button>
-      <button type="button" class="secondary" onclick="limparTudo()">LIMPAR</button>
+      <button type="button" onclick="importarExcel()">IMPORTAR DO EXCEL</button>
     </div>
 
     <hr>
 
     <div class="section-header">
-  <h3>Fluxo</h3>
-  <div class="actions inline-actions">
-    <button type="button" onclick="baixarSVG()">Baixar Fluxo</button>
-    <button type="button" onclick="baixarSVGExcel()">Baixar SVG Excel</button>
-    <button type="button" onclick="baixarAnalisePDF()">Baixar Análise</button>
-  </div>
-</div>
+      <h3>Fluxo</h3>
+      <div class="actions inline-actions">
+        <button type="button" onclick="baixarSVG()">Baixar Fluxo</button>
+        <button type="button" onclick="baixarSVGExcel()">Baixar SVG Excel</button>
+        <button type="button" onclick="baixarAnalisePDF()">Baixar Análise</button>
+      </div>
+    </div>
 
     <div id="diagramWrap">
       <div id="diagram"></div>

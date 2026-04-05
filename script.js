@@ -1,5 +1,25 @@
 let ultimoNomeArquivo = "fluxograma_processo";
 
+let fluxoData = [];
+let uidCounter = 1;
+
+function gerarUID() {
+  return "uid_" + uidCounter++;
+}
+
+function gerarIdVisual(index) {
+  let n = Number(index) + 1;
+  let resultado = "";
+
+  while (n > 0) {
+    const resto = (n - 1) % 26;
+    resultado = String.fromCharCode(65 + resto) + resultado;
+    n = Math.floor((n - 1) / 26);
+  }
+
+  return resultado;
+}
+
 const CONFIG = {
   boxWidth: 250,
   boxHeight: 110,
@@ -86,9 +106,306 @@ function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
   return svg;
 }
 
+function adicionarLinha(posicao = fluxoData.length) {
+  const nova = {
+    uid: gerarUID(),
+    ordem: 0,
+    id: "",
+    area: "",
+    atividade: "",
+    tipo: "",
+    sistema: "",
+    tempo: "",
+    coluna: 1,
+    linha: 1,
+    cor: "white",
+    proxSim: "",
+    proxNao: "",
+    extras: []
+  };
+
+  fluxoData.splice(posicao, 0, nova);
+  atualizarTabela();
+}
+
+function excluirLinha(uid) {
+  const usada = fluxoData.some(l =>
+    l.proxSim === uid ||
+    l.proxNao === uid ||
+    (Array.isArray(l.extras) && l.extras.includes(uid))
+  );
+
+  if (usada) {
+    const ok = confirm("Essa etapa está conectada em outras linhas. Se continuar, essas conexões serão removidas. Deseja excluir mesmo?");
+    if (!ok) return;
+  }
+
+  fluxoData = fluxoData.filter(l => l.uid !== uid);
+
+  fluxoData.forEach(l => {
+    if (l.proxSim === uid) l.proxSim = "";
+    if (l.proxNao === uid) l.proxNao = "";
+    if (Array.isArray(l.extras)) {
+      l.extras = l.extras.filter(dest => dest !== uid);
+    }
+  });
+
+  atualizarTabela();
+}
+
+function atualizarTabela() {
+  const tbody = document.getElementById("tbodyFluxo");
+  if (!tbody) return;
+
+  tbody.innerHTML = "";
+
+  fluxoData.forEach((linha, index) => {
+    const ordem = index + 1;
+    const id = gerarIdVisual(index);
+
+    linha.ordem = ordem;
+    linha.id = id;
+
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td>${ordem}</td>
+      <td>${id}</td>
+
+      <td>
+        <input value="${escaparHTML(linha.area || "")}" onchange="updateCampo('${linha.uid}','area',this.value)">
+      </td>
+
+      <td>
+        <input value="${escaparHTML(linha.atividade || "")}" onchange="updateCampo('${linha.uid}','atividade',this.value)">
+      </td>
+
+      <td>
+        <input value="${escaparHTML(linha.tipo || "")}" onchange="updateCampo('${linha.uid}','tipo',this.value)">
+      </td>
+
+      <td>
+        <input value="${escaparHTML(linha.sistema || "")}" onchange="updateCampo('${linha.uid}','sistema',this.value)">
+      </td>
+
+      <td>
+        <input value="${escaparHTML(linha.tempo || "")}" onchange="updateCampo('${linha.uid}','tempo',this.value)">
+      </td>
+
+      <td>
+        <input type="number" min="1" value="${linha.coluna || 1}" onchange="updateCampo('${linha.uid}','coluna',this.value)">
+      </td>
+
+      <td>
+        <input type="number" min="1" value="${linha.linha || 1}" onchange="updateCampo('${linha.uid}','linha',this.value)">
+      </td>
+
+      <td>
+        <select onchange="updateCampo('${linha.uid}','cor',this.value)">
+          <option value="white" ${linha.cor === "white" ? "selected" : ""}>Branco</option>
+          <option value="blue" ${linha.cor === "blue" ? "selected" : ""}>Azul</option>
+          <option value="green" ${linha.cor === "green" ? "selected" : ""}>Verde</option>
+          <option value="yellow" ${linha.cor === "yellow" ? "selected" : ""}>Amarelo</option>
+          <option value="red" ${linha.cor === "red" ? "selected" : ""}>Vermelho</option>
+        </select>
+      </td>
+
+      <td>${criarSelectConexao(linha.uid, linha.proxSim, "proxSim")}</td>
+      <td>${criarSelectConexao(linha.uid, linha.proxNao, "proxNao")}</td>
+
+      <td>
+        <div id="extras_${linha.uid}"></div>
+        <button type="button" class="btn-small" onclick="addExtra('${linha.uid}')">+ adicionar</button>
+      </td>
+
+      <td class="acoes-btn">
+        <button type="button" class="btn-small" onclick="adicionarLinha(${index})">↑ inserir</button>
+        <button type="button" class="btn-small" onclick="adicionarLinha(${index + 1})">↓ inserir</button>
+        <button type="button" class="btn-small" onclick="excluirLinha('${linha.uid}')">Excluir</button>
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+    renderExtras(linha);
+  });
+}
+
+function criarSelectConexao(uidAtual, valorSelecionado, campo) {
+  let options = `<option value="">-</option>`;
+
+  fluxoData.forEach(l => {
+    if (l.uid === uidAtual) return;
+
+    const label = `${l.id || ""} - ${l.atividade || "(sem nome)"}`;
+
+    options += `<option value="${l.uid}" ${valorSelecionado === l.uid ? "selected" : ""}>${escaparHTML(label)}</option>`;
+  });
+
+  if (!campo) {
+    return `<select>${options}</select>`;
+  }
+
+  return `<select onchange="updateCampo('${uidAtual}','${campo}',this.value)">${options}</select>`;
+}
+
+function addExtra(uid) {
+  const linha = fluxoData.find(l => l.uid === uid);
+  if (!linha) return;
+
+  if (!Array.isArray(linha.extras)) {
+    linha.extras = [];
+  }
+
+  linha.extras.push("");
+  atualizarTabela();
+}
+
+function renderExtras(linha) {
+  const div = document.getElementById("extras_" + linha.uid);
+  if (!div) return;
+
+  div.innerHTML = "";
+
+  if (!Array.isArray(linha.extras)) {
+    linha.extras = [];
+  }
+
+  linha.extras.forEach((val, i) => {
+    const wrapper = document.createElement("div");
+    wrapper.style.display = "flex";
+    wrapper.style.gap = "4px";
+    wrapper.style.marginBottom = "4px";
+
+    wrapper.innerHTML = `
+      ${criarSelectConexao(linha.uid, val, null)}
+      <button type="button" class="btn-small" onclick="removeExtra('${linha.uid}', ${i})">x</button>
+    `;
+
+    const select = wrapper.querySelector("select");
+    if (select) {
+      select.onchange = (e) => {
+        linha.extras[i] = e.target.value;
+      };
+    }
+
+    div.appendChild(wrapper);
+  });
+}
+
+function removeExtra(uid, index) {
+  const linha = fluxoData.find(l => l.uid === uid);
+  if (!linha || !Array.isArray(linha.extras)) return;
+
+  linha.extras.splice(index, 1);
+  atualizarTabela();
+}
+
+function updateCampo(uid, campo, valor) {
+  const linha = fluxoData.find(l => l.uid === uid);
+  if (!linha) return;
+
+  if (campo === "coluna" || campo === "linha") {
+    linha[campo] = Math.max(1, Number(valor) || 1);
+    atualizarTabela();
+    return;
+  }
+
+  linha[campo] = valor;
+
+  // Re-renderiza para manter:
+  // - labels dos selects atualizados
+  // - ID/ordem coerentes
+  // - extras sincronizados visualmente
+  atualizarTabela();
+}
+
+function importarExcel() {
+  const entrada = document.getElementById("entrada");
+  const texto = entrada ? entrada.value.trim() : "";
+
+  if (!texto) {
+    alert("Cole a tabela do Excel primeiro.");
+    return;
+  }
+
+  const linhasBrutas = texto
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .filter(l => l.trim() !== "");
+
+  let linhas = linhasBrutas.map(l => l.split("\t"));
+
+  if (linhas.length && ehCabecalho(linhas[0])) {
+    linhas.shift();
+  }
+
+  fluxoData = [];
+  uidCounter = 1;
+
+  linhas.forEach((col) => {
+    while (col.length < 13) col.push("");
+
+    const area = limpar(col[2]) || "Sem Área";
+    const atividade = limpar(col[3]);
+    const tipo = limpar(col[4]) || "Não informado";
+    const sistema = limpar(col[5]) || "Sem sistema informado";
+    const tempo = limpar(col[6]);
+    const proxSimOriginal = limpar(col[7]);
+    const proxNaoOriginal = limpar(col[8]);
+    const conexoesExtrasOriginal = limpar(col[9]);
+    const coluna = Number(limpar(col[10])) || 1;
+    const linha = Number(limpar(col[11])) || 1;
+    const cor = normalizarCor(col[12]);
+
+    if (!atividade) return;
+
+    fluxoData.push({
+      uid: gerarUID(),
+      ordem: 0,
+      id: "",
+      area,
+      atividade,
+      tipo,
+      sistema,
+      tempo,
+      coluna,
+      linha,
+      cor,
+      proxSimOriginal,
+      proxNaoOriginal,
+      conexoesExtrasOriginal,
+      proxSim: "",
+      proxNao: "",
+      extras: []
+    });
+  });
+
+  atualizarTabela();
+
+  const mapaIdVisualParaUid = {};
+  fluxoData.forEach((linha) => {
+    mapaIdVisualParaUid[linha.id] = linha.uid;
+  });
+
+  fluxoData.forEach((linha) => {
+    linha.proxSim = mapaIdVisualParaUid[linha.proxSimOriginal] || "";
+    linha.proxNao = mapaIdVisualParaUid[linha.proxNaoOriginal] || "";
+    linha.extras = quebrarListaIds(linha.conexoesExtrasOriginal)
+      .map(id => mapaIdVisualParaUid[id] || "")
+      .filter(Boolean);
+
+    delete linha.proxSimOriginal;
+    delete linha.proxNaoOriginal;
+    delete linha.conexoesExtrasOriginal;
+  });
+
+  atualizarTabela();
+}
+
 function limpar(txt) {
   if (txt === null || txt === undefined) return "";
-  return String(txt).replace(/"/g, "").replace(/\(/g, "").replace(/\)/g, "").trim();
+  return String(txt).replace(/"/g, "").trim();
 }
 
 function escaparHTML(txt) {
@@ -497,6 +814,36 @@ function gerarNomeArquivo() {
 }
 
 function limparTudo() {
+  const temDadosTopo =
+    obterValorCampo("desenho") ||
+    obterValorCampo("processo") ||
+    obterValorCampo("analista") ||
+    obterValorCampo("negocio") ||
+    obterValorCampo("area") ||
+    obterValorCampo("gestor");
+
+  const temEtapas = fluxoData.some(linha =>
+    limpar(linha.area || "") ||
+    limpar(linha.atividade || "") ||
+    limpar(linha.tipo || "") ||
+    limpar(linha.sistema || "") ||
+    limpar(linha.tempo || "") ||
+    Number(linha.coluna || 1) !== 1 ||
+    Number(linha.linha || 1) !== 1 ||
+    limpar(linha.proxSim || "") ||
+    limpar(linha.proxNao || "") ||
+    (Array.isArray(linha.extras) && linha.extras.some(x => limpar(x || ""))) ||
+    (linha.cor && linha.cor !== "white")
+  );
+
+  const temEntradaExcel = obterValorCampo("entrada");
+  const temDiagrama = !!document.querySelector("#diagram svg");
+
+  if (temDadosTopo || temEtapas || temEntradaExcel || temDiagrama) {
+    const confirmar = confirm("Deseja realmente excluir todo o fluxo e limpar todos os campos?");
+    if (!confirmar) return;
+  }
+
   limparCampo("desenho");
   limparCampo("processo");
   limparCampo("analista");
@@ -504,6 +851,9 @@ function limparTudo() {
   limparCampo("area");
   limparCampo("gestor");
   limparCampo("entrada");
+
+  fluxoData = [];
+  uidCounter = 1;
 
   const diagram = document.getElementById("diagram");
   const infoProcesso = document.getElementById("infoProcesso");
@@ -514,6 +864,8 @@ function limparTudo() {
   if (metricas) metricas.innerHTML = "";
 
   ultimoNomeArquivo = "fluxograma_processo";
+
+  adicionarLinha();
 }
 
 function adicionarLoopSeNecessario(origemId, destinoId, etapaPorId, etapaAtual) {
@@ -2418,11 +2770,44 @@ function renderizarAnaliseExecutiva(dados) {
   `;
 }
 
-function gerarFluxo() {
-  const texto = document.getElementById("entrada").value;
+function obterEtapasDaTabela() {
+  const etapasValidas = fluxoData.filter(linha => limpar(linha.atividade || "") !== "");
 
-  if (!texto.trim()) {
-    alert("Cole a tabela do Excel primeiro.");
+  const uidParaId = {};
+  etapasValidas.forEach((linha, index) => {
+    uidParaId[linha.uid] = gerarIdVisual(index);
+  });
+
+  return etapasValidas.map((linha, index) => ({
+    ordem: index + 1,
+    id: uidParaId[linha.uid],
+    atividade: limpar(linha.atividade || ""),
+    area: limpar(linha.area || "") || "Sem Área",
+    tipo: limpar(linha.tipo || "") || "Não informado",
+    sistema: limpar(linha.sistema || "") || "Sem sistema informado",
+    tempo: tempoParaSegundos(limpar(linha.tempo || "")),
+    proxSim: uidParaId[linha.proxSim] || "",
+    proxNao: uidParaId[linha.proxNao] || "",
+    conexoesExtras: (Array.isArray(linha.extras) ? linha.extras : [])
+      .map(uid => uidParaId[uid] || "")
+      .filter(Boolean)
+      .join(","),
+    coluna: Math.max(1, Number(linha.coluna) || 1),
+    linha: Math.max(1, Number(linha.linha) || 1),
+    cor: normalizarCor(linha.cor || "white")
+  }));
+}
+
+function gerarFluxo() {
+  if (!fluxoData || fluxoData.length === 0) {
+    alert("Preencha a tabela ou importe um Excel antes de gerar o fluxo.");
+    return;
+  }
+
+  const etapas = obterEtapasDaTabela();
+
+  if (!etapas.length) {
+    alert("Nenhuma etapa válida foi encontrada na tabela.");
     return;
   }
 
@@ -2433,63 +2818,7 @@ function gerarFluxo() {
   const area = obterValorCampo("area");
   const gestor = obterValorCampo("gestor");
 
-  const linhasBrutas = texto
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n")
-    .filter(l => l.trim() !== "");
-
-  let linhas = linhasBrutas.map(l => l.split("\t"));
-
-  if (linhas.length && ehCabecalho(linhas[0])) {
-    linhas.shift();
-  }
-
-  const etapas = [];
-  const idsValidos = new Set();
-
-  linhas.forEach((col) => {
-    while (col.length < 13) col.push("");
-
-    const ordem = Number(limpar(col[0])) || 0;
-    const id = limpar(col[1]);
-    const areaEtapa = limpar(col[2]) || "Sem Área";
-    const atividade = limpar(col[3]);
-    const tipo = limpar(col[4]) || "Não informado";
-    const sistema = limpar(col[5]) || "Sem sistema informado";
-    const tempo = tempoParaSegundos(limpar(col[6]));
-    const proxSim = limpar(col[7]);
-    const proxNao = limpar(col[8]);
-    const conexoesExtras = limpar(col[9]);
-    const coluna = Number(limpar(col[10])) || 1;
-    const linha = Number(limpar(col[11])) || 1;
-    const cor = normalizarCor(col[12]);
-
-    if (!id || !atividade) return;
-
-    etapas.push({
-      ordem,
-      id,
-      atividade,
-      area: areaEtapa,
-      tipo,
-      sistema,
-      tempo,
-      proxSim,
-      proxNao,
-      conexoesExtras,
-      coluna,
-      linha,
-      cor
-    });
-
-    idsValidos.add(id);
-  });
-
-  if (!etapas.length) {
-    alert("Nenhuma etapa válida foi encontrada na tabela.");
-    return;
-  }
+  const idsValidos = new Set(etapas.map(e => e.id));
 
   etapas.sort((a, b) => a.ordem - b.ordem);
 
@@ -2990,70 +3319,19 @@ function ajustarViewBoxAoConteudo(svg, folga = 0) {
 }
 
 function gerarFluxoExcel() {
-  const texto = document.getElementById("entrada").value;
-
-  if (!texto.trim()) {
-    alert("Cole a tabela do Excel primeiro.");
-    return;
+  if (!fluxoData || fluxoData.length === 0) {
+    alert("Preencha a tabela antes de exportar.");
+    return null;
   }
 
-  const linhasBrutas = texto
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n")
-    .filter(l => l.trim() !== "");
-
-  let linhas = linhasBrutas.map(l => l.split("\t"));
-
-  if (linhas.length && ehCabecalho(linhas[0])) {
-    linhas.shift();
-  }
-
-  const etapas = [];
-  const idsValidos = new Set();
-
-  linhas.forEach((col) => {
-    while (col.length < 13) col.push("");
-
-    const ordem = Number(limpar(col[0])) || 0;
-    const id = limpar(col[1]);
-    const areaEtapa = limpar(col[2]) || "Sem Área";
-    const atividade = limpar(col[3]);
-    const tipo = limpar(col[4]) || "Não informado";
-    const sistema = limpar(col[5]) || "Sem sistema informado";
-    const tempo = tempoParaSegundos(limpar(col[6]));
-    const proxSim = limpar(col[7]);
-    const proxNao = limpar(col[8]);
-    const conexoesExtras = limpar(col[9]);
-    const coluna = Number(limpar(col[10])) || 1;
-    const linha = Number(limpar(col[11])) || 1;
-    const cor = normalizarCor(col[12]);
-
-    if (!id || !atividade) return;
-
-    etapas.push({
-      ordem,
-      id,
-      atividade,
-      area: areaEtapa,
-      tipo,
-      sistema,
-      tempo,
-      proxSim,
-      proxNao,
-      conexoesExtras,
-      coluna,
-      linha,
-      cor
-    });
-
-    idsValidos.add(id);
-  });
+  const etapas = obterEtapasDaTabela();
 
   if (!etapas.length) {
     alert("Nenhuma etapa válida foi encontrada na tabela.");
-    return;
+    return null;
   }
+
+  const idsValidos = new Set(etapas.map(e => e.id));
 
   etapas.sort((a, b) => a.ordem - b.ordem);
 
@@ -3071,6 +3349,7 @@ function gerarFluxoExcel() {
 
   const areasOrdenadas = [];
   const areaJaExiste = new Set();
+
   etapas.forEach((e) => {
     const nome = e.area || "Sem Área";
     if (!areaJaExiste.has(nome)) {
@@ -3079,16 +3358,8 @@ function gerarFluxoExcel() {
     }
   });
 
-  const laneContentWidth =
-    maxColuna * colSlotWidth +
-    (maxColuna - 1) * EXCEL_LAYOUT.colGap;
-
-  const laneLeft = 0;
-  const laneTop = 0;
-
-  let cursorY = laneTop;
+  let cursorY = 0;
   let rowOffsetGlobal = 0;
-
   const lanesBase = [];
 
   areasOrdenadas.forEach((nomeArea) => {
@@ -3120,13 +3391,17 @@ function gerarFluxoExcel() {
 
   const laneLabelWidthExcel = calcularLarguraFaixaRaiaExcel(lanesBase);
 
+  const laneContentWidth =
+    maxColuna * colSlotWidth +
+    (maxColuna - 1) * EXCEL_LAYOUT.colGap;
+
   const lanes = lanesBase.map((base) => ({
     area: base.area,
-    x: laneLeft,
+    x: 0,
     y: base.y,
-    width: laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth + laneContentWidth,
+    width: laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth + EXCEL_LAYOUT.laneTextOffsetLeft + laneContentWidth,
     height: base.height,
-    contentX: laneLeft + laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth + EXCEL_LAYOUT.laneTextOffsetLeft,
+    contentX: laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth + EXCEL_LAYOUT.laneTextOffsetLeft,
     contentY: base.y + EXCEL_LAYOUT.lanePaddingTop,
     contentHeight: base.contentHeight,
     rows: base.rows,
@@ -3135,14 +3410,8 @@ function gerarFluxoExcel() {
     labelLines: base.labelLines || [base.area]
   }));
 
-  const larguraSvg =
-    lanes[0].labelWidth +
-    EXCEL_LAYOUT.laneEntryWidth +
-    EXCEL_LAYOUT.laneTextOffsetLeft +
-    laneContentWidth;
-
-  const ultimaLane = lanes[lanes.length - 1];
-  const alturaSvg = ultimaLane ? (ultimaLane.y + ultimaLane.height) : cursorY;
+  const larguraSvg = Math.max(...lanes.map(l => l.width), 0);
+  const alturaSvg = lanes.length ? lanes[lanes.length - 1].y + lanes[lanes.length - 1].height : 0;
 
   const svg = criarElementoSVG("svg");
   svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -3167,9 +3436,7 @@ function gerarFluxoExcel() {
 
     const pergunta = isPergunta(e.atividade);
     const w = pergunta ? CONFIG.decisionWidth : CONFIG.boxWidth;
-    const h = pergunta
-      ? Math.ceil(alturaPadraoNos * CONFIG.decisionHeightFactor)
-      : alturaPadraoNos;
+    const h = obterAlturaNo(e, alturaPadraoNos);
 
     const x = slotX + (colSlotWidth - w) / 2;
     const y = slotY + (rowSlotHeight - h) / 2;
@@ -3198,22 +3465,23 @@ function gerarFluxoExcel() {
 
   const primeiraEtapa = etapas[0];
   const ultimaEtapa = etapas[etapas.length - 1];
-
+  const primeiraPos = posicoes[primeiraEtapa.id];
+  const ultimaPos = posicoes[ultimaEtapa.id];
   const lanePrimeira = laneByArea[primeiraEtapa.area || "Sem Área"];
   const laneUltima = laneByArea[ultimaEtapa.area || "Sem Área"];
 
   posicoes["__INICIO__"] = {
     id: "__INICIO__",
-    x: posicoes[primeiraEtapa.id].x - 60 - EXCEL_LAYOUT.startGap,
-    y: posicoes[primeiraEtapa.id].cy - 18,
+    x: primeiraPos.x - 60 - EXCEL_LAYOUT.startGap,
+    y: primeiraPos.cy - 18,
     w: 60,
     h: 36,
-    cx: posicoes[primeiraEtapa.id].x - EXCEL_LAYOUT.startGap - 30,
-    cy: posicoes[primeiraEtapa.id].cy,
-    top: posicoes[primeiraEtapa.id].cy - 18,
-    bottom: posicoes[primeiraEtapa.id].cy + 18,
-    left: posicoes[primeiraEtapa.id].x - 60 - EXCEL_LAYOUT.startGap,
-    right: posicoes[primeiraEtapa.id].x - EXCEL_LAYOUT.startGap,
+    cx: primeiraPos.x - EXCEL_LAYOUT.startGap - 30,
+    cy: primeiraPos.cy,
+    top: primeiraPos.cy - 18,
+    bottom: primeiraPos.cy + 18,
+    left: primeiraPos.x - 60 - EXCEL_LAYOUT.startGap,
+    right: primeiraPos.x - EXCEL_LAYOUT.startGap,
     isDecision: false,
     gridCol: 0,
     gridRow: primeiraEtapa.linha,
@@ -3223,16 +3491,16 @@ function gerarFluxoExcel() {
 
   posicoes["__FIM__"] = {
     id: "__FIM__",
-    x: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap,
-    y: posicoes[ultimaEtapa.id].cy - 18,
+    x: ultimaPos.x + ultimaPos.w + EXCEL_LAYOUT.endGap,
+    y: ultimaPos.cy - 18,
     w: 60,
     h: 36,
-    cx: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap + 30,
-    cy: posicoes[ultimaEtapa.id].cy,
-    top: posicoes[ultimaEtapa.id].cy - 18,
-    bottom: posicoes[ultimaEtapa.id].cy + 18,
-    left: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap,
-    right: posicoes[ultimaEtapa.id].x + posicoes[ultimaEtapa.id].w + EXCEL_LAYOUT.endGap + 60,
+    cx: ultimaPos.x + ultimaPos.w + EXCEL_LAYOUT.endGap + 30,
+    cy: ultimaPos.cy,
+    top: ultimaPos.cy - 18,
+    bottom: ultimaPos.cy + 18,
+    left: ultimaPos.x + ultimaPos.w + EXCEL_LAYOUT.endGap,
+    right: ultimaPos.x + ultimaPos.w + EXCEL_LAYOUT.endGap + 60,
     isDecision: false,
     gridCol: ultimaEtapa.coluna + 1,
     gridRow: ultimaEtapa.linha,
@@ -3328,10 +3596,7 @@ function gerarFluxoExcel() {
     }
   });
 
-  svg.setAttribute("viewBox", `0 0 ${larguraSvg} ${alturaSvg}`);
-  svg.setAttribute("width", larguraSvg);
-  svg.setAttribute("height", alturaSvg);
-
+  ajustarViewBoxAoConteudo(svg, 0);
   return aplicarEscalaSVGExcel(svg, EXCEL_EXPORT_SCALE);
 }
 
@@ -3349,50 +3614,10 @@ function obterSVGPronto() {
 }
 
 function coletarDadosAnaliseEstruturados() {
-  const etapas = [];
-  const texto = document.getElementById("entrada").value;
+  if (!fluxoData || fluxoData.length === 0) return null;
 
-  const linhasBrutas = texto
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n")
-    .filter(l => l.trim() !== "");
-
-  let linhas = linhasBrutas.map(l => l.split("\t"));
-
-  if (linhas.length && ehCabecalho(linhas[0])) {
-    linhas.shift();
-  }
-
- linhas.forEach((col) => {
-  while (col.length < 13) col.push("");
-
-  const ordem = Number(limpar(col[0])) || 0;
-  const id = limpar(col[1]);
-  const areaEtapa = limpar(col[2]) || "Sem Área";
-  const atividade = limpar(col[3]);
-  const tipo = limpar(col[4]) || "Não informado";
-  const sistema = limpar(col[5]) || "Sem sistema informado";
-  const tempo = tempoParaSegundos(limpar(col[6]));
-  const proxSim = limpar(col[7]);
-  const proxNao = limpar(col[8]);
-  const conexoesExtras = limpar(col[9]);
-
-    if (!id || !atividade) return;
-
-    etapas.push({
-      ordem,
-      id,
-      atividade,
-      area: areaEtapa,
-      tipo,
-      sistema,
-      tempo,
-      proxSim,
-      proxNao,
-      conexoesExtras
-    });
-  });
+  const etapas = obterEtapasDaTabela();
+  if (!etapas.length) return null;
 
   etapas.sort((a, b) => a.ordem - b.ordem);
 
@@ -3405,6 +3630,7 @@ function coletarDadosAnaliseEstruturados() {
   let loops = 0;
   let decisoes = 0;
   let conexoesExtrasCount = 0;
+
   const etapasImpactadasRetrabalho = new Set();
   const tiposTempo = {};
   const sistemasTempo = {};
@@ -3944,3 +4170,13 @@ function baixarSVGExcel() {
 function baixarFluxo() {
   baixarSVG();
 }
+
+function inicializarAplicacao() {
+  atualizarTabela();
+
+  if (!fluxoData.length) {
+    adicionarLinha();
+  }
+}
+
+window.addEventListener("DOMContentLoaded", inicializarAplicacao);
