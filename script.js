@@ -765,25 +765,49 @@ function tratarAutocompleteKeydown(event, uid, campo) {
   if (event.key === "Tab") {
     event.preventDefault();
 
+    const linha = fluxoData.find(l => l.uid === uid);
+    if (!linha) return;
+
     const inputAtual = document.querySelector(
       `.flow-input[data-uid="${uid}"][data-campo="${campo}"]`
     );
 
+    const valorDigitado = inputAtual ? inputAtual.value : "";
+    let valorFinal = valorDigitado;
+
     if (box && itens.length) {
       const itemAtivo = itens[autocompleteState.indiceAtivo];
-      if (itemAtivo) {
-        selecionarSugestaoAutocomplete(uid, campo, itemAtivo.dataset.valor || "", false);
-      } else if (inputAtual) {
-        selecionarSugestaoAutocomplete(uid, campo, inputAtual.value || "", false);
+      if (itemAtivo && itemAtivo.dataset.valor) {
+        valorFinal = itemAtivo.dataset.valor;
       }
-    } else if (inputAtual) {
-      selecionarSugestaoAutocomplete(uid, campo, inputAtual.value || "", false);
     }
+
+    valorFinal = normalizarTextoCampo(campo, valorFinal);
+    linha[campo] = valorFinal;
+
+    if (campo === "area") {
+      reaplicarSugestoesPosicao();
+      atualizarTabela();
+
+      requestAnimationFrame(() => {
+        focarCampoEspecifico(uid, "atividade");
+      });
+
+      fecharAutocomplete();
+      atualizarOpcoesDeConexao();
+      salvarEstadoLocal();
+      return;
+    }
+
+    atualizarTabela();
 
     requestAnimationFrame(() => {
       focarProximoCampoTabela(uid, campo, event.shiftKey);
     });
 
+    fecharAutocomplete();
+    atualizarOpcoesDeConexao();
+    salvarEstadoLocal();
     return;
   }
 }
