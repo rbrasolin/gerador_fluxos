@@ -186,35 +186,86 @@ function atualizarTabela() {
       <td>${id}</td>
 
       <td>
-        <input class="flow-input" value="${escaparHTML(linha.area || "")}" oninput="updateCampo('${linha.uid}','area',this.value)">
+        <input
+          class="flow-input"
+          data-uid="${linha.uid}"
+          data-campo="area"
+          value="${escaparHTML(linha.area || "")}"
+          oninput="updateCampo('${linha.uid}','area',this.value)"
+        >
       </td>
 
       <td>
-        <input class="flow-input" value="${escaparHTML(linha.atividade || "")}" oninput="updateCampo('${linha.uid}','atividade',this.value)">
+        <input
+          class="flow-input"
+          data-uid="${linha.uid}"
+          data-campo="atividade"
+          value="${escaparHTML(linha.atividade || "")}"
+          oninput="updateCampo('${linha.uid}','atividade',this.value)"
+        >
       </td>
 
       <td>
-        <input class="flow-input" value="${escaparHTML(linha.tipo || "")}" oninput="updateCampo('${linha.uid}','tipo',this.value)">
+        <input
+          class="flow-input"
+          data-uid="${linha.uid}"
+          data-campo="tipo"
+          value="${escaparHTML(linha.tipo || "")}"
+          oninput="updateCampo('${linha.uid}','tipo',this.value)"
+        >
       </td>
 
       <td>
-        <input class="flow-input" value="${escaparHTML(linha.sistema || "")}" oninput="updateCampo('${linha.uid}','sistema',this.value)">
+        <input
+          class="flow-input"
+          data-uid="${linha.uid}"
+          data-campo="sistema"
+          value="${escaparHTML(linha.sistema || "")}"
+          oninput="updateCampo('${linha.uid}','sistema',this.value)"
+        >
       </td>
 
       <td>
-        <input class="flow-input" value="${escaparHTML(linha.tempo || "")}" oninput="updateCampo('${linha.uid}','tempo',this.value)">
+        <input
+          class="flow-input"
+          data-uid="${linha.uid}"
+          data-campo="tempo"
+          value="${escaparHTML(linha.tempo || "")}"
+          oninput="updateCampo('${linha.uid}','tempo',this.value)"
+        >
       </td>
 
       <td>
-        <input class="flow-input" type="number" min="1" value="${linha.coluna || 1}" oninput="updateCampo('${linha.uid}','coluna',this.value)">
+        <input
+          class="flow-input"
+          data-uid="${linha.uid}"
+          data-campo="coluna"
+          type="number"
+          min="1"
+          value="${linha.coluna || 1}"
+          oninput="updateCampo('${linha.uid}','coluna',this.value)"
+        >
       </td>
 
       <td>
-        <input class="flow-input" type="number" min="1" value="${linha.linha || 1}" oninput="updateCampo('${linha.uid}','linha',this.value)">
+        <input
+          class="flow-input"
+          data-uid="${linha.uid}"
+          data-campo="linha"
+          type="number"
+          min="1"
+          value="${linha.linha || 1}"
+          oninput="updateCampo('${linha.uid}','linha',this.value)"
+        >
       </td>
 
       <td>
-        <select class="flow-input" onchange="updateCampo('${linha.uid}','cor',this.value)">
+        <select
+          class="flow-input"
+          data-uid="${linha.uid}"
+          data-campo="cor"
+          onchange="updateCampo('${linha.uid}','cor',this.value)"
+        >
           <option value="white" ${linha.cor === "white" ? "selected" : ""}>Branco</option>
           <option value="blue" ${linha.cor === "blue" ? "selected" : ""}>Azul</option>
           <option value="green" ${linha.cor === "green" ? "selected" : ""}>Verde</option>
@@ -259,7 +310,22 @@ function criarSelectConexao(uidAtual, valorSelecionado, campo) {
     return `<select class="flow-input conexao-select" data-uid="${uidAtual}">${options}</select>`;
   }
 
-  return `<select class="flow-input conexao-select" data-uid="${uidAtual}" data-campo="${campo}" onchange="updateCampo('${uidAtual}','${campo}',this.value)">${options}</select>`;
+  const onKeydownExtra =
+    campo === "proxNao"
+      ? `onkeydown="tratarTabCampo(event,'${uidAtual}','${campo}')"`
+      : "";
+
+  return `
+    <select
+      class="flow-input conexao-select"
+      data-uid="${uidAtual}"
+      data-campo="${campo}"
+      onchange="updateCampo('${uidAtual}','${campo}',this.value)"
+      ${onKeydownExtra}
+    >
+      ${options}
+    </select>
+  `;
 }
 
 function atualizarOpcoesDeConexao() {
@@ -437,6 +503,39 @@ function configurarNavegacaoTabTabela() {
       proximoCampo.select();
     }
   });
+}
+
+function tratarTabCampo(event, uid, campo) {
+  if (event.key !== "Tab" || event.shiftKey) return;
+
+  // Regra especial:
+  // ao apertar TAB no campo "Não", ir direto para a próxima linha
+  if (campo === "proxNao") {
+    event.preventDefault();
+
+    const indiceAtual = fluxoData.findIndex(l => l.uid === uid);
+    if (indiceAtual === -1) return;
+
+    const proximaLinha = fluxoData[indiceAtual + 1];
+    if (!proximaLinha) return;
+
+    // espera o navegador terminar o ciclo do evento antes de focar
+    requestAnimationFrame(() => {
+      const tbody = document.getElementById("tbodyFluxo");
+      if (!tbody) return;
+
+      const proximoCampo = tbody.querySelector(
+        `input.flow-input[data-uid="${proximaLinha.uid}"][data-campo="area"]`
+      );
+
+      if (proximoCampo) {
+        proximoCampo.focus();
+        if (typeof proximoCampo.select === "function") {
+          proximoCampo.select();
+        }
+      }
+    });
+  }
 }
 
 function importarExcel() {
