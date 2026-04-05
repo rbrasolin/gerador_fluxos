@@ -228,19 +228,21 @@ function atualizarTabela() {
 
       <td>
         <div id="extras_${linha.uid}"></div>
-        <button type="button" class="btn-small" onclick="addExtra('${linha.uid}')">+ adicionar</button>
+        <button type="button" class="btn-small" tabindex="-1" onclick="addExtra('${linha.uid}')">+ adicionar</button>
       </td>
 
       <td class="acoes-btn">
-        <button type="button" class="btn-small" onclick="adicionarLinha(${index})">↑ inserir</button>
-        <button type="button" class="btn-small" onclick="adicionarLinha(${index + 1})">↓ inserir</button>
-        <button type="button" class="btn-small" onclick="excluirLinha('${linha.uid}')">Excluir</button>
+        <button type="button" class="btn-small" tabindex="-1" onclick="adicionarLinha(${index})">↑ inserir</button>
+        <button type="button" class="btn-small" tabindex="-1" onclick="adicionarLinha(${index + 1})">↓ inserir</button>
+        <button type="button" class="btn-small" tabindex="-1" onclick="excluirLinha('${linha.uid}')">Excluir</button>
       </td>
     `;
 
     tbody.appendChild(tr);
     renderExtras(linha);
   });
+
+  atualizarOpcoesDeConexao();
 }
 
 function criarSelectConexao(uidAtual, valorSelecionado, campo) {
@@ -258,6 +260,38 @@ function criarSelectConexao(uidAtual, valorSelecionado, campo) {
   }
 
   return `<select class="flow-input conexao-select" data-uid="${uidAtual}" data-campo="${campo}" onchange="updateCampo('${uidAtual}','${campo}',this.value)">${options}</select>`;
+}
+
+function atualizarOpcoesDeConexao() {
+  const selects = document.querySelectorAll("#tbodyFluxo select.conexao-select");
+
+  selects.forEach(select => {
+    const uidAtual = select.dataset.uid;
+    const campo = select.dataset.campo || "";
+    const valorAtual = select.value;
+
+    let options = `<option value="">-</option>`;
+
+    fluxoData.forEach(l => {
+      if (l.uid === uidAtual) return;
+
+      const label = `${l.id || ""} - ${l.atividade || "(sem nome)"}`;
+      options += `<option value="${l.uid}" ${valorAtual === l.uid ? "selected" : ""}>${escaparHTML(label)}</option>`;
+    });
+
+    select.innerHTML = options;
+
+    if (valorAtual) {
+      select.value = valorAtual;
+    }
+
+    if (campo && select.value !== valorAtual) {
+      const linha = fluxoData.find(l => l.uid === uidAtual);
+      if (linha) {
+        linha[campo] = select.value || "";
+      }
+    }
+  });
 }
 
 function atualizarOpcoesDeConexao() {
@@ -314,7 +348,7 @@ function renderExtras(linha) {
 
     wrapper.innerHTML = `
       ${criarSelectConexao(linha.uid, val, null)}
-      <button type="button" class="btn-small" onclick="removeExtra('${linha.uid}', ${i})">x</button>
+      <button type="button" class="btn-small" tabindex="-1" onclick="removeExtra('${linha.uid}', ${i})">x</button>
     `;
 
     const select = wrapper.querySelector("select");
@@ -351,8 +385,8 @@ function updateCampo(uid, campo, valor, reRender = false) {
     return;
   }
 
-  // Atualiza os labels/opções dos selects sem redesenhar a tabela inteira
-  // Isso evita quebrar o TAB, mas mantém as conexões sempre atualizadas
+  // Atualiza labels e opções dos selects sem reconstruir a tabela inteira
+  // para não quebrar o TAB durante digitação
   if (campo === "atividade" || campo === "area") {
     atualizarOpcoesDeConexao();
   }
@@ -370,23 +404,102 @@ function configurarNavegacaoTabTabela() {
     const campoAtual = event.target;
     if (!campoAtual.matches(".flow-input")) return;
 
-    const campos = Array.from(
-      tbody.querySelectorAll(".flow-input:not([disabled])")
-    ).filter(el => el.offsetParent !== null);
+    const linhaAtual = campoAtual.closest("tr");
+    if (!linhaAtual) return;
 
-    const indiceAtual = campos.indexOf(campoAtual);
+    const obterCamposEditaveis = (container) => {
+      return Array.from(
+        container.querySelectorAll(".flow-input:not([disabled]):not([tabindex='-1'])")
+      ).filter(el => el.offsetParent !== null && !el.readOnly);
+    };
+
+    const camposLinhaAtual = obterCamposEditaveis(linhaAtual);
+    const indiceAtual = camposLinhaAtual.indexOf(campoAtual);
+
     if (indiceAtual === -1) return;
 
-    const proximoIndice = event.shiftKey ? indiceAtual - 1 : indiceAtual + 1;
-    const proximoCampo = campos[proximoIndice];
-
-    if (!proximoCampo) return;
-
     event.preventDefault();
-    proximoCampo.focus();
 
-    if (typeof proximoCampo.select === "function" && proximoCampo.tagName === "INPUT") {
-      proximoCampo.select();
+    // SHIFT + TAB
+    if (event.shiftKey) {
+      // se ainda existe campo anterior na mesma linha
+      if (indiceAtual > 0) {
+        const campoAnterior = camposLinhaAtual[indiceAtual - 1];
+        campoAnterior.focus();
+
+        if (
+          typeof campoAnterior.select === "function" &&
+          campoAnterior.tagName === "INPUT" &&
+          campoAnterior.type !== "number"
+        ) {
+          campoAnterior.select();
+        }
+        return;
+      }
+
+      // vai para a linha anterior, último campo editável
+      let linhaAnterior = linhaAtual.previousElementSibling;
+
+      while (linhaAnterior) {
+        const camposLinhaAnterior = obterCamposEditaveis(linhaAnterior);
+
+        if (camposLinhaAnterior.length) {
+          const ultimoCampo = camposLinhaAnterior[camposLinhaAnterior.length - 1];
+          ultimoCampo.focus();
+
+          if (
+            typeof ultimoCampo.select === "function" &&
+            ultimoCampo.tagName === "INPUT" &&
+            ultimoCampo.type !== "number"
+          ) {
+            ultimoCampo.select();
+          }
+          return;
+        }
+
+        linhaAnterior = linhaAnterior.previousElementSibling;
+      }
+
+      return;
+    }
+
+    // TAB normal
+    // se ainda existe próximo campo na mesma linha
+    if (indiceAtual < camposLinhaAtual.length - 1) {
+      const proximoCampo = camposLinhaAtual[indiceAtual + 1];
+      proximoCampo.focus();
+
+      if (
+        typeof proximoCampo.select === "function" &&
+        proximoCampo.tagName === "INPUT" &&
+        proximoCampo.type !== "number"
+      ) {
+        proximoCampo.select();
+      }
+      return;
+    }
+
+    // vai para a próxima linha, primeiro campo editável
+    let proximaLinha = linhaAtual.nextElementSibling;
+
+    while (proximaLinha) {
+      const camposProximaLinha = obterCamposEditaveis(proximaLinha);
+
+      if (camposProximaLinha.length) {
+        const primeiroCampo = camposProximaLinha[0];
+        primeiroCampo.focus();
+
+        if (
+          typeof primeiroCampo.select === "function" &&
+          primeiroCampo.tagName === "INPUT" &&
+          primeiroCampo.type !== "number"
+        ) {
+          primeiroCampo.select();
+        }
+        return;
+      }
+
+      proximaLinha = proximaLinha.nextElementSibling;
     }
   });
 }
