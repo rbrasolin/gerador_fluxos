@@ -173,35 +173,35 @@ function atualizarTabela() {
       <td>${id}</td>
 
       <td>
-        <input value="${escaparHTML(linha.area || "")}" onchange="updateCampo('${linha.uid}','area',this.value)">
+        <input class="flow-input" value="${escaparHTML(linha.area || "")}" oninput="updateCampo('${linha.uid}','area',this.value)">
       </td>
 
       <td>
-        <input value="${escaparHTML(linha.atividade || "")}" onchange="updateCampo('${linha.uid}','atividade',this.value)">
+        <input class="flow-input" value="${escaparHTML(linha.atividade || "")}" oninput="updateCampo('${linha.uid}','atividade',this.value)">
       </td>
 
       <td>
-        <input value="${escaparHTML(linha.tipo || "")}" onchange="updateCampo('${linha.uid}','tipo',this.value)">
+        <input class="flow-input" value="${escaparHTML(linha.tipo || "")}" oninput="updateCampo('${linha.uid}','tipo',this.value)">
       </td>
 
       <td>
-        <input value="${escaparHTML(linha.sistema || "")}" onchange="updateCampo('${linha.uid}','sistema',this.value)">
+        <input class="flow-input" value="${escaparHTML(linha.sistema || "")}" oninput="updateCampo('${linha.uid}','sistema',this.value)">
       </td>
 
       <td>
-        <input value="${escaparHTML(linha.tempo || "")}" onchange="updateCampo('${linha.uid}','tempo',this.value)">
+        <input class="flow-input" value="${escaparHTML(linha.tempo || "")}" oninput="updateCampo('${linha.uid}','tempo',this.value)">
       </td>
 
       <td>
-        <input type="number" min="1" value="${linha.coluna || 1}" onchange="updateCampo('${linha.uid}','coluna',this.value)">
+        <input class="flow-input" type="number" min="1" value="${linha.coluna || 1}" oninput="updateCampo('${linha.uid}','coluna',this.value)">
       </td>
 
       <td>
-        <input type="number" min="1" value="${linha.linha || 1}" onchange="updateCampo('${linha.uid}','linha',this.value)">
+        <input class="flow-input" type="number" min="1" value="${linha.linha || 1}" oninput="updateCampo('${linha.uid}','linha',this.value)">
       </td>
 
       <td>
-        <select onchange="updateCampo('${linha.uid}','cor',this.value)">
+        <select class="flow-input" onchange="updateCampo('${linha.uid}','cor',this.value)">
           <option value="white" ${linha.cor === "white" ? "selected" : ""}>Branco</option>
           <option value="blue" ${linha.cor === "blue" ? "selected" : ""}>Azul</option>
           <option value="green" ${linha.cor === "green" ? "selected" : ""}>Verde</option>
@@ -245,7 +245,7 @@ function criarSelectConexao(uidAtual, valorSelecionado, campo) {
     return `<select>${options}</select>`;
   }
 
-  return `<select onchange="updateCampo('${uidAtual}','${campo}',this.value)">${options}</select>`;
+  return `<select class="flow-input" onchange="updateCampo('${uidAtual}','${campo}',this.value)">${options}</select>`;
 }
 
 function addExtra(uid) {
@@ -300,23 +300,52 @@ function removeExtra(uid, index) {
   atualizarTabela();
 }
 
-function updateCampo(uid, campo, valor) {
+function updateCampo(uid, campo, valor, reRender = false) {
   const linha = fluxoData.find(l => l.uid === uid);
   if (!linha) return;
 
   if (campo === "coluna" || campo === "linha") {
     linha[campo] = Math.max(1, Number(valor) || 1);
-    atualizarTabela();
-    return;
+  } else {
+    linha[campo] = valor;
   }
 
-  linha[campo] = valor;
+  if (reRender) {
+    atualizarTabela();
+  }
+}
 
-  // Re-renderiza para manter:
-  // - labels dos selects atualizados
-  // - ID/ordem coerentes
-  // - extras sincronizados visualmente
-  atualizarTabela();
+function configurarNavegacaoTabTabela() {
+  const tbody = document.getElementById("tbodyFluxo");
+  if (!tbody || tbody.dataset.tabConfigurado === "1") return;
+
+  tbody.dataset.tabConfigurado = "1";
+
+  tbody.addEventListener("keydown", (event) => {
+    if (event.key !== "Tab") return;
+
+    const campoAtual = event.target;
+    if (!campoAtual.matches(".flow-input")) return;
+
+    const campos = Array.from(
+      tbody.querySelectorAll(".flow-input:not([disabled])")
+    ).filter(el => el.offsetParent !== null);
+
+    const indiceAtual = campos.indexOf(campoAtual);
+    if (indiceAtual === -1) return;
+
+    const proximoIndice = event.shiftKey ? indiceAtual - 1 : indiceAtual + 1;
+    const proximoCampo = campos[proximoIndice];
+
+    if (!proximoCampo) return;
+
+    event.preventDefault();
+    proximoCampo.focus();
+
+    if (typeof proximoCampo.select === "function" && proximoCampo.tagName === "INPUT") {
+      proximoCampo.select();
+    }
+  });
 }
 
 function importarExcel() {
@@ -482,6 +511,12 @@ function formatarTempo(seg) {
   return segundosParaTempo(seg);
 }
 
+function formatarTempoEtapa(etapa) {
+  const tempoBruto = limpar(etapa?.tempoTexto ?? etapa?.tempo ?? "");
+  if (!tempoBruto) return "";
+  return segundosParaTempo(tempoParaSegundos(tempoBruto));
+}
+
 function formatarPercentual(valor) {
   return (Number(valor) || 0).toFixed(1).replace(".", ",");
 }
@@ -600,10 +635,11 @@ function obterLinhasEtapa(etapa, larguraCaixa) {
     CONFIG.fontSize
   );
 
-  return [
-    ...linhasAtividade,
-    formatarTempo(etapa.tempo)
-  ];
+  const linhaTempo = formatarTempoEtapa(etapa);
+
+  return linhaTempo
+    ? [...linhasAtividade, linhaTempo]
+    : [...linhasAtividade];
 }
 
 function desenharSistemaSeparado(svg, etapa, pos) {
@@ -714,42 +750,45 @@ function desenharNoExcel(svg, etapa, pos) {
     g.appendChild(linhaSeparadora);
 
     const linhasAtividade = quebrarTextoPorLargura(
-  etapa.atividade,
-  obterLarguraUtilTexto(etapa, pos.w),
-  CONFIG.fontSize
-);
+      etapa.atividade,
+      obterLarguraUtilTexto(etapa, pos.w),
+      CONFIG.fontSize
+    );
 
-const linhaTempo = formatarTempo(etapa.tempo);
+    const linhaTempo = formatarTempoEtapa(etapa);
 
-const areaUtil = pos.h - alturaSistema - 6;
-const totalAlturaTexto = (linhasAtividade.length * CONFIG.textLineHeight) + CONFIG.textLineHeight;
-const inicioYTexto = pos.y + (areaUtil - totalAlturaTexto) / 2 + 14;
+    const areaUtil = pos.h - alturaSistema - 6;
+    const totalAlturaTexto =
+      (linhasAtividade.length * CONFIG.textLineHeight) +
+      (linhaTempo ? CONFIG.textLineHeight : 0);
 
-// atividade: uma forma por linha
-linhasAtividade.forEach((linha, i) => {
-  const text = criarElementoSVG("text");
-  text.setAttribute("x", pos.x + pos.w / 2);
-  text.setAttribute("y", inicioYTexto + i * CONFIG.textLineHeight);
-  text.setAttribute("text-anchor", "middle");
-  text.setAttribute("font-family", CONFIG.fontFamily);
-  text.setAttribute("font-size", String(CONFIG.fontSize));
-  text.setAttribute("fill", "#111111");
-  text.setAttribute("xml:space", "preserve");
-  text.textContent = linha;
-  g.appendChild(text);
-});
+    const inicioYTexto = pos.y + (areaUtil - totalAlturaTexto) / 2 + 14;
 
-// tempo: uma forma separada
-const textTempo = criarElementoSVG("text");
-textTempo.setAttribute("x", pos.x + pos.w / 2);
-textTempo.setAttribute("y", inicioYTexto + linhasAtividade.length * CONFIG.textLineHeight);
-textTempo.setAttribute("text-anchor", "middle");
-textTempo.setAttribute("font-family", CONFIG.fontFamily);
-textTempo.setAttribute("font-size", String(CONFIG.smallFontSize));
-textTempo.setAttribute("fill", "#111111");
-textTempo.setAttribute("xml:space", "preserve");
-textTempo.textContent = linhaTempo;
-g.appendChild(textTempo);
+    linhasAtividade.forEach((linha, i) => {
+      const text = criarElementoSVG("text");
+      text.setAttribute("x", pos.x + pos.w / 2);
+      text.setAttribute("y", inicioYTexto + i * CONFIG.textLineHeight);
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("font-family", CONFIG.fontFamily);
+      text.setAttribute("font-size", String(CONFIG.fontSize));
+      text.setAttribute("fill", "#111111");
+      text.setAttribute("xml:space", "preserve");
+      text.textContent = linha;
+      g.appendChild(text);
+    });
+
+    if (linhaTempo) {
+      const textTempo = criarElementoSVG("text");
+      textTempo.setAttribute("x", pos.x + pos.w / 2);
+      textTempo.setAttribute("y", inicioYTexto + linhasAtividade.length * CONFIG.textLineHeight);
+      textTempo.setAttribute("text-anchor", "middle");
+      textTempo.setAttribute("font-family", CONFIG.fontFamily);
+      textTempo.setAttribute("font-size", String(CONFIG.smallFontSize));
+      textTempo.setAttribute("fill", "#111111");
+      textTempo.setAttribute("xml:space", "preserve");
+      textTempo.textContent = linhaTempo;
+      g.appendChild(textTempo);
+    }
 
     const textoSistema = criarElementoSVG("text");
     textoSistema.setAttribute("x", pos.x + pos.w / 2);
@@ -927,21 +966,22 @@ function desenharNo(svg, etapa, pos) {
     const cy = pos.y + pos.h / 2;
 
     const polygon = criarElementoSVG("polygon");
-polygon.setAttribute(
-  "points",
-  `${cx},${pos.y} ${pos.x + pos.w},${cy} ${cx},${pos.y + pos.h} ${pos.x},${cy}`
-);
-polygon.setAttribute("class", `box ${etapa.cor}`);
-g.appendChild(polygon);
+    polygon.setAttribute(
+      "points",
+      `${cx},${pos.y} ${pos.x + pos.w},${cy} ${cx},${pos.y + pos.h} ${pos.x},${cy}`
+    );
+    polygon.setAttribute("class", `box ${etapa.cor}`);
+    g.appendChild(polygon);
   } else {
-  const rect = criarElementoSVG("rect");
-  rect.setAttribute("x", pos.x);
-  rect.setAttribute("y", pos.y);
-  rect.setAttribute("width", pos.w);
-  rect.setAttribute("height", pos.h);
-  rect.setAttribute("class", `box ${etapa.cor}`);
-  g.appendChild(rect);
+    const rect = criarElementoSVG("rect");
+    rect.setAttribute("x", pos.x);
+    rect.setAttribute("y", pos.y);
+    rect.setAttribute("width", pos.w);
+    rect.setAttribute("height", pos.h);
+    rect.setAttribute("class", `box ${etapa.cor}`);
+    g.appendChild(rect);
   }
+
   const linhas = obterLinhasEtapa(etapa, pos.w);
   const alturaSistema = 24;
   const areaUtil = pos.h - alturaSistema;
@@ -963,9 +1003,9 @@ g.appendChild(polygon);
 
   svg.appendChild(g);
 
-if (!pergunta) {
-  desenharSistemaSeparado(svg, etapa, pos);
-}
+  if (!pergunta) {
+    desenharSistemaSeparado(svg, etapa, pos);
+  }
 }
 
 function desenharRaias(svg, areasOrdenadas, lanes, svgWidth) {
@@ -3397,11 +3437,11 @@ function gerarFluxoExcel() {
 
   const lanes = lanesBase.map((base) => ({
     area: base.area,
-    x: 0,
+    x: EXCEL_LAYOUT.extraLeftPadding,
     y: base.y,
     width: laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth + EXCEL_LAYOUT.laneTextOffsetLeft + laneContentWidth,
     height: base.height,
-    contentX: laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth + EXCEL_LAYOUT.laneTextOffsetLeft,
+    contentX: EXCEL_LAYOUT.extraLeftPadding + laneLabelWidthExcel + EXCEL_LAYOUT.laneEntryWidth + EXCEL_LAYOUT.laneTextOffsetLeft,
     contentY: base.y + EXCEL_LAYOUT.lanePaddingTop,
     contentHeight: base.contentHeight,
     rows: base.rows,
@@ -3410,7 +3450,7 @@ function gerarFluxoExcel() {
     labelLines: base.labelLines || [base.area]
   }));
 
-  const larguraSvg = Math.max(...lanes.map(l => l.width), 0);
+  const larguraSvg = Math.max(...lanes.map(l => l.x + l.width), 0);
   const alturaSvg = lanes.length ? lanes[lanes.length - 1].y + lanes[lanes.length - 1].height : 0;
 
   const svg = criarElementoSVG("svg");
@@ -4172,6 +4212,7 @@ function baixarFluxo() {
 }
 
 function inicializarAplicacao() {
+  configurarNavegacaoTabTabela();
   atualizarTabela();
 
   if (!fluxoData.length) {
