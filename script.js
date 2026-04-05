@@ -751,14 +751,65 @@ function tratarAutocompleteKeydown(event, uid, campo) {
     return;
   }
 
-  if (event.key === "Enter" && box && itens.length) {
+  if (event.key === "Enter") {
     event.preventDefault();
     event.stopPropagation();
-    const itemAtivo = itens[autocompleteState.indiceAtivo];
-    if (itemAtivo) {
-      selecionarSugestaoAutocomplete(uid, campo, itemAtivo.dataset.valor || "", true);
+
+    const linha = fluxoData.find(l => l.uid === uid);
+    if (!linha) return;
+
+    const inputAtual = document.querySelector(
+      `.flow-input[data-uid="${uid}"][data-campo="${campo}"]`
+    );
+
+    let valorFinal = inputAtual ? inputAtual.value : "";
+
+    if (box && itens.length) {
+      const itemAtivo = itens[autocompleteState.indiceAtivo];
+      if (itemAtivo && itemAtivo.dataset.valor) {
+        valorFinal = itemAtivo.dataset.valor;
+      }
     }
-    return;
+
+    valorFinal = normalizarTextoCampo(campo, valorFinal);
+    linha[campo] = valorFinal;
+
+    fecharAutocomplete();
+    atualizarOpcoesDeConexao();
+    salvarEstadoLocal();
+
+    if (campo === "area") {
+      ignorarBlurAutocomplete = true;
+
+      reaplicarSugestoesPosicao();
+      atualizarTabela();
+
+      requestAnimationFrame(() => {
+        const destino = document.querySelector(
+          `.flow-input[data-uid="${uid}"][data-campo="atividade"]`
+        );
+
+        if (destino) {
+          destino.focus();
+          if (typeof destino.select === "function") {
+            destino.select();
+          }
+        }
+
+        setTimeout(() => {
+          ignorarBlurAutocomplete = false;
+        }, 200);
+      });
+
+      return false;
+    }
+
+    if (box && itens.length) {
+      selecionarSugestaoAutocomplete(uid, campo, valorFinal, true);
+      return false;
+    }
+
+    return false;
   }
 
   if (event.key === "Escape") {
