@@ -3223,6 +3223,137 @@ function tentarRotaDecisaoMesmaLinhaAcima(
   );
 }
 
+function tentarRotaRetornoSuperior(
+  origem,
+  destino,
+  rotulo = "",
+  ordemConexao = 0,
+  posicoes = {},
+  rotasExistentes = []
+) {
+  const dx = destino.gridCol - origem.gridCol;
+  const dy = destino.gridRowGlobal - origem.gridRowGlobal;
+
+  // foco: destino à esquerda e acima
+  if (!(dx < 0 && dy < 0)) {
+    return null;
+  }
+
+  const excludeIds = [origem.id, destino.id, "__INICIO__", "__FIM__"];
+  const candidatos = [];
+
+  function registrar(points, startSide, endSide, canalY) {
+    const rota = normalizarPontos(points);
+
+    const rotasComparacao = (rotasExistentes || []).filter(r =>
+      !(r.origemId === origem.id && r.destinoId === destino.id)
+    );
+
+    candidatos.push({
+      points: rota,
+      startSide,
+      endSide,
+      cruzaCaixa: pathCruzaCaixas(rota, posicoes, excludeIds),
+      cruzaLinha: pathCruzaConexoes(rota, rotasComparacao),
+      comprimento: calcularComprimento(rota),
+      label: {
+        x: (points[0].x + points[points.length - 1].x) / 2,
+        y: canalY - 10
+      }
+    });
+  }
+
+  for (let extra = 0; extra < 6; extra++) {
+    const canalY = calcularCanalSuperiorDentroRaia(
+      origem,
+      destino,
+      1 + ordemConexao + extra,
+      posicoes
+    );
+
+    const startTop = getAnchorPoint(origem, "top");
+    const endTop = getAnchorPoint(destino, "top");
+    const endBottom = getAnchorPoint(destino, "bottom");
+    const startLeft = getAnchorPoint(origem, "left");
+
+    // 1) preferido: sai por cima e entra por cima
+    registrar(
+      [
+        { x: startTop.x, y: startTop.y },
+        { x: startTop.x, y: canalY },
+        { x: endTop.x, y: canalY },
+        { x: endTop.x, y: endTop.y }
+      ],
+      "top",
+      "top",
+      canalY
+    );
+
+    // 2) alternativa: sai por cima e entra por baixo
+    registrar(
+      [
+        { x: startTop.x, y: startTop.y },
+        { x: startTop.x, y: canalY },
+        { x: endBottom.x, y: canalY },
+        { x: endBottom.x, y: endBottom.y }
+      ],
+      "top",
+      "bottom",
+      canalY
+    );
+
+    // 3) alternativa: sai pela esquerda, sobe e entra por cima
+    const escapeX = startLeft.x - CONFIG.routeGap;
+    registrar(
+      [
+        { x: startLeft.x, y: startLeft.y },
+        { x: escapeX, y: startLeft.y },
+        { x: escapeX, y: canalY },
+        { x: endTop.x, y: canalY },
+        { x: endTop.x, y: endTop.y }
+      ],
+      "left",
+      "top",
+      canalY
+    );
+  }
+
+  if (!candidatos.length) return null;
+
+  candidatos.sort((a, b) => {
+    if (a.cruzaCaixa !== b.cruzaCaixa) return a.cruzaCaixa ? 1 : -1;
+    if (a.cruzaLinha !== b.cruzaLinha) return a.cruzaLinha ? 1 : -1;
+
+    // prioridade explícita:
+    // top->top > top->bottom > left->top
+    const rank = (c) => {
+      if (c.startSide === "top" && c.endSide === "top") return 1;
+      if (c.startSide === "top" && c.endSide === "bottom") return 2;
+      if (c.startSide === "left" && c.endSide === "top") return 3;
+      return 9;
+    };
+
+    if (rank(a) !== rank(b)) return rank(a) - rank(b);
+    if (a.points.length !== b.points.length) return a.points.length - b.points.length;
+    return a.comprimento - b.comprimento;
+  });
+
+  const melhorSemCruzar = candidatos.find(c => !c.cruzaCaixa && !c.cruzaLinha);
+  const melhorSemCaixa = candidatos.find(c => !c.cruzaCaixa);
+  const melhor = melhorSemCruzar || melhorSemCaixa || candidatos[0];
+
+  if (melhor.cruzaCaixa) {
+    return null;
+  }
+
+  return montarRotaOrtogonal(
+    melhor.points,
+    melhor.label,
+    melhor.startSide,
+    melhor.endSide
+  );
+}
+
 function escolherRota(origem, destino, contexto = {}) {
   const rotulo = contexto.rotulo || "";
   const ordemConexao = contexto.ordemConexao || 0;
@@ -3267,6 +3398,19 @@ function escolherRota(origem, destino, contexto = {}) {
 
   if (rotaEspecialDecisao) {
     return rotaEspecialDecisao;
+  }
+
+  const rotaRetornoSuperior = tentarRotaRetornoSuperior(
+    origem,
+    destino,
+    rotulo,
+    ordemConexao,
+    posicoes,
+    rotasExistentes
+  );
+
+  if (rotaRetornoSuperior) {
+    return rotaRetornoSuperior;
   }
 
   const ladosUsadosOrigem = obterLadosUsadosDoNo(origem.id, rotasExistentes);
