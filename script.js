@@ -735,6 +735,7 @@ function tratarAutocompleteKeydown(event, uid, campo) {
 
   if (event.key === "ArrowDown" && box && itens.length) {
     event.preventDefault();
+    event.stopPropagation();
     const novoIndice = Math.min(autocompleteState.indiceAtivo + 1, itens.length - 1);
     atualizarItemAtivoAutocomplete(box, novoIndice);
     return;
@@ -742,6 +743,7 @@ function tratarAutocompleteKeydown(event, uid, campo) {
 
   if (event.key === "ArrowUp" && box && itens.length) {
     event.preventDefault();
+    event.stopPropagation();
     const novoIndice = Math.max(autocompleteState.indiceAtivo - 1, 0);
     atualizarItemAtivoAutocomplete(box, novoIndice);
     return;
@@ -749,6 +751,7 @@ function tratarAutocompleteKeydown(event, uid, campo) {
 
   if (event.key === "Enter" && box && itens.length) {
     event.preventDefault();
+    event.stopPropagation();
     const itemAtivo = itens[autocompleteState.indiceAtivo];
     if (itemAtivo) {
       selecionarSugestaoAutocomplete(uid, campo, itemAtivo.dataset.valor || "", true);
@@ -758,12 +761,14 @@ function tratarAutocompleteKeydown(event, uid, campo) {
 
   if (event.key === "Escape") {
     event.preventDefault();
+    event.stopPropagation();
     fecharAutocomplete();
     return;
   }
 
   if (event.key === "Tab") {
     event.preventDefault();
+    event.stopPropagation();
 
     const linha = fluxoData.find(l => l.uid === uid);
     if (!linha) return;
@@ -772,8 +777,7 @@ function tratarAutocompleteKeydown(event, uid, campo) {
       `.flow-input[data-uid="${uid}"][data-campo="${campo}"]`
     );
 
-    const valorDigitado = inputAtual ? inputAtual.value : "";
-    let valorFinal = valorDigitado;
+    let valorFinal = inputAtual ? inputAtual.value : "";
 
     if (box && itens.length) {
       const itemAtivo = itens[autocompleteState.indiceAtivo];
@@ -785,30 +789,37 @@ function tratarAutocompleteKeydown(event, uid, campo) {
     valorFinal = normalizarTextoCampo(campo, valorFinal);
     linha[campo] = valorFinal;
 
+    fecharAutocomplete();
+    atualizarOpcoesDeConexao();
+    salvarEstadoLocal();
+
     if (campo === "area") {
       reaplicarSugestoesPosicao();
       atualizarTabela();
 
-      requestAnimationFrame(() => {
-        focarCampoEspecifico(uid, "atividade");
-      });
+      setTimeout(() => {
+        const destino = document.querySelector(
+          `.flow-input[data-uid="${uid}"][data-campo="atividade"]`
+        );
 
-      fecharAutocomplete();
-      atualizarOpcoesDeConexao();
-      salvarEstadoLocal();
-      return;
+        if (destino) {
+          destino.focus();
+          if (typeof destino.select === "function") {
+            destino.select();
+          }
+        }
+      }, 0);
+
+      return false;
     }
 
     atualizarTabela();
 
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       focarProximoCampoTabela(uid, campo, event.shiftKey);
-    });
+    }, 0);
 
-    fecharAutocomplete();
-    atualizarOpcoesDeConexao();
-    salvarEstadoLocal();
-    return;
+    return false;
   }
 }
 
@@ -1212,6 +1223,14 @@ function configurarNavegacaoTabTabela() {
 
     const campoAtual = event.target;
     if (!campoAtual.matches(".flow-input")) return;
+
+    const campo = campoAtual.dataset.campo || "";
+
+    // Área, Tipo e Sistema têm tratamento próprio
+    // então a navegação geral não interfere neles
+    if (campo === "area" || campo === "tipo" || campo === "sistema") {
+      return;
+    }
 
     const campos = Array.from(
       tbody.querySelectorAll(".flow-input")
