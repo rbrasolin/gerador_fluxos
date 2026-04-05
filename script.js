@@ -662,6 +662,24 @@ function focarProximoCampoTabela(uid, campo, voltar = false) {
   }
 }
 
+function focarCampoEspecifico(uid, campo) {
+  const el = document.querySelector(
+    `.flow-input[data-uid="${uid}"][data-campo="${campo}"]`
+  );
+
+  if (!el) return;
+
+  el.focus();
+
+  if (
+    typeof el.select === "function" &&
+    el.tagName === "INPUT" &&
+    el.type !== "number"
+  ) {
+    el.select();
+  }
+}
+
 function selecionarSugestaoAutocomplete(uid, campo, valor, manterFocoNoMesmoCampo = true) {
   const linha = fluxoData.find(l => l.uid === uid);
   if (!linha) return;
@@ -730,6 +748,8 @@ function tratarAutocompleteKeydown(event, uid, campo) {
   if (event.key === "Tab" && !event.shiftKey) {
     event.preventDefault();
 
+    const proximo = obterProximoCampoSequencial(uid, campo, false);
+
     const inputAtual = document.querySelector(
       `.flow-input[data-uid="${uid}"][data-campo="${campo}"]`
     );
@@ -745,9 +765,25 @@ function tratarAutocompleteKeydown(event, uid, campo) {
       selecionarSugestaoAutocomplete(uid, campo, inputAtual.value || "", false);
     }
 
-    requestAnimationFrame(() => {
-      focarProximoCampoTabela(uid, campo, false);
-    });
+    if (proximo) {
+      requestAnimationFrame(() => {
+        const destino = document.querySelector(
+          `.flow-input[data-uid="${proximo.uid}"][data-campo="${proximo.campo}"]`
+        );
+
+        if (destino) {
+          destino.focus();
+
+          if (
+            typeof destino.select === "function" &&
+            destino.tagName === "INPUT" &&
+            destino.type !== "number"
+          ) {
+            destino.select();
+          }
+        }
+      });
+    }
 
     return;
   }
