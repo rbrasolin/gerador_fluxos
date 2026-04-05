@@ -3894,20 +3894,62 @@ function calcularLarguraFaixaRaiaExcel(lanesBase) {
 }
 
 function ajustarViewBoxAoConteudo(svg, folga = 0) {
+  if (!svg) return svg;
+
+  let bbox = null;
+  let wrapper = null;
+
   try {
-    const bbox = svg.getBBox();
+    // getBBox costuma falhar quando o SVG ainda não está no DOM.
+    wrapper = document.createElement("div");
+    wrapper.style.position = "absolute";
+    wrapper.style.left = "-100000px";
+    wrapper.style.top = "-100000px";
+    wrapper.style.visibility = "hidden";
+    wrapper.style.pointerEvents = "none";
+    wrapper.style.width = "0";
+    wrapper.style.height = "0";
+    wrapper.style.overflow = "hidden";
 
-    const x = Math.max(0, bbox.x - folga);
-    const y = Math.max(0, bbox.y - folga);
-    const width = bbox.width + folga * 2;
-    const height = bbox.height + folga * 2;
+    document.body.appendChild(wrapper);
+    wrapper.appendChild(svg);
 
-    svg.setAttribute("viewBox", `${x} ${y} ${width} ${height}`);
-    svg.setAttribute("width", width);
-    svg.setAttribute("height", height);
+    bbox = svg.getBBox();
   } catch (e) {
-    // fallback silencioso caso o navegador não consiga calcular o bbox
+    bbox = null;
+  } finally {
+    if (wrapper && wrapper.parentNode) {
+      wrapper.parentNode.removeChild(wrapper);
+    }
   }
+
+  if (
+    !bbox ||
+    !Number.isFinite(bbox.x) ||
+    !Number.isFinite(bbox.y) ||
+    !Number.isFinite(bbox.width) ||
+    !Number.isFinite(bbox.height) ||
+    bbox.width <= 0 ||
+    bbox.height <= 0
+  ) {
+    // fallback: mantém dimensões existentes e evita gerar SVG 1x1
+    const larguraAtual = Number(svg.getAttribute("width")) || 1000;
+    const alturaAtual = Number(svg.getAttribute("height")) || 800;
+
+    svg.setAttribute("viewBox", `0 0 ${larguraAtual} ${alturaAtual}`);
+    svg.setAttribute("width", larguraAtual);
+    svg.setAttribute("height", alturaAtual);
+    return svg;
+  }
+
+  const x = bbox.x - folga;
+  const y = bbox.y - folga;
+  const width = bbox.width + folga * 2;
+  const height = bbox.height + folga * 2;
+
+  svg.setAttribute("viewBox", `${x} ${y} ${width} ${height}`);
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", height);
 
   return svg;
 }
@@ -4190,8 +4232,8 @@ function gerarFluxoExcel() {
     }
   });
 
-  ajustarViewBoxAoConteudo(svg, 0);
-  return aplicarEscalaSVGExcel(svg, EXCEL_EXPORT_SCALE);
+  const svgAjustado = ajustarViewBoxAoConteudo(svg, 0);
+  return aplicarEscalaSVGExcel(svgAjustado, EXCEL_EXPORT_SCALE);  
 }
 
 /* =========================
