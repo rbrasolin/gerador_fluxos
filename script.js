@@ -404,102 +404,37 @@ function configurarNavegacaoTabTabela() {
     const campoAtual = event.target;
     if (!campoAtual.matches(".flow-input")) return;
 
-    const linhaAtual = campoAtual.closest("tr");
-    if (!linhaAtual) return;
+    const campos = Array.from(
+      tbody.querySelectorAll(".flow-input")
+    ).filter(el => {
+      return (
+        el.offsetParent !== null &&
+        !el.disabled &&
+        !el.readOnly &&
+        el.tabIndex !== -1
+      );
+    });
 
-    const obterCamposEditaveis = (container) => {
-      return Array.from(
-        container.querySelectorAll(".flow-input:not([disabled]):not([tabindex='-1'])")
-      ).filter(el => el.offsetParent !== null && !el.readOnly);
-    };
-
-    const camposLinhaAtual = obterCamposEditaveis(linhaAtual);
-    const indiceAtual = camposLinhaAtual.indexOf(campoAtual);
-
+    const indiceAtual = campos.indexOf(campoAtual);
     if (indiceAtual === -1) return;
+
+    const proximoIndice = event.shiftKey ? indiceAtual - 1 : indiceAtual + 1;
+
+    if (proximoIndice < 0 || proximoIndice >= campos.length) {
+      return;
+    }
 
     event.preventDefault();
 
-    // SHIFT + TAB
-    if (event.shiftKey) {
-      // se ainda existe campo anterior na mesma linha
-      if (indiceAtual > 0) {
-        const campoAnterior = camposLinhaAtual[indiceAtual - 1];
-        campoAnterior.focus();
+    const proximoCampo = campos[proximoIndice];
+    proximoCampo.focus();
 
-        if (
-          typeof campoAnterior.select === "function" &&
-          campoAnterior.tagName === "INPUT" &&
-          campoAnterior.type !== "number"
-        ) {
-          campoAnterior.select();
-        }
-        return;
-      }
-
-      // vai para a linha anterior, último campo editável
-      let linhaAnterior = linhaAtual.previousElementSibling;
-
-      while (linhaAnterior) {
-        const camposLinhaAnterior = obterCamposEditaveis(linhaAnterior);
-
-        if (camposLinhaAnterior.length) {
-          const ultimoCampo = camposLinhaAnterior[camposLinhaAnterior.length - 1];
-          ultimoCampo.focus();
-
-          if (
-            typeof ultimoCampo.select === "function" &&
-            ultimoCampo.tagName === "INPUT" &&
-            ultimoCampo.type !== "number"
-          ) {
-            ultimoCampo.select();
-          }
-          return;
-        }
-
-        linhaAnterior = linhaAnterior.previousElementSibling;
-      }
-
-      return;
-    }
-
-    // TAB normal
-    // se ainda existe próximo campo na mesma linha
-    if (indiceAtual < camposLinhaAtual.length - 1) {
-      const proximoCampo = camposLinhaAtual[indiceAtual + 1];
-      proximoCampo.focus();
-
-      if (
-        typeof proximoCampo.select === "function" &&
-        proximoCampo.tagName === "INPUT" &&
-        proximoCampo.type !== "number"
-      ) {
-        proximoCampo.select();
-      }
-      return;
-    }
-
-    // vai para a próxima linha, primeiro campo editável
-    let proximaLinha = linhaAtual.nextElementSibling;
-
-    while (proximaLinha) {
-      const camposProximaLinha = obterCamposEditaveis(proximaLinha);
-
-      if (camposProximaLinha.length) {
-        const primeiroCampo = camposProximaLinha[0];
-        primeiroCampo.focus();
-
-        if (
-          typeof primeiroCampo.select === "function" &&
-          primeiroCampo.tagName === "INPUT" &&
-          primeiroCampo.type !== "number"
-        ) {
-          primeiroCampo.select();
-        }
-        return;
-      }
-
-      proximaLinha = proximaLinha.nextElementSibling;
+    if (
+      typeof proximoCampo.select === "function" &&
+      proximoCampo.tagName === "INPUT" &&
+      proximoCampo.type !== "number"
+    ) {
+      proximoCampo.select();
     }
   });
 }
