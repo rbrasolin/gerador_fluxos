@@ -166,11 +166,35 @@ function excluirLinha(uid) {
   atualizarTabela();
 }
 
+function obterValoresUnicosCampo(campo) {
+  const valores = fluxoData
+    .map(l => limpar(l[campo] || ""))
+    .filter(Boolean);
+
+  return [...new Set(valores)].sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+function gerarDatalistHTML(id, valores) {
+  return `
+    <datalist id="${id}">
+      ${valores.map(valor => `<option value="${escaparHTML(valor)}"></option>`).join("")}
+    </datalist>
+  `;
+}
+
 function atualizarTabela() {
   const tbody = document.getElementById("tbodyFluxo");
   if (!tbody) return;
 
-  tbody.innerHTML = "";
+  const areasSugestoes = obterValoresUnicosCampo("area");
+  const tiposSugestoes = obterValoresUnicosCampo("tipo");
+  const sistemasSugestoes = obterValoresUnicosCampo("sistema");
+
+  tbody.innerHTML = `
+    ${gerarDatalistHTML("sugestoes-area", areasSugestoes)}
+    ${gerarDatalistHTML("sugestoes-tipo", tiposSugestoes)}
+    ${gerarDatalistHTML("sugestoes-sistema", sistemasSugestoes)}
+  `;
 
   fluxoData.forEach((linha, index) => {
     const ordem = index + 1;
@@ -188,6 +212,7 @@ function atualizarTabela() {
       <td>
         <input
           class="flow-input"
+          list="sugestoes-area"
           data-uid="${linha.uid}"
           data-campo="area"
           value="${escaparHTML(linha.area || "")}"
@@ -208,6 +233,7 @@ function atualizarTabela() {
       <td>
         <input
           class="flow-input"
+          list="sugestoes-tipo"
           data-uid="${linha.uid}"
           data-campo="tipo"
           value="${escaparHTML(linha.tipo || "")}"
@@ -218,6 +244,7 @@ function atualizarTabela() {
       <td>
         <input
           class="flow-input"
+          list="sugestoes-sistema"
           data-uid="${linha.uid}"
           data-campo="sistema"
           value="${escaparHTML(linha.sistema || "")}"
@@ -452,9 +479,35 @@ function updateCampo(uid, campo, valor, reRender = false) {
   }
 
   // Atualiza labels e opções dos selects sem reconstruir a tabela inteira
-  // para não quebrar o TAB durante digitação
-  if (campo === "atividade" || campo === "area") {
+  if (campo === "atividade") {
     atualizarOpcoesDeConexao();
+  }
+
+  // Recria a tabela para atualizar listas de sugestão
+  if (campo === "area" || campo === "tipo" || campo === "sistema") {
+    const elementoAtivo = document.activeElement;
+    const selecaoInicio = elementoAtivo?.selectionStart ?? null;
+    const selecaoFim = elementoAtivo?.selectionEnd ?? null;
+
+    atualizarTabela();
+
+    requestAnimationFrame(() => {
+      const novoCampo = document.querySelector(
+        `.flow-input[data-uid="${uid}"][data-campo="${campo}"]`
+      );
+
+      if (novoCampo) {
+        novoCampo.focus();
+
+        if (
+          typeof novoCampo.setSelectionRange === "function" &&
+          selecaoInicio !== null &&
+          selecaoFim !== null
+        ) {
+          novoCampo.setSelectionRange(selecaoInicio, selecaoFim);
+        }
+      }
+    });
   }
 }
 
