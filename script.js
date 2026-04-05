@@ -1937,7 +1937,6 @@ function baixarTemplateExcel() {
     return;
   }
 
-  // Cabeçalho igual ao importador
   const cabecalho = [
     "Ordem",
     "ID",
@@ -1956,7 +1955,6 @@ function baixarTemplateExcel() {
 
   const linhas = [cabecalho.join("\t")];
 
-  // mapa UID -> ID visual (A, B, C...)
   const mapaUidParaId = {};
   fluxoData.forEach(l => {
     mapaUidParaId[l.uid] = l.id;
@@ -1991,8 +1989,11 @@ function baixarTemplateExcel() {
   });
 
   const conteudo = linhas.join("\n");
+  const BOM = "\uFEFF";
 
-  const blob = new Blob([conteudo], { type: "text/tab-separated-values;charset=utf-8;" });
+  const blob = new Blob([BOM + conteudo], {
+    type: "text/tab-separated-values;charset=utf-8;"
+  });
 
   const link = document.createElement("a");
   const nomeArquivo = (ultimoNomeArquivo || "template_fluxo") + ".xls";
@@ -2003,6 +2004,8 @@ function baixarTemplateExcel() {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+
+  URL.revokeObjectURL(link.href);
 }
 
 function limparTudo() {
