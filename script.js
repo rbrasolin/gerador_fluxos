@@ -284,20 +284,66 @@ function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
   return svg;
 }
 
-function reaplicarSugestoesConexao(forcarTudo = false) {
-  fluxoData.forEach((linha, index) => {
-    const proximaLinha = fluxoData[index + 1] || null;
-    const sugestaoUid = proximaLinha ? proximaLinha.uid : "";
+function reaplicarSugestoesPosicao() {
+  let areaAnterior = "";
+  let colunaAnterior = 1;
 
-    if (forcarTudo) {
-      linha.proxSim = sugestaoUid;
-      linha.proxSimAuto = !!sugestaoUid;
+  fluxoData.forEach((linha, index) => {
+    const areaAtual = normalizarEspacos(linha.area || "");
+    const colunaAtual = Math.max(1, Number(linha.coluna) || 1);
+    const linhaAtual = Math.max(1, Number(linha.linha) || 1);
+
+    // linha automática sempre 1
+    const linhaEfetiva = linha.linhaManual ? linhaAtual : 1;
+    linha.linha = linhaEfetiva;
+
+    // se a coluna foi definida manualmente, respeita
+    if (linha.colunaManual) {
+      linha.coluna = colunaAtual;
+
+      if (areaAtual) {
+        areaAnterior = areaAtual;
+        colunaAnterior = linha.coluna;
+      }
+
       return;
     }
 
-    if (linha.proxSimAuto) {
-      linha.proxSim = sugestaoUid;
-      linha.proxSimAuto = !!sugestaoUid;
+    let colunaBase = 1;
+
+    // primeira linha
+    if (index === 0) {
+      colunaBase = 1;
+    }
+    // sem área preenchida ainda -> mantém a coluna anterior
+    else if (!areaAtual) {
+      colunaBase = Math.max(1, colunaAnterior || 1);
+    }
+    // mesma raia da linha anterior -> avança coluna
+    else if (areaAtual === areaAnterior) {
+      colunaBase = Math.max(1, colunaAnterior + 1);
+    }
+    // trocou de raia -> mantém a coluna da origem
+    else {
+      colunaBase = Math.max(1, colunaAnterior || 1);
+    }
+
+    const colunaLivre = areaAtual
+      ? obterProximaColunaLivreNaRaia(
+          linha.uid,
+          areaAtual,
+          linhaEfetiva,
+          colunaBase
+        )
+      : colunaBase;
+
+    linha.coluna = colunaLivre;
+
+    if (areaAtual) {
+      areaAnterior = areaAtual;
+      colunaAnterior = colunaLivre;
+    } else {
+      colunaAnterior = colunaLivre;
     }
   });
 }
