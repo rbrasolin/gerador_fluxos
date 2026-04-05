@@ -7,6 +7,8 @@ let autocompleteState = {
   indiceAtivo: -1
 };
 
+let ignorarBlurAutocomplete = false;
+
 const STORAGE_KEY = "gerador_fluxograma_estado_v1";
 let saveStateTimeout = null;
 
@@ -794,10 +796,12 @@ function tratarAutocompleteKeydown(event, uid, campo) {
     salvarEstadoLocal();
 
     if (campo === "area") {
+      ignorarBlurAutocomplete = true;
+
       reaplicarSugestoesPosicao();
       atualizarTabela();
 
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         const destino = document.querySelector(
           `.flow-input[data-uid="${uid}"][data-campo="atividade"]`
         );
@@ -808,16 +812,26 @@ function tratarAutocompleteKeydown(event, uid, campo) {
             destino.select();
           }
         }
-      }, 0);
+
+        setTimeout(() => {
+          ignorarBlurAutocomplete = false;
+        }, 0);
+      });
 
       return false;
     }
 
+    ignorarBlurAutocomplete = true;
+
     atualizarTabela();
 
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       focarProximoCampoTabela(uid, campo, event.shiftKey);
-    }, 0);
+
+      setTimeout(() => {
+        ignorarBlurAutocomplete = false;
+      }, 0);
+    });
 
     return false;
   }
@@ -848,6 +862,8 @@ function onFocusAutocomplete(uid, campo, elemento) {
 
 function onBlurAutocomplete(uid, campo, elemento) {
   setTimeout(() => {
+    if (ignorarBlurAutocomplete) return;
+
     const valorNormalizado = normalizarTextoCampo(campo, elemento.value);
     const linha = fluxoData.find(l => l.uid === uid);
     if (!linha) return;
