@@ -815,7 +815,7 @@ function tratarAutocompleteKeydown(event, uid, campo) {
 
         setTimeout(() => {
           ignorarBlurAutocomplete = false;
-        }, 0);
+        }, 200);
       });
 
       return false;
@@ -830,7 +830,7 @@ function tratarAutocompleteKeydown(event, uid, campo) {
 
       setTimeout(() => {
         ignorarBlurAutocomplete = false;
-      }, 0);
+      }, 200);
     });
 
     return false;
