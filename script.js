@@ -2,6 +2,10 @@ let ultimoNomeArquivo = "fluxograma_processo";
 
 let fluxoData = [];
 let uidCounter = 1;
+let autocompleteState = {
+  abertoPara: null,
+  indiceAtivo: -1
+};
 
 function gerarUID() {
   return "uid_" + uidCounter++;
@@ -262,11 +266,256 @@ function renderizarDatalists() {
   `;
 }
 
+function normalizarEspacos(texto) {
+  return String(texto || "")
+    .replace(/"/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizarTextoCampo(campo, valor) {
+  let texto = normalizarEspacos(valor);
+
+  if (!texto) return "";
+
+  if (campo === "area" || campo === "tipo" || campo === "sistema") {
+    const textoLower = texto.toLocaleLowerCase("pt-BR");
+
+    const existente = fluxoData.find(l => {
+      const atual = normalizarEspacos(l[campo] || "");
+      return atual && atual.toLocaleLowerCase("pt-BR") === textoLower;
+    });
+
+    if (existente) {
+      return normalizarEspacos(existente[campo] || "");
+    }
+  }
+
+  return texto;
+}
+
+function obterValoresUnicosCampo(campo) {
+  const mapa = new Map();
+
+  fluxoData.forEach(l => {
+    const valorOriginal = normalizarEspacos(l[campo] || "");
+    if (!valorOriginal) return;
+
+    const chave = valorOriginal.toLocaleLowerCase("pt-BR");
+
+    if (!mapa.has(chave)) {
+      mapa.set(chave, valorOriginal);
+    }
+  });
+
+  return Array.from(mapa.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+function filtrarSugestoesAutocomplete(campo, termo) {
+  const sugestoes = obterValoresUnicosCampo(campo);
+  const termoNormalizado = normalizarEspacos(termo).toLocaleLowerCase("pt-BR");
+
+  if (!termoNormalizado) {
+    return sugestoes.slice(0, 8);
+  }
+
+  const comeca = sugestoes.filter(item =>
+    item.toLocaleLowerCase("pt-BR").startsWith(termoNormalizado)
+  );
+
+  const contem = sugestoes.filter(item =>
+    !item.toLocaleLowerCase("pt-BR").startsWith(termoNormalizado) &&
+    item.toLocaleLowerCase("pt-BR").includes(termoNormalizado)
+  );
+
+  return [...comeca, ...contem].slice(0, 8);
+}
+
+function fecharAutocomplete() {
+  document.querySelectorAll(".autocomplete-box").forEach(el => el.remove());
+  autocompleteState.abertoPara = null;
+  autocompleteState.indiceAtivo = -1;
+}
+
+function renderizarAutocomplete(uid, campo, inputEl) {
+  fecharAutocomplete();
+
+  const sugestoes = filtrarSugestoesAutocomplete(campo, inputEl.value);
+  if (!sugestoes.length) return;
+
+  const rect = inputEl.getBoundingClientRect();
+  const box = document.createElement("div");
+  box.className = "autocomplete-box";
+  box.dataset.uid = uid;
+  box.dataset.campo = campo;
+
+  box.style.position = "fixed";
+  box.style.left = rect.left + "px";
+  box.style.top = (rect.bottom + 2) + "px";
+  box.style.width = rect.width + "px";
+  box.style.maxHeight = "220px";
+  box.style.overflowY = "auto";
+  box.style.background = "#ffffff";
+  box.style.border = "1px solid #cfcfcf";
+  box.style.borderRadius = "8px";
+  box.style.boxShadow = "0 6px 18px rgba(0,0,0,0.12)";
+  box.style.zIndex = "9999";
+  box.style.padding = "4px 0";
+
+  sugestoes.forEach((sugestao, index) => {
+    const item = document.createElement("div");
+    item.className = "autocomplete-item";
+    item.dataset.index = String(index);
+    item.dataset.valor = sugestao;
+    item.style.padding = "8px 10px";
+    item.style.cursor = "pointer";
+    item.style.fontFamily = "Arial, sans-serif";
+    item.style.fontSize = "14px";
+    item.style.lineHeight = "1.2";
+    item.textContent = sugestao;
+
+    item.addEventListener("mouseenter", () => {
+      atualizarItemAtivoAutocomplete(box, index);
+    });
+
+    item.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      selecionarSugestaoAutocomplete(uid, campo, sugestao);
+    });
+
+    box.appendChild(item);
+  });
+
+  document.body.appendChild(box);
+  autocompleteState.abertoPara = `${uid}__${campo}`;
+  autocompleteState.indiceAtivo = 0;
+  atualizarItemAtivoAutocomplete(box, 0);
+}
+
+function atualizarItemAtivoAutocomplete(box, indice) {
+  const itens = Array.from(box.querySelectorAll(".autocomplete-item"));
+  if (!itens.length) return;
+
+  itens.forEach((item, i) => {
+    item.style.background = i === indice ? "#eaf3ff" : "#ffffff";
+  });
+
+  autocompleteState.indiceAtivo = indice;
+
+  const ativo = itens[indice];
+  if (ativo) {
+    ativo.scrollIntoView({ block: "nearest" });
+  }
+}
+
+function selecionarSugestaoAutocomplete(uid, campo, valor) {
+  const linha = fluxoData.find(l => l.uid === uid);
+  if (!linha) return;
+
+  const valorNormalizado = normalizarTextoCampo(campo, valor);
+  linha[campo] = valorNormalizado;
+
+  const input = document.querySelector(
+    `.flow-input[data-uid="${uid}"][data-campo="${campo}"]`
+  );
+
+  if (input) {
+    input.value = valorNormalizado;
+    input.focus();
+    if (typeof input.setSelectionRange === "function") {
+      const fim = valorNormalizado.length;
+      input.setSelectionRange(fim, fim);
+    }
+  }
+
+  fecharAutocomplete();
+  atualizarOpcoesDeConexao();
+}
+
+function tratarAutocompleteKeydown(event, uid, campo) {
+  const chaveAtual = `${uid}__${campo}`;
+  const box = document.querySelector(`.autocomplete-box[data-uid="${uid}"][data-campo="${campo}"]`);
+
+  if (!box) return;
+
+  const itens = Array.from(box.querySelectorAll(".autocomplete-item"));
+  if (!itens.length) return;
+
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    const novoIndice = Math.min(autocompleteState.indiceAtivo + 1, itens.length - 1);
+    atualizarItemAtivoAutocomplete(box, novoIndice);
+    return;
+  }
+
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    const novoIndice = Math.max(autocompleteState.indiceAtivo - 1, 0);
+    atualizarItemAtivoAutocomplete(box, novoIndice);
+    return;
+  }
+
+  if (event.key === "Enter") {
+    event.preventDefault();
+    const itemAtivo = itens[autocompleteState.indiceAtivo];
+    if (itemAtivo) {
+      selecionarSugestaoAutocomplete(uid, campo, itemAtivo.dataset.valor || "");
+    }
+    return;
+  }
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    fecharAutocomplete();
+    return;
+  }
+
+  if (event.key === "Tab") {
+    const itemAtivo = itens[autocompleteState.indiceAtivo];
+    if (itemAtivo) {
+      selecionarSugestaoAutocomplete(uid, campo, itemAtivo.dataset.valor || "");
+    } else {
+      fecharAutocomplete();
+    }
+  }
+}
+
+function onInputAutocomplete(uid, campo, valor, elemento) {
+  updateCampo(uid, campo, valor);
+
+  const valorNormalizado = normalizarEspacos(valor);
+  if (!valorNormalizado) {
+    fecharAutocomplete();
+    return;
+  }
+
+  renderizarAutocomplete(uid, campo, elemento);
+}
+
+function onFocusAutocomplete(uid, campo, elemento) {
+  const valorNormalizado = normalizarEspacos(elemento.value);
+  if (valorNormalizado) {
+    renderizarAutocomplete(uid, campo, elemento);
+  }
+}
+
+function onBlurAutocomplete(uid, campo, elemento) {
+  setTimeout(() => {
+    const valorNormalizado = normalizarTextoCampo(campo, elemento.value);
+    const linha = fluxoData.find(l => l.uid === uid);
+    if (linha) {
+      linha[campo] = valorNormalizado;
+    }
+    elemento.value = valorNormalizado;
+    fecharAutocomplete();
+  }, 120);
+}
+
 function atualizarTabela() {
   const tbody = document.getElementById("tbodyFluxo");
   if (!tbody) return;
 
-  renderizarDatalists();
+  fecharAutocomplete();
   tbody.innerHTML = "";
 
   fluxoData.forEach((linha, index) => {
@@ -285,13 +534,14 @@ function atualizarTabela() {
       <td>
         <input
           class="flow-input"
-          list="sugestoes-area"
           autocomplete="off"
           data-uid="${linha.uid}"
           data-campo="area"
           value="${escaparHTML(linha.area || "")}"
-          oninput="updateCampo('${linha.uid}','area',this.value)"
-          onblur="finalizarCampoNormalizado('${linha.uid}','area',this)"
+          oninput="onInputAutocomplete('${linha.uid}','area',this.value,this)"
+          onfocus="onFocusAutocomplete('${linha.uid}','area',this)"
+          onblur="onBlurAutocomplete('${linha.uid}','area',this)"
+          onkeydown="tratarAutocompleteKeydown(event,'${linha.uid}','area')"
         >
       </td>
 
@@ -308,26 +558,28 @@ function atualizarTabela() {
       <td>
         <input
           class="flow-input"
-          list="sugestoes-tipo"
           autocomplete="off"
           data-uid="${linha.uid}"
           data-campo="tipo"
           value="${escaparHTML(linha.tipo || "")}"
-          oninput="updateCampo('${linha.uid}','tipo',this.value)"
-          onblur="finalizarCampoNormalizado('${linha.uid}','tipo',this)"
+          oninput="onInputAutocomplete('${linha.uid}','tipo',this.value,this)"
+          onfocus="onFocusAutocomplete('${linha.uid}','tipo',this)"
+          onblur="onBlurAutocomplete('${linha.uid}','tipo',this)"
+          onkeydown="tratarAutocompleteKeydown(event,'${linha.uid}','tipo')"
         >
       </td>
 
       <td>
         <input
           class="flow-input"
-          list="sugestoes-sistema"
           autocomplete="off"
           data-uid="${linha.uid}"
           data-campo="sistema"
           value="${escaparHTML(linha.sistema || "")}"
-          oninput="updateCampo('${linha.uid}','sistema',this.value)"
-          onblur="finalizarCampoNormalizado('${linha.uid}','sistema',this)"
+          oninput="onInputAutocomplete('${linha.uid}','sistema',this.value,this)"
+          onfocus="onFocusAutocomplete('${linha.uid}','sistema',this)"
+          onblur="onBlurAutocomplete('${linha.uid}','sistema',this)"
+          onkeydown="tratarAutocompleteKeydown(event,'${linha.uid}','sistema')"
         >
       </td>
 
@@ -540,8 +792,7 @@ function updateCampo(uid, campo, valor, reRender = false) {
     return;
   }
 
-  if (campo === "area" || campo === "tipo" || campo === "sistema") {
-    renderizarDatalists();
+  if (campo === "area") {
     atualizarOpcoesDeConexao();
   }
 }
@@ -4522,5 +4773,18 @@ function inicializarAplicacao() {
     adicionarLinha();
   }
 }
+
+window.addEventListener("scroll", fecharAutocomplete, true);
+window.addEventListener("resize", fecharAutocomplete);
+
+document.addEventListener("click", (event) => {
+  const clicouNoInputAutocomplete = event.target.closest(
+    'input[data-campo="area"], input[data-campo="tipo"], input[data-campo="sistema"], .autocomplete-box'
+  );
+
+  if (!clicouNoInputAutocomplete) {
+    fecharAutocomplete();
+  }
+});
 
 window.addEventListener("DOMContentLoaded", inicializarAplicacao);
