@@ -250,15 +250,38 @@ function criarSelectConexao(uidAtual, valorSelecionado, campo) {
     if (l.uid === uidAtual) return;
 
     const label = `${l.id || ""} - ${l.atividade || "(sem nome)"}`;
-
     options += `<option value="${l.uid}" ${valorSelecionado === l.uid ? "selected" : ""}>${escaparHTML(label)}</option>`;
   });
 
   if (!campo) {
-    return `<select>${options}</select>`;
+    return `<select class="flow-input conexao-select" data-uid="${uidAtual}">${options}</select>`;
   }
 
-  return `<select class="flow-input" onchange="updateCampo('${uidAtual}','${campo}',this.value)">${options}</select>`;
+  return `<select class="flow-input conexao-select" data-uid="${uidAtual}" data-campo="${campo}" onchange="updateCampo('${uidAtual}','${campo}',this.value)">${options}</select>`;
+}
+
+function atualizarOpcoesDeConexao() {
+  const selects = document.querySelectorAll("#tbodyFluxo select.conexao-select");
+
+  selects.forEach(select => {
+    const uidAtual = select.dataset.uid;
+    const valorAtual = select.value;
+
+    let options = `<option value="">-</option>`;
+
+    fluxoData.forEach(l => {
+      if (l.uid === uidAtual) return;
+
+      const label = `${l.id || ""} - ${l.atividade || "(sem nome)"}`;
+      options += `<option value="${l.uid}" ${valorAtual === l.uid ? "selected" : ""}>${escaparHTML(label)}</option>`;
+    });
+
+    select.innerHTML = options;
+
+    if (valorAtual) {
+      select.value = valorAtual;
+    }
+  });
 }
 
 function addExtra(uid) {
@@ -325,6 +348,13 @@ function updateCampo(uid, campo, valor, reRender = false) {
 
   if (reRender) {
     atualizarTabela();
+    return;
+  }
+
+  // Atualiza os labels/opções dos selects sem redesenhar a tabela inteira
+  // Isso evita quebrar o TAB, mas mantém as conexões sempre atualizadas
+  if (campo === "atividade" || campo === "area") {
+    atualizarOpcoesDeConexao();
   }
 }
 
