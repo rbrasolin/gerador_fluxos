@@ -508,18 +508,20 @@ function configurarNavegacaoTabTabela() {
 function tratarTabCampo(event, uid, campo) {
   if (event.key !== "Tab" || event.shiftKey) return;
 
-  // Regra especial:
-  // ao apertar TAB no campo "Não", ir direto para a próxima linha
   if (campo === "proxNao") {
     event.preventDefault();
 
     const indiceAtual = fluxoData.findIndex(l => l.uid === uid);
     if (indiceAtual === -1) return;
 
-    const proximaLinha = fluxoData[indiceAtual + 1];
-    if (!proximaLinha) return;
+    let proximaLinha = fluxoData[indiceAtual + 1];
 
-    // espera o navegador terminar o ciclo do evento antes de focar
+    // 🔥 NOVO: cria nova linha automaticamente se não existir
+    if (!proximaLinha) {
+      adicionarLinha(indiceAtual + 1);
+      proximaLinha = fluxoData[indiceAtual + 1];
+    }
+
     requestAnimationFrame(() => {
       const tbody = document.getElementById("tbodyFluxo");
       if (!tbody) return;
