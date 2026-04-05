@@ -348,6 +348,26 @@ function reaplicarSugestoesPosicao() {
   });
 }
 
+function reaplicarSugestoesConexao(forcarTudo = false) {
+  fluxoData.forEach((linha, index) => {
+    const proximaLinha = fluxoData[index + 1] || null;
+    const sugestaoUid = proximaLinha ? proximaLinha.uid : "";
+
+    // mudança estrutural: recalcula tudo
+    if (forcarTudo) {
+      linha.proxSim = sugestaoUid;
+      linha.proxSimAuto = !!sugestaoUid;
+      return;
+    }
+
+    // fora de mudança estrutural: só mantém automático quem já era automático
+    if (linha.proxSimAuto) {
+      linha.proxSim = sugestaoUid;
+      linha.proxSimAuto = !!sugestaoUid;
+    }
+  });
+}
+
 function existePosicaoOcupadaNaRaia(uidIgnorar, area, linha, coluna) {
   const areaNormalizada = normalizarEspacos(area || "");
   const linhaNormalizada = Math.max(1, Number(linha) || 1);
@@ -1326,22 +1346,25 @@ function configurarNavegacaoTabTabela() {
     const campoAtual = event.target;
     if (!campoAtual.matches(".flow-input")) return;
 
-    const tag = (campoAtual.tagName || "").toUpperCase();
-    const tipo = (campoAtual.type || "").toLowerCase();
     const campo = campoAtual.dataset.campo || "";
 
-    // autocomplete já trata sozinho
+    // esses campos já têm navegação própria
     if (campo === "area" || campo === "tipo" || campo === "sistema") {
       return;
     }
 
-    // proxNao tem regra própria: pode criar próxima linha
+    // último campo da linha
     if (campo === "proxNao") {
+      if (event.shiftKey) return;
+
+      event.preventDefault();
+      const uid = campoAtual.dataset.uid;
+      if (!uid) return;
+
+      irParaProximaLinhaOuCriar(uid);
       return;
     }
 
-    // Enter em select também deve navegar
-    // Enter em input comum também
     event.preventDefault();
 
     const campos = Array.from(
@@ -1361,9 +1384,7 @@ function configurarNavegacaoTabTabela() {
     const voltar = tecla === "Tab" && event.shiftKey;
     const proximoIndice = voltar ? indiceAtual - 1 : indiceAtual + 1;
 
-    if (proximoIndice < 0 || proximoIndice >= campos.length) {
-      return;
-    }
+    if (proximoIndice < 0 || proximoIndice >= campos.length) return;
 
     const proximoCampo = campos[proximoIndice];
     proximoCampo.focus();
@@ -1378,6 +1399,34 @@ function configurarNavegacaoTabTabela() {
   });
 }
 
+function irParaProximaLinhaOuCriar(uid) {
+  const indiceAtual = fluxoData.findIndex(l => l.uid === uid);
+  if (indiceAtual === -1) return;
+
+  let proximaLinha = fluxoData[indiceAtual + 1];
+
+  if (!proximaLinha) {
+    adicionarLinha(indiceAtual + 1);
+    proximaLinha = fluxoData[indiceAtual + 1];
+  }
+
+  requestAnimationFrame(() => {
+    const tbody = document.getElementById("tbodyFluxo");
+    if (!tbody || !proximaLinha) return;
+
+    const proximoCampo = tbody.querySelector(
+      `input.flow-input[data-uid="${proximaLinha.uid}"][data-campo="area"]`
+    );
+
+    if (proximoCampo) {
+      proximoCampo.focus();
+      if (typeof proximoCampo.select === "function") {
+        proximoCampo.select();
+      }
+    }
+  });
+}
+
 function tratarTabCampo(event, uid, campo) {
   const tecla = event.key;
   const ehTab = tecla === "Tab";
@@ -1387,32 +1436,7 @@ function tratarTabCampo(event, uid, campo) {
 
   if (campo === "proxNao") {
     event.preventDefault();
-
-    const indiceAtual = fluxoData.findIndex(l => l.uid === uid);
-    if (indiceAtual === -1) return;
-
-    let proximaLinha = fluxoData[indiceAtual + 1];
-
-    if (!proximaLinha) {
-      adicionarLinha(indiceAtual + 1);
-      proximaLinha = fluxoData[indiceAtual + 1];
-    }
-
-    requestAnimationFrame(() => {
-      const tbody = document.getElementById("tbodyFluxo");
-      if (!tbody) return;
-
-      const proximoCampo = tbody.querySelector(
-        `input.flow-input[data-uid="${proximaLinha.uid}"][data-campo="area"]`
-      );
-
-      if (proximoCampo) {
-        proximoCampo.focus();
-        if (typeof proximoCampo.select === "function") {
-          proximoCampo.select();
-        }
-      }
-    });
+    irParaProximaLinhaOuCriar(uid);
   }
 }
 
