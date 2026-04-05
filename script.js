@@ -674,12 +674,25 @@ function atualizarItemAtivoAutocomplete(box, indice) {
   }
 }
 
-function focarProximoCampoTabela(uid, campo, voltar = false) {
+function obterCamposNavegaveisTabela() {
   const tbody = document.getElementById("tbodyFluxo");
-  if (!tbody) return;
+  if (!tbody) return [];
+
+  const ordemCampos = [
+    "area",
+    "atividade",
+    "tipo",
+    "sistema",
+    "tempo",
+    "coluna",
+    "linha",
+    "cor",
+    "proxSim",
+    "proxNao"
+  ];
 
   const campos = Array.from(
-    tbody.querySelectorAll(".flow-input")
+    tbody.querySelectorAll(".flow-input[data-uid][data-campo]")
   ).filter(el => {
     return (
       el.offsetParent !== null &&
@@ -688,6 +701,28 @@ function focarProximoCampoTabela(uid, campo, voltar = false) {
       el.tabIndex !== -1
     );
   });
+
+  campos.sort((a, b) => {
+    const uidA = a.dataset.uid;
+    const uidB = b.dataset.uid;
+
+    const linhaA = fluxoData.findIndex(l => l.uid === uidA);
+    const linhaB = fluxoData.findIndex(l => l.uid === uidB);
+
+    if (linhaA !== linhaB) return linhaA - linhaB;
+
+    const campoA = ordemCampos.indexOf(a.dataset.campo || "");
+    const campoB = ordemCampos.indexOf(b.dataset.campo || "");
+
+    return campoA - campoB;
+  });
+
+  return campos;
+}
+
+function focarProximoCampoTabela(uid, campo, voltar = false) {
+  const campos = obterCamposNavegaveisTabela();
+  if (!campos.length) return;
 
   const campoAtual = campos.find(el =>
     el.dataset.uid === uid && el.dataset.campo === campo
@@ -699,7 +734,6 @@ function focarProximoCampoTabela(uid, campo, voltar = false) {
   if (indiceAtual === -1) return;
 
   const proximoIndice = voltar ? indiceAtual - 1 : indiceAtual + 1;
-
   if (proximoIndice < 0 || proximoIndice >= campos.length) return;
 
   const proximoCampo = campos[proximoIndice];
@@ -1344,58 +1378,43 @@ function configurarNavegacaoTabTabela() {
     if (tecla !== "Tab" && tecla !== "Enter") return;
 
     const campoAtual = event.target;
+    if (!(campoAtual instanceof HTMLElement)) return;
     if (!campoAtual.matches(".flow-input")) return;
 
+    const uid = campoAtual.dataset.uid || "";
     const campo = campoAtual.dataset.campo || "";
+    if (!uid || !campo) return;
 
-    // esses campos já têm navegação própria
+    // campos com autocomplete já têm tratamento próprio
     if (campo === "area" || campo === "tipo" || campo === "sistema") {
       return;
     }
 
-    // último campo da linha
+    const voltar = tecla === "Tab" && event.shiftKey;
+
+    // Enter se comporta como avanço, exceto quando Shift+Tab volta
     if (campo === "proxNao") {
-      if (event.shiftKey) return;
+      if (voltar) return;
 
       event.preventDefault();
-      const uid = campoAtual.dataset.uid;
-      if (!uid) return;
-
+      event.stopPropagation();
       irParaProximaLinhaOuCriar(uid);
       return;
     }
 
     event.preventDefault();
+    event.stopPropagation();
 
-    const campos = Array.from(
-      tbody.querySelectorAll(".flow-input")
-    ).filter(el => {
-      return (
-        el.offsetParent !== null &&
-        !el.disabled &&
-        !el.readOnly &&
-        el.tabIndex !== -1
-      );
-    });
-
-    const indiceAtual = campos.indexOf(campoAtual);
-    if (indiceAtual === -1) return;
-
-    const voltar = tecla === "Tab" && event.shiftKey;
-    const proximoIndice = voltar ? indiceAtual - 1 : indiceAtual + 1;
-
-    if (proximoIndice < 0 || proximoIndice >= campos.length) return;
-
-    const proximoCampo = campos[proximoIndice];
-    proximoCampo.focus();
-
-    if (
-      typeof proximoCampo.select === "function" &&
-      proximoCampo.tagName === "INPUT" &&
-      proximoCampo.type !== "number"
-    ) {
-      proximoCampo.select();
+    // garante persistência do valor atual antes de trocar foco
+    if (campoAtual.tagName === "SELECT") {
+      updateCampo(uid, campo, campoAtual.value);
+    } else {
+      updateCampo(uid, campo, campoAtual.value);
     }
+
+    requestAnimationFrame(() => {
+      focarProximoCampoTabela(uid, campo, voltar);
+    });
   });
 }
 
@@ -1408,19 +1427,22 @@ function irParaProximaLinhaOuCriar(uid) {
   if (!proximaLinha) {
     adicionarLinha(indiceAtual + 1);
     proximaLinha = fluxoData[indiceAtual + 1];
+  } else {
+    atualizarTabela();
   }
 
   requestAnimationFrame(() => {
-    const tbody = document.getElementById("tbodyFluxo");
-    if (!tbody || !proximaLinha) return;
-
-    const proximoCampo = tbody.querySelector(
-      `input.flow-input[data-uid="${proximaLinha.uid}"][data-campo="area"]`
+    const proximoCampo = document.querySelector(
+      `.flow-input[data-uid="${proximaLinha.uid}"][data-campo="area"]`
     );
 
     if (proximoCampo) {
       proximoCampo.focus();
-      if (typeof proximoCampo.select === "function") {
+
+      if (
+        typeof proximoCampo.select === "function" &&
+        proximoCampo.tagName === "INPUT"
+      ) {
         proximoCampo.select();
       }
     }
@@ -1436,6 +1458,7 @@ function tratarTabCampo(event, uid, campo) {
 
   if (campo === "proxNao") {
     event.preventDefault();
+    event.stopPropagation();
     irParaProximaLinhaOuCriar(uid);
   }
 }
@@ -2042,9 +2065,10 @@ function limparTudo() {
     obterValorCampo("analista") ||
     obterValorCampo("negocio") ||
     obterValorCampo("area") ||
-    obterValorCampo("gestor");
+    obterValorCampo("gestor") ||
+    obterValorCampo("entrada");
 
-  const temEtapas = fluxoData.some(linha =>
+  const temEtapas = Array.isArray(fluxoData) && fluxoData.some(linha =>
     limpar(linha.area || "") ||
     limpar(linha.atividade || "") ||
     limpar(linha.tipo || "") ||
@@ -2058,13 +2082,14 @@ function limparTudo() {
     (linha.cor && linha.cor !== "white")
   );
 
-  const temEntradaExcel = obterValorCampo("entrada");
   const temDiagrama = !!document.querySelector("#diagram svg");
 
-  if (temDadosTopo || temEtapas || temEntradaExcel || temDiagrama) {
+  if (temDadosTopo || temEtapas || temDiagrama) {
     const confirmar = confirm("Deseja realmente excluir todo o fluxo e limpar todos os campos?");
     if (!confirmar) return;
   }
+
+  fecharAutocomplete();
 
   limparCampo("desenho");
   limparCampo("processo");
@@ -2076,6 +2101,7 @@ function limparTudo() {
 
   fluxoData = [];
   uidCounter = 1;
+  ultimoNomeArquivo = "fluxograma_processo";
 
   const diagram = document.getElementById("diagram");
   const infoProcesso = document.getElementById("infoProcesso");
@@ -2085,10 +2111,16 @@ function limparTudo() {
   if (infoProcesso) infoProcesso.innerHTML = "";
   if (metricas) metricas.innerHTML = "";
 
-  ultimoNomeArquivo = "fluxograma_processo";
-
   limparEstadoLocal();
-  adicionarLinha();
+
+  // recria estado visual limpo
+  adicionarLinha(0);
+
+  // garante atualização visual completa
+  atualizarTabela();
+  renderizarDatalists();
+  atualizarOpcoesDeConexao();
+  salvarEstadoLocal(true);
 }
 
 function adicionarLoopSeNecessario(origemId, destinoId, etapaPorId, etapaAtual) {
@@ -5651,12 +5683,13 @@ function baixarFluxo() {
 }
 
 function inicializarAplicacao() {
-  configurarNavegacaoTabTabela();
   configurarAutoSaveCamposFixos();
 
   const restaurou = restaurarEstadoLocal();
 
   atualizarTabela();
+  configurarNavegacaoTabTabela();
+  renderizarDatalists();
 
   if (!restaurou && !fluxoData.length) {
     adicionarLinha();
