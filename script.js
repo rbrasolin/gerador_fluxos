@@ -182,19 +182,92 @@ function gerarDatalistHTML(id, valores) {
   `;
 }
 
-function atualizarTabela() {
-  const tbody = document.getElementById("tbodyFluxo");
-  if (!tbody) return;
+function normalizarEspacos(texto) {
+  return String(texto || "")
+    .replace(/"/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizarTextoCampo(campo, valor) {
+  let texto = normalizarEspacos(valor);
+
+  if (!texto) return "";
+
+  if (campo === "area" || campo === "tipo" || campo === "sistema") {
+    const textoLower = texto.toLocaleLowerCase("pt-BR");
+
+    const existente = fluxoData.find(l => {
+      const atual = normalizarEspacos(l[campo] || "");
+      return atual && atual.toLocaleLowerCase("pt-BR") === textoLower;
+    });
+
+    if (existente) {
+      return normalizarEspacos(existente[campo] || "");
+    }
+  }
+
+  return texto;
+}
+
+function obterValoresUnicosCampo(campo) {
+  const mapa = new Map();
+
+  fluxoData.forEach(l => {
+    const valorOriginal = normalizarEspacos(l[campo] || "");
+    if (!valorOriginal) return;
+
+    const chave = valorOriginal.toLocaleLowerCase("pt-BR");
+
+    if (!mapa.has(chave)) {
+      mapa.set(chave, valorOriginal);
+    }
+  });
+
+  return Array.from(mapa.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+function garantirContainerDatalists() {
+  let container = document.getElementById("flowDatalists");
+
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "flowDatalists";
+    container.style.display = "none";
+    document.body.appendChild(container);
+  }
+
+  return container;
+}
+
+function renderizarDatalists() {
+  const container = garantirContainerDatalists();
 
   const areasSugestoes = obterValoresUnicosCampo("area");
   const tiposSugestoes = obterValoresUnicosCampo("tipo");
   const sistemasSugestoes = obterValoresUnicosCampo("sistema");
 
-  tbody.innerHTML = `
-    ${gerarDatalistHTML("sugestoes-area", areasSugestoes)}
-    ${gerarDatalistHTML("sugestoes-tipo", tiposSugestoes)}
-    ${gerarDatalistHTML("sugestoes-sistema", sistemasSugestoes)}
+  container.innerHTML = `
+    <datalist id="sugestoes-area">
+      ${areasSugestoes.map(valor => `<option value="${escaparHTML(valor)}"></option>`).join("")}
+    </datalist>
+
+    <datalist id="sugestoes-tipo">
+      ${tiposSugestoes.map(valor => `<option value="${escaparHTML(valor)}"></option>`).join("")}
+    </datalist>
+
+    <datalist id="sugestoes-sistema">
+      ${sistemasSugestoes.map(valor => `<option value="${escaparHTML(valor)}"></option>`).join("")}
+    </datalist>
   `;
+}
+
+function atualizarTabela() {
+  const tbody = document.getElementById("tbodyFluxo");
+  if (!tbody) return;
+
+  renderizarDatalists();
+  tbody.innerHTML = "";
 
   fluxoData.forEach((linha, index) => {
     const ordem = index + 1;
@@ -213,10 +286,12 @@ function atualizarTabela() {
         <input
           class="flow-input"
           list="sugestoes-area"
+          autocomplete="off"
           data-uid="${linha.uid}"
           data-campo="area"
           value="${escaparHTML(linha.area || "")}"
           oninput="updateCampo('${linha.uid}','area',this.value)"
+          onblur="finalizarCampoNormalizado('${linha.uid}','area',this)"
         >
       </td>
 
@@ -234,10 +309,12 @@ function atualizarTabela() {
         <input
           class="flow-input"
           list="sugestoes-tipo"
+          autocomplete="off"
           data-uid="${linha.uid}"
           data-campo="tipo"
           value="${escaparHTML(linha.tipo || "")}"
           oninput="updateCampo('${linha.uid}','tipo',this.value)"
+          onblur="finalizarCampoNormalizado('${linha.uid}','tipo',this)"
         >
       </td>
 
@@ -245,10 +322,12 @@ function atualizarTabela() {
         <input
           class="flow-input"
           list="sugestoes-sistema"
+          autocomplete="off"
           data-uid="${linha.uid}"
           data-campo="sistema"
           value="${escaparHTML(linha.sistema || "")}"
           oninput="updateCampo('${linha.uid}','sistema',this.value)"
+          onblur="finalizarCampoNormalizado('${linha.uid}','sistema',this)"
         >
       </td>
 
@@ -387,30 +466,6 @@ function atualizarOpcoesDeConexao() {
   });
 }
 
-function atualizarOpcoesDeConexao() {
-  const selects = document.querySelectorAll("#tbodyFluxo select.conexao-select");
-
-  selects.forEach(select => {
-    const uidAtual = select.dataset.uid;
-    const valorAtual = select.value;
-
-    let options = `<option value="">-</option>`;
-
-    fluxoData.forEach(l => {
-      if (l.uid === uidAtual) return;
-
-      const label = `${l.id || ""} - ${l.atividade || "(sem nome)"}`;
-      options += `<option value="${l.uid}" ${valorAtual === l.uid ? "selected" : ""}>${escaparHTML(label)}</option>`;
-    });
-
-    select.innerHTML = options;
-
-    if (valorAtual) {
-      select.value = valorAtual;
-    }
-  });
-}
-
 function addExtra(uid) {
   const linha = fluxoData.find(l => l.uid === uid);
   if (!linha) return;
@@ -469,6 +524,8 @@ function updateCampo(uid, campo, valor, reRender = false) {
 
   if (campo === "coluna" || campo === "linha") {
     linha[campo] = Math.max(1, Number(valor) || 1);
+  } else if (campo === "area" || campo === "tipo" || campo === "sistema") {
+    linha[campo] = normalizarEspacos(valor);
   } else {
     linha[campo] = valor;
   }
@@ -478,37 +535,28 @@ function updateCampo(uid, campo, valor, reRender = false) {
     return;
   }
 
-  // Atualiza labels e opções dos selects sem reconstruir a tabela inteira
   if (campo === "atividade") {
     atualizarOpcoesDeConexao();
+    return;
   }
 
-  // Recria a tabela para atualizar listas de sugestão
   if (campo === "area" || campo === "tipo" || campo === "sistema") {
-    const elementoAtivo = document.activeElement;
-    const selecaoInicio = elementoAtivo?.selectionStart ?? null;
-    const selecaoFim = elementoAtivo?.selectionEnd ?? null;
-
-    atualizarTabela();
-
-    requestAnimationFrame(() => {
-      const novoCampo = document.querySelector(
-        `.flow-input[data-uid="${uid}"][data-campo="${campo}"]`
-      );
-
-      if (novoCampo) {
-        novoCampo.focus();
-
-        if (
-          typeof novoCampo.setSelectionRange === "function" &&
-          selecaoInicio !== null &&
-          selecaoFim !== null
-        ) {
-          novoCampo.setSelectionRange(selecaoInicio, selecaoFim);
-        }
-      }
-    });
+    renderizarDatalists();
+    atualizarOpcoesDeConexao();
   }
+}
+
+function finalizarCampoNormalizado(uid, campo, elemento) {
+  const linha = fluxoData.find(l => l.uid === uid);
+  if (!linha) return;
+
+  const valorNormalizado = normalizarTextoCampo(campo, elemento.value);
+
+  linha[campo] = valorNormalizado;
+  elemento.value = valorNormalizado;
+
+  renderizarDatalists();
+  atualizarOpcoesDeConexao();
 }
 
 function configurarNavegacaoTabTabela() {
@@ -679,7 +727,10 @@ function importarExcel() {
 
 function limpar(txt) {
   if (txt === null || txt === undefined) return "";
-  return String(txt).replace(/"/g, "").trim();
+  return String(txt)
+    .replace(/"/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function escaparHTML(txt) {
