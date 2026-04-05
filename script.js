@@ -289,16 +289,12 @@ function reaplicarSugestoesConexao(forcarTudo = false) {
     const proximaLinha = fluxoData[index + 1] || null;
     const sugestaoUid = proximaLinha ? proximaLinha.uid : "";
 
-    // Quando for mudança estrutural (inserção/exclusão),
-    // recalcula tudo, inclusive as que tinham sido alteradas manualmente
     if (forcarTudo) {
       linha.proxSim = sugestaoUid;
       linha.proxSimAuto = !!sugestaoUid;
       return;
     }
 
-    // Fora de mudança estrutural:
-    // só atualiza se o campo ainda estiver automático
     if (linha.proxSimAuto) {
       linha.proxSim = sugestaoUid;
       linha.proxSimAuto = !!sugestaoUid;
@@ -338,19 +334,6 @@ function obterProximaColunaLivreNaRaia(uidIgnorar, area, linha, colunaInicial = 
   return coluna;
 }
 
-function reaplicarSugestoesConexao() {
-  fluxoData.forEach((linha, index) => {
-    const proximaLinha = fluxoData[index + 1] || null;
-
-    if (proximaLinha) {
-      linha.proxSim = proximaLinha.uid;
-      linha.proxSimAuto = true;
-    } else {
-      linha.proxSim = "";
-      linha.proxSimAuto = false;
-    }
-  });
-}
 
 function adicionarLinha(posicao = fluxoData.length) {
   const nova = {
@@ -1291,18 +1274,29 @@ function configurarNavegacaoTabTabela() {
   tbody.dataset.tabConfigurado = "1";
 
   tbody.addEventListener("keydown", (event) => {
-    if (event.key !== "Tab") return;
+    const tecla = event.key;
+    if (tecla !== "Tab" && tecla !== "Enter") return;
 
     const campoAtual = event.target;
     if (!campoAtual.matches(".flow-input")) return;
 
+    const tag = (campoAtual.tagName || "").toUpperCase();
+    const tipo = (campoAtual.type || "").toLowerCase();
     const campo = campoAtual.dataset.campo || "";
 
-    // Área, Tipo e Sistema têm tratamento próprio
-    // então a navegação geral não interfere neles
+    // autocomplete já trata sozinho
     if (campo === "area" || campo === "tipo" || campo === "sistema") {
       return;
     }
+
+    // proxNao tem regra própria: pode criar próxima linha
+    if (campo === "proxNao") {
+      return;
+    }
+
+    // Enter em select também deve navegar
+    // Enter em input comum também
+    event.preventDefault();
 
     const campos = Array.from(
       tbody.querySelectorAll(".flow-input")
@@ -1318,13 +1312,12 @@ function configurarNavegacaoTabTabela() {
     const indiceAtual = campos.indexOf(campoAtual);
     if (indiceAtual === -1) return;
 
-    const proximoIndice = event.shiftKey ? indiceAtual - 1 : indiceAtual + 1;
+    const voltar = tecla === "Tab" && event.shiftKey;
+    const proximoIndice = voltar ? indiceAtual - 1 : indiceAtual + 1;
 
     if (proximoIndice < 0 || proximoIndice >= campos.length) {
       return;
     }
-
-    event.preventDefault();
 
     const proximoCampo = campos[proximoIndice];
     proximoCampo.focus();
@@ -1340,7 +1333,11 @@ function configurarNavegacaoTabTabela() {
 }
 
 function tratarTabCampo(event, uid, campo) {
-  if (event.key !== "Tab" || event.shiftKey) return;
+  const tecla = event.key;
+  const ehTab = tecla === "Tab";
+  const ehEnter = tecla === "Enter";
+
+  if ((!ehTab && !ehEnter) || event.shiftKey) return;
 
   if (campo === "proxNao") {
     event.preventDefault();
@@ -1350,7 +1347,6 @@ function tratarTabCampo(event, uid, campo) {
 
     let proximaLinha = fluxoData[indiceAtual + 1];
 
-    // 🔥 NOVO: cria nova linha automaticamente se não existir
     if (!proximaLinha) {
       adicionarLinha(indiceAtual + 1);
       proximaLinha = fluxoData[indiceAtual + 1];
