@@ -4232,8 +4232,12 @@ function gerarFluxoExcel() {
     }
   });
 
-  const svgAjustado = ajustarViewBoxAoConteudo(svg, 0);
-  return aplicarEscalaSVGExcel(svgAjustado, EXCEL_EXPORT_SCALE);  
+  svg.setAttribute("viewBox", `0 0 ${larguraSvg} ${alturaSvg}`);
+  svg.setAttribute("width", larguraSvg);
+  svg.setAttribute("height", alturaSvg);  
+  svg.setAttribute("preserveAspectRatio", "xMinYMin meet");
+
+return aplicarEscalaSVGExcel(svg, EXCEL_EXPORT_SCALE); 
 }
 
 /* =========================
