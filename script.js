@@ -279,31 +279,30 @@ function aplicarEscalaSVGExcel(svgOriginal, escala = EXCEL_EXPORT_SCALE) {
 }
 
 function reaplicarSugestoesPosicao() {
-  const mapaLinhaPorArea = new Map();
   const ultimaColunaPorArea = new Map();
-
   let colunaAnterior = 0;
-  let maiorLinhaUsada = 0;
 
   fluxoData.forEach((linha) => {
     const areaNormalizada = normalizarEspacos(linha.area || "");
     const colunaAtual = Math.max(1, Number(linha.coluna) || 1);
     const linhaAtual = Math.max(1, Number(linha.linha) || 1);
 
-    if (!areaNormalizada) {
-      if (!linha.colunaManual) linha.coluna = colunaAtual;
-      if (!linha.linhaManual) linha.linha = linhaAtual;
-      return;
+    // LINHA: sugestão padrão sempre 1
+    if (!linha.linhaManual) {
+      linha.linha = 1;
+    } else {
+      linha.linha = linhaAtual;
     }
 
-    let linhaSugerida;
-
-    if (mapaLinhaPorArea.has(areaNormalizada)) {
-      linhaSugerida = mapaLinhaPorArea.get(areaNormalizada);
-    } else {
-      linhaSugerida = linha.linhaManual ? linhaAtual : (maiorLinhaUsada + 1 || 1);
-      mapaLinhaPorArea.set(areaNormalizada, linhaSugerida);
-      maiorLinhaUsada = Math.max(maiorLinhaUsada, linhaSugerida);
+    // COLUNA: mantém sua lógica por área
+    if (!areaNormalizada) {
+      if (!linha.colunaManual) {
+        linha.coluna = Math.max(1, colunaAnterior || 1);
+      } else {
+        linha.coluna = colunaAtual;
+      }
+      colunaAnterior = linha.coluna;
+      return;
     }
 
     const colunaSugerida = ultimaColunaPorArea.has(areaNormalizada)
@@ -311,16 +310,11 @@ function reaplicarSugestoesPosicao() {
       : (colunaAnterior || 1);
 
     const colunaEfetiva = linha.colunaManual ? colunaAtual : colunaSugerida;
-    const linhaEfetiva = linha.linhaManual ? linhaAtual : linhaSugerida;
 
     linha.coluna = colunaEfetiva;
-    linha.linha = linhaEfetiva;
 
-    mapaLinhaPorArea.set(areaNormalizada, linhaEfetiva);
     ultimaColunaPorArea.set(areaNormalizada, colunaEfetiva);
-
     colunaAnterior = colunaEfetiva;
-    maiorLinhaUsada = Math.max(maiorLinhaUsada, linhaEfetiva);
   });
 }
 
@@ -589,7 +583,47 @@ function atualizarItemAtivoAutocomplete(box, indice) {
   }
 }
 
-function selecionarSugestaoAutocomplete(uid, campo, valor) {
+function focarProximoCampoTabela(uid, campo, voltar = false) {
+  const tbody = document.getElementById("tbodyFluxo");
+  if (!tbody) return;
+
+  const campos = Array.from(
+    tbody.querySelectorAll(".flow-input")
+  ).filter(el => {
+    return (
+      el.offsetParent !== null &&
+      !el.disabled &&
+      !el.readOnly &&
+      el.tabIndex !== -1
+    );
+  });
+
+  const campoAtual = campos.find(el =>
+    el.dataset.uid === uid && el.dataset.campo === campo
+  );
+
+  if (!campoAtual) return;
+
+  const indiceAtual = campos.indexOf(campoAtual);
+  if (indiceAtual === -1) return;
+
+  const proximoIndice = voltar ? indiceAtual - 1 : indiceAtual + 1;
+
+  if (proximoIndice < 0 || proximoIndice >= campos.length) return;
+
+  const proximoCampo = campos[proximoIndice];
+  proximoCampo.focus();
+
+  if (
+    typeof proximoCampo.select === "function" &&
+    proximoCampo.tagName === "INPUT" &&
+    proximoCampo.type !== "number"
+  ) {
+    proximoCampo.select();
+  }
+}
+
+function selecionarSugestaoAutocomplete(uid, campo, valor, manterFocoNoMesmoCampo = true) {
   const linha = fluxoData.find(l => l.uid === uid);
   if (!linha) return;
 
@@ -600,21 +634,19 @@ function selecionarSugestaoAutocomplete(uid, campo, valor) {
     reaplicarSugestoesPosicao();
   }
 
-  const input = document.querySelector(
-    `.flow-input[data-uid="${uid}"][data-campo="${campo}"]`
-  );
-
   atualizarTabela();
 
-  const novoInput = document.querySelector(
-    `.flow-input[data-uid="${uid}"][data-campo="${campo}"]`
-  );
+  if (manterFocoNoMesmoCampo) {
+    const novoInput = document.querySelector(
+      `.flow-input[data-uid="${uid}"][data-campo="${campo}"]`
+    );
 
-  if (novoInput) {
-    novoInput.focus();
-    if (typeof novoInput.setSelectionRange === "function") {
-      const fim = novoInput.value.length;
-      novoInput.setSelectionRange(fim, fim);
+    if (novoInput) {
+      novoInput.focus();
+      if (typeof novoInput.setSelectionRange === "function") {
+        const fim = novoInput.value.length;
+        novoInput.setSelectionRange(fim, fim);
+      }
     }
   }
 
@@ -624,7 +656,6 @@ function selecionarSugestaoAutocomplete(uid, campo, valor) {
 }
 
 function tratarAutocompleteKeydown(event, uid, campo) {
-  const chaveAtual = `${uid}__${campo}`;
   const box = document.querySelector(`.autocomplete-box[data-uid="${uid}"][data-campo="${campo}"]`);
 
   if (!box) return;
@@ -662,12 +693,20 @@ function tratarAutocompleteKeydown(event, uid, campo) {
   }
 
   if (event.key === "Tab") {
+    event.preventDefault();
+
     const itemAtivo = itens[autocompleteState.indiceAtivo];
     if (itemAtivo) {
-      selecionarSugestaoAutocomplete(uid, campo, itemAtivo.dataset.valor || "");
+      selecionarSugestaoAutocomplete(uid, campo, itemAtivo.dataset.valor || "", false);
     } else {
       fecharAutocomplete();
     }
+
+    requestAnimationFrame(() => {
+      focarProximoCampoTabela(uid, campo, event.shiftKey);
+    });
+
+    return;
   }
 }
 
