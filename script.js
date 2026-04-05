@@ -696,31 +696,27 @@ function selecionarSugestaoAutocomplete(uid, campo, valor, manterFocoNoMesmoCamp
 
 function tratarAutocompleteKeydown(event, uid, campo) {
   const box = document.querySelector(`.autocomplete-box[data-uid="${uid}"][data-campo="${campo}"]`);
+  const itens = box ? Array.from(box.querySelectorAll(".autocomplete-item")) : [];
 
-  if (!box) return;
-
-  const itens = Array.from(box.querySelectorAll(".autocomplete-item"));
-  if (!itens.length) return;
-
-  if (event.key === "ArrowDown") {
+  if (event.key === "ArrowDown" && box && itens.length) {
     event.preventDefault();
     const novoIndice = Math.min(autocompleteState.indiceAtivo + 1, itens.length - 1);
     atualizarItemAtivoAutocomplete(box, novoIndice);
     return;
   }
 
-  if (event.key === "ArrowUp") {
+  if (event.key === "ArrowUp" && box && itens.length) {
     event.preventDefault();
     const novoIndice = Math.max(autocompleteState.indiceAtivo - 1, 0);
     atualizarItemAtivoAutocomplete(box, novoIndice);
     return;
   }
 
-  if (event.key === "Enter") {
+  if (event.key === "Enter" && box && itens.length) {
     event.preventDefault();
     const itemAtivo = itens[autocompleteState.indiceAtivo];
     if (itemAtivo) {
-      selecionarSugestaoAutocomplete(uid, campo, itemAtivo.dataset.valor || "");
+      selecionarSugestaoAutocomplete(uid, campo, itemAtivo.dataset.valor || "", true);
     }
     return;
   }
@@ -731,18 +727,26 @@ function tratarAutocompleteKeydown(event, uid, campo) {
     return;
   }
 
-  if (event.key === "Tab") {
+  if (event.key === "Tab" && !event.shiftKey) {
     event.preventDefault();
 
-    const itemAtivo = itens[autocompleteState.indiceAtivo];
-    if (itemAtivo) {
-      selecionarSugestaoAutocomplete(uid, campo, itemAtivo.dataset.valor || "", false);
-    } else {
-      fecharAutocomplete();
+    const inputAtual = document.querySelector(
+      `.flow-input[data-uid="${uid}"][data-campo="${campo}"]`
+    );
+
+    if (box && itens.length) {
+      const itemAtivo = itens[autocompleteState.indiceAtivo];
+      if (itemAtivo) {
+        selecionarSugestaoAutocomplete(uid, campo, itemAtivo.dataset.valor || "", false);
+      } else if (inputAtual) {
+        selecionarSugestaoAutocomplete(uid, campo, inputAtual.value || "", false);
+      }
+    } else if (inputAtual) {
+      selecionarSugestaoAutocomplete(uid, campo, inputAtual.value || "", false);
     }
 
     requestAnimationFrame(() => {
-      focarProximoCampoTabela(uid, campo, event.shiftKey);
+      focarProximoCampoTabela(uid, campo, false);
     });
 
     return;
@@ -750,7 +754,11 @@ function tratarAutocompleteKeydown(event, uid, campo) {
 }
 
 function onInputAutocomplete(uid, campo, valor, elemento) {
-  updateCampo(uid, campo, valor);
+  const linha = fluxoData.find(l => l.uid === uid);
+  if (!linha) return;
+
+  linha[campo] = valor;
+  salvarEstadoLocal();
 
   const valorNormalizado = normalizarEspacos(valor);
   if (!valorNormalizado) {
@@ -1099,37 +1107,12 @@ function updateCampo(uid, campo, valor, reRender = false) {
   }
 
   if (campo === "area" || campo === "tipo" || campo === "sistema") {
-    linha[campo] = normalizarEspacos(valor);
-  } else {
     linha[campo] = valor;
-  }
-
-  if (campo === "area") {
-    reaplicarSugestoesPosicao();
-
-    const areaNormalizada = normalizarEspacos(linha.area || "");
-    const linhaEfetiva = Math.max(1, Number(linha.linha) || 1);
-    const colunaEfetiva = Math.max(1, Number(linha.coluna) || 1);
-
-    if (
-      areaNormalizada &&
-      existePosicaoOcupadaNaRaia(uid, areaNormalizada, linhaEfetiva, colunaEfetiva)
-    ) {
-      const proximaLivre = obterProximaColunaLivreNaRaia(
-        uid,
-        areaNormalizada,
-        linhaEfetiva,
-        colunaEfetiva
-      );
-
-      linha.coluna = proximaLivre;
-    }
-
-    atualizarTabela();
-    atualizarOpcoesDeConexao();
     salvarEstadoLocal();
     return;
   }
+
+  linha[campo] = valor;
 
   if (reRender) {
     atualizarTabela();
