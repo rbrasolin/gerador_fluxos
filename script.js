@@ -353,15 +353,21 @@ function reaplicarSugestoesConexao(forcarTudo = false) {
     const proximaLinha = fluxoData[index + 1] || null;
     const sugestaoUid = proximaLinha ? proximaLinha.uid : "";
 
-    // mudança estrutural: recalcula tudo
-    if (forcarTudo) {
+    // Se a conexão já era automática, pode atualizar a sugestão
+    if (linha.proxSimAuto) {
       linha.proxSim = sugestaoUid;
       linha.proxSimAuto = !!sugestaoUid;
       return;
     }
 
-    // fora de mudança estrutural: só mantém automático quem já era automático
-    if (linha.proxSimAuto) {
+    // Se a linha ainda não tem nenhuma conexão manual,
+    // aplica sugestão automática inicial
+    const semConexaoManual =
+      !linha.proxSim &&
+      !linha.proxNao &&
+      (!Array.isArray(linha.extras) || linha.extras.length === 0);
+
+    if (semConexaoManual) {
       linha.proxSim = sugestaoUid;
       linha.proxSimAuto = !!sugestaoUid;
     }
