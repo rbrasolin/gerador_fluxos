@@ -288,22 +288,37 @@ function reaplicarSugestoesPosicao() {
   let areaAnterior = "";
   let colunaAnterior = 1;
 
+  const posicoesOcupadas = new Set();
+
   fluxoData.forEach((linha, index) => {
     const areaAtual = normalizarEspacos(linha.area || "");
     const colunaAtual = Math.max(1, Number(linha.coluna) || 1);
     const linhaAtual = Math.max(1, Number(linha.linha) || 1);
 
-    // linha automática sempre 1
     const linhaEfetiva = linha.linhaManual ? linhaAtual : 1;
     linha.linha = linhaEfetiva;
 
-    // se a coluna foi definida manualmente, respeita
+    const chavePosicao = (area, linhaNum, colunaNum) =>
+      `${area}__${linhaNum}__${colunaNum}`;
+
     if (linha.colunaManual) {
-      linha.coluna = colunaAtual;
+      let colunaManualFinal = colunaAtual;
+
+      while (
+        areaAtual &&
+        posicoesOcupadas.has(chavePosicao(areaAtual, linhaEfetiva, colunaManualFinal))
+      ) {
+        colunaManualFinal++;
+      }
+
+      linha.coluna = colunaManualFinal;
 
       if (areaAtual) {
+        posicoesOcupadas.add(chavePosicao(areaAtual, linhaEfetiva, colunaManualFinal));
         areaAnterior = areaAtual;
-        colunaAnterior = linha.coluna;
+        colunaAnterior = colunaManualFinal;
+      } else {
+        colunaAnterior = colunaManualFinal;
       }
 
       return;
@@ -311,35 +326,29 @@ function reaplicarSugestoesPosicao() {
 
     let colunaBase = 1;
 
-    // primeira linha
     if (index === 0) {
       colunaBase = 1;
-    }
-    // sem área preenchida ainda -> mantém a coluna anterior
-    else if (!areaAtual) {
+    } else if (!areaAtual) {
       colunaBase = Math.max(1, colunaAnterior || 1);
-    }
-    // mesma raia da linha anterior -> avança coluna
-    else if (areaAtual === areaAnterior) {
+    } else if (areaAtual === areaAnterior) {
       colunaBase = Math.max(1, colunaAnterior + 1);
-    }
-    // trocou de raia -> mantém a coluna da origem
-    else {
+    } else {
       colunaBase = Math.max(1, colunaAnterior || 1);
     }
 
-    const colunaLivre = areaAtual
-      ? obterProximaColunaLivreNaRaia(
-          linha.uid,
-          areaAtual,
-          linhaEfetiva,
-          colunaBase
-        )
-      : colunaBase;
+    let colunaLivre = colunaBase;
+
+    while (
+      areaAtual &&
+      posicoesOcupadas.has(chavePosicao(areaAtual, linhaEfetiva, colunaLivre))
+    ) {
+      colunaLivre++;
+    }
 
     linha.coluna = colunaLivre;
 
     if (areaAtual) {
+      posicoesOcupadas.add(chavePosicao(areaAtual, linhaEfetiva, colunaLivre));
       areaAnterior = areaAtual;
       colunaAnterior = colunaLivre;
     } else {
