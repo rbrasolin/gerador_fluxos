@@ -4606,6 +4606,7 @@ function gerarFluxo() {
 
   document.getElementById("diagram").innerHTML = "";
   document.getElementById("diagram").appendChild(svg);
+  atualizarBarraRolagemSuperior();
 
   ultimoNomeArquivo = gerarNomeArquivo();
 
@@ -5695,6 +5696,25 @@ function baixarSVGExcel() {
 
 function baixarFluxo() {
   baixarSVG();
+}
+
+function atualizarBarraRolagemSuperior() {
+  const wrap = document.getElementById("diagramWrap");
+  const topScroll = document.getElementById("diagramScrollTop");
+  const topInner = document.getElementById("diagramScrollTopInner");
+  const diagram = document.getElementById("diagram");
+
+  if (!wrap || !topScroll || !topInner || !diagram) return;
+
+  topInner.style.width = diagram.scrollWidth + "px";
+
+  topScroll.onscroll = () => {
+    wrap.scrollLeft = topScroll.scrollLeft;
+  };
+
+  wrap.onscroll = () => {
+    topScroll.scrollLeft = wrap.scrollLeft;
+  };
 }
 
 function inicializarAplicacao() {

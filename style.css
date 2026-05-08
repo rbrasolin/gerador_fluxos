@@ -409,3 +409,26 @@ button:hover {
 #tabelaFluxo td:nth-child(14) {
   width: 145px;
 }
+
+/* Reduz apenas a visualização na tela, sem mexer no SVG exportado */
+#diagram {
+  zoom: 0.85;
+}
+
+.diagram-scroll-top {
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 18px;
+  border: 1px solid #d9d9d9;
+  border-bottom: none;
+  background: #fff;
+}
+
+#diagramScrollTopInner {
+  height: 1px;
+}
+
+#diagramWrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
