@@ -412,7 +412,7 @@ button:hover {
 
 /* Reduz apenas a visualização na tela, sem mexer no SVG exportado */
 #diagram {
-  zoom: 0.85;
+  zoom: 1.00;
 }
 
 .diagram-scroll-top {
