@@ -6,11 +6,13 @@ body {
 }
 
 .page {
-  max-width: 1400px;
+  width: calc(100vw - 40px);
+  max-width: none;
   margin: 20px auto;
   padding: 20px;
   background: #fff;
   border: 1px solid #d9d9d9;
+  box-sizing: border-box;
 }
 
 h1 {
@@ -336,4 +338,74 @@ button:hover {
   font-size: 10px;
   padding: 2px 6px;
   margin-top: 2px;
+}
+
+/* Ajuste de largura da tabela de digitação */
+#tabelaFluxo {
+  table-layout: fixed;
+  min-width: 1650px;
+}
+
+#tabelaFluxo th:nth-child(1),
+#tabelaFluxo td:nth-child(1) {
+  width: 48px;
+}
+
+#tabelaFluxo th:nth-child(2),
+#tabelaFluxo td:nth-child(2) {
+  width: 32px;
+}
+
+#tabelaFluxo th:nth-child(3),
+#tabelaFluxo td:nth-child(3) {
+  width: 90px;
+}
+
+#tabelaFluxo th:nth-child(4),
+#tabelaFluxo td:nth-child(4) {
+  width: 360px;
+}
+
+#tabelaFluxo th:nth-child(5),
+#tabelaFluxo td:nth-child(5) {
+  width: 90px;
+}
+
+#tabelaFluxo th:nth-child(6),
+#tabelaFluxo td:nth-child(6) {
+  width: 120px;
+}
+
+#tabelaFluxo th:nth-child(7),
+#tabelaFluxo td:nth-child(7) {
+  width: 80px;
+}
+
+#tabelaFluxo th:nth-child(8),
+#tabelaFluxo td:nth-child(8),
+#tabelaFluxo th:nth-child(9),
+#tabelaFluxo td:nth-child(9) {
+  width: 70px;
+}
+
+#tabelaFluxo th:nth-child(10),
+#tabelaFluxo td:nth-child(10) {
+  width: 70px;
+}
+
+#tabelaFluxo th:nth-child(11),
+#tabelaFluxo td:nth-child(11),
+#tabelaFluxo th:nth-child(12),
+#tabelaFluxo td:nth-child(12) {
+  width: 260px;
+}
+
+#tabelaFluxo th:nth-child(13),
+#tabelaFluxo td:nth-child(13) {
+  width: 90px;
+}
+
+#tabelaFluxo th:nth-child(14),
+#tabelaFluxo td:nth-child(14) {
+  width: 145px;
 }
